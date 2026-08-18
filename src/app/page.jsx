@@ -2,7 +2,12 @@
 
 import React from 'react';
 import App from '../../App';
+import AuthGate from '../components/AuthGate';
 
 export default function HomePage() {
-  return <App />;
+  return (
+    <AuthGate>
+      <App />
+    </AuthGate>
+  );
 }
