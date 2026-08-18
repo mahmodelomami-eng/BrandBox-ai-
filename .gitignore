@@ -29,3 +29,6 @@ yarn-error.log*
 .DS_Store
 .idea/
 .vscode/
+
+# Supabase CLI local state
+supabase/.temp/
