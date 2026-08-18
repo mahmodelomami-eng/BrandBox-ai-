@@ -3,11 +3,14 @@
 import React from 'react';
 import App from '../../App';
 import AuthGate from '../components/AuthGate';
+import RealUserDataBridge from '../components/RealUserDataBridge';
 
 export default function HomePage() {
   return (
     <AuthGate>
-      <App />
+      <RealUserDataBridge>
+        <App />
+      </RealUserDataBridge>
     </AuthGate>
   );
 }
