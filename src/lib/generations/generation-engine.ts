@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { CreditEngine } from '../credits/credit-engine';
 import { createServerSupabaseClient } from '../supabase/server';
 import { AuthContext } from '../auth/rbac-engine';
@@ -24,14 +25,11 @@ export interface GenerationResponse {
 }
 
 export class GenerationEngine {
-  public static async executeGeneration(
-    actor: AuthContext,
-    request: GenerationRequest
-  ): Promise<GenerationResponse> {
+  public static async executeGeneration(actor: AuthContext, request: GenerationRequest): Promise<GenerationResponse> {
     if (!actor?.userId) throw new Error('UNAUTHORIZED: Authentication required for AI generation.');
     if (!request.prompt?.trim()) throw new Error('INVALID_INPUT: Prompt is required.');
 
-    const generationId = `gen_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+    const generationId = `gen_${Date.now()}_${randomUUID().slice(0, 8)}`;
     const requiredCredits = CreditEngine.calculateRequiredCredits(request.modelId, request.generationType);
     const supabase = createServerSupabaseClient();
 
@@ -49,52 +47,29 @@ export class GenerationEngine {
       credits_reserved: requiredCredits,
     });
 
-    if (generationInsertError) {
-      throw new Error(`GENERATION_RECORD_FAILED: ${generationInsertError.message}`);
-    }
+    if (generationInsertError) throw new Error(`GENERATION_RECORD_FAILED: ${generationInsertError.message}`);
 
     const currentBalance = await CreditEngine.getBalance(actor.userId);
     if (currentBalance < requiredCredits) {
-      await supabase.from('generations').update({ status: 'failed', error_message: 'INSUFFICIENT_CREDITS' }).eq('id', generationId);
-      return {
-        success: false,
-        generationId,
-        creditsConsumed: 0,
-        remainingBalance: currentBalance,
-        errorMessage: `INSUFFICIENT_CREDITS: Required ${requiredCredits} credits, but current balance is ${currentBalance}.`
-      };
+      await supabase.from('generations').update({ status: 'failed', error_message: 'INSUFFICIENT_CREDITS', credits_reserved: 0 }).eq('id', generationId);
+      return { success: false, generationId, creditsConsumed: 0, remainingBalance: currentBalance, errorMessage: `INSUFFICIENT_CREDITS: Required ${requiredCredits} credits, but current balance is ${currentBalance}.` };
     }
 
     const deductionRes = await CreditEngine.deductCredits(
-      actor.userId,
-      requiredCredits,
-      `AI Generation (${request.modelId})`,
-      'generation',
-      generationId,
-      `gen_deduct_${generationId}`,
-      actor.userId
+      actor.userId, requiredCredits, `AI Generation (${request.modelId})`, 'generation', generationId,
+      `gen_deduct_${generationId}`, actor.userId
     );
 
     if (!deductionRes.success) {
-      await supabase.from('generations').update({ status: 'failed', error_message: deductionRes.message }).eq('id', generationId);
-      return {
-        success: false,
-        generationId,
-        creditsConsumed: 0,
-        remainingBalance: deductionRes.newBalance,
-        errorMessage: deductionRes.message
-      };
+      await supabase.from('generations').update({ status: 'failed', error_message: deductionRes.message, credits_reserved: 0 }).eq('id', generationId);
+      return { success: false, generationId, creditsConsumed: 0, remainingBalance: deductionRes.newBalance, errorMessage: deductionRes.message };
     }
 
     await supabase.from('generations').update({ status: 'processing' }).eq('id', generationId);
 
     try {
       if (request.simulateFailure) throw new Error('SIMULATED_AI_PROVIDER_TIMEOUT');
-
-      if (request.generationType !== 'chat') {
-        throw new Error(`${request.generationType.toUpperCase()}_PROVIDER_NOT_CONFIGURED: This provider will be connected after the platform readiness phase.`);
-      }
-
+      if (request.generationType !== 'chat') throw new Error(`${request.generationType.toUpperCase()}_PROVIDER_NOT_CONFIGURED: This provider will be connected after the platform readiness phase.`);
       if (!isOpenRouterConfigured()) throw new Error('AI_PROVIDER_NOT_CONFIGURED: OpenRouter is not configured yet.');
       if (!isOpenRouterModelAllowed(request.modelId)) throw new Error(`MODEL_NOT_ALLOWED: ${request.modelId}`);
 
@@ -108,47 +83,19 @@ export class GenerationEngine {
         maxTokens: Number(request.settings?.maxTokens ?? 2000),
       });
 
-      await supabase.from('generations').update({
-        status: 'completed',
-        credits_consumed: requiredCredits,
-        credits_reserved: 0,
-        result_url: null,
-        duration_ms: null,
-      }).eq('id', generationId);
-
-      return {
-        success: true,
-        generationId,
-        creditsConsumed: requiredCredits,
-        remainingBalance: deductionRes.newBalance,
-        content: result.content,
-      };
+      await supabase.from('generations').update({ status: 'completed', credits_consumed: requiredCredits, credits_reserved: 0 }).eq('id', generationId);
+      return { success: true, generationId, creditsConsumed: requiredCredits, remainingBalance: deductionRes.newBalance, content: result.content };
     } catch (err: any) {
       const message = err?.message || 'Generation failed';
       const refundRes = await CreditEngine.refundCredits(
-        actor.userId,
-        requiredCredits,
-        `Automatic Refund: AI Provider Failure (${message})`,
-        'generation_failure_refund',
-        generationId,
-        `gen_refund_${generationId}`,
-        actor.userId
+        actor.userId, requiredCredits, `Automatic Refund: AI Provider Failure (${message})`, 'generation_failure_refund', generationId,
+        `gen_refund_${generationId}`, actor.userId
       );
 
-      await supabase.from('generations').update({
-        status: 'failed',
-        credits_consumed: 0,
-        credits_reserved: 0,
-        error_message: message,
-      }).eq('id', generationId);
-
+      await supabase.from('generations').update({ status: 'failed', credits_consumed: 0, credits_reserved: 0, error_message: message }).eq('id', generationId);
       return {
-        success: false,
-        generationId,
-        creditsConsumed: 0,
-        remainingBalance: refundRes.newBalance,
-        errorMessage: `AI_PROVIDER_ERROR: ${message}. Credits refunded automatically.`,
-        wasRefunded: refundRes.success,
+        success: false, generationId, creditsConsumed: 0, remainingBalance: refundRes.newBalance,
+        errorMessage: `AI_PROVIDER_ERROR: ${message}. Credits refunded automatically.`, wasRefunded: refundRes.success,
       };
     }
   }
