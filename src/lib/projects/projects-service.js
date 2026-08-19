@@ -41,7 +41,14 @@ export async function createUserProject(input) {
     .select('id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,created_at,updated_at')
     .single();
 
-  if (error) throw error;
+  if (error) {
+throw error;
+  }
+
+  if (!data) {
+    throw new Error("Supabase لم يُرجع المشروع بعد عملية الإنشاء.");
+  }
+
   return data;
 }
 

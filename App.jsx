@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useReducer } from "react";
+import { listUserProjects, createUserProject } from "./src/lib/projects/projects-service";
+import { createBrowserSupabaseClient } from "./src/lib/supabase/client";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -729,16 +731,16 @@ const initialState = {
     {
       id: "proj-1",
       ownerId: "usr_supabase_981240",
-      ownerName: "محمود الحسن",
+      ownerName: "المستخدم",
       name: "حملة متجر القهوة المختصة",
       type: "صورة + نص",
       description:
         "إطلاق خط إنتاج القهوة الإثيوبية الفاخرة مع هوية بصرية مخصصة.",
       industry: "الأغذية والمشروبات",
-      targetAudience: "عشاق القهوة وجمهور جيل Z",
+      targetAudience: "الجميع",
       language: "العربية",
-      tone: "عصري وحماسي",
-      timeAgo: "منذ ساعتين",
+      tone: "احترافي",
+      timeAgo: "الآن",
       thumbnail:
         "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&auto=format&fit=crop&q=80",
       createdAt: "2026-08-10T12:00:00Z",
@@ -746,15 +748,15 @@ const initialState = {
     {
       id: "proj-2",
       ownerId: "usr_supabase_412091",
-      ownerName: "فاطمة الورفلي",
+      ownerName: "المستخدم",
       name: "تسويق المجمع العقاري الحديث",
       type: "فيديو AI",
       description: "حملة ترويجية للمجمعات السكنية الفاخرة في العاصمة طرابلس.",
       industry: "العقارات",
-      targetAudience: "المستثمرون والعائلات الفاخرة",
+      targetAudience: "الجميع",
       language: "العربية",
-      tone: "احترافي وراقي",
-      timeAgo: "منذ 5 ساعات",
+      tone: "احترافي",
+      timeAgo: "الآن",
       thumbnail:
         "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=500&auto=format&fit=crop&q=80",
       createdAt: "2026-08-10T08:00:00Z",
@@ -825,6 +827,26 @@ const initialState = {
 
 function appReducer(state, action) {
   switch (action.type) {
+    case "LOAD_USER_PROJECTS":
+      return {
+        ...state,
+        projects: action.payload,
+        activeProjectId:
+          action.payload.length > 0
+            ? action.payload[0].id
+            : null,
+      };
+
+    case "PROJECT_CREATED":
+      return {
+        ...state,
+        projects: [action.payload, ...state.projects],
+        activeProjectId: action.payload.id,
+        activeTab: "project-workspace",
+        projectWorkspaceTab: "overview",
+        isCreateProjectOpen: false,
+      };
+
     case "SET_TAB":
       return { ...state, activeTab: action.payload };
 
@@ -866,7 +888,7 @@ function appReducer(state, action) {
       const newProj = {
         id: `proj-${Date.now()}`,
         ownerId: state.auth.user.id,
-        ownerName: `${state.auth.user.firstName} ${state.auth.user.lastName}`,
+        ownerName: "المستخدم",
         name: action.payload.name,
         type: action.payload.type || "صورة + نص",
         description: action.payload.description || "",
@@ -1238,6 +1260,98 @@ export default function App() {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  useEffect(() => {
+    let mounted = true;
+    let authSubscription = null;
+
+    async function loadProjects() {
+      try {
+const supabase = createBrowserSupabaseClient();
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+if (userError) throw userError;
+
+        if (!user) {
+return;
+        }
+const projects = await listUserProjects();
+
+        if (!mounted) return;
+
+        const mappedProjects = projects.map((p) => ({
+          id: p.id,
+          ownerId: p.owner_id,
+          ownerName: `${state.auth.user?.firstName || ""} ${state.auth.user?.lastName || ""}`.trim(),
+          name: p.name,
+          type: p.type || "صورة + نص",
+          description: p.description || "",
+          industry: p.industry || "عام",
+          targetAudience: "الجميع",
+          language: "العربية",
+          tone: "احترافي",
+          timeAgo: "الآن",
+          thumbnail:
+            p.thumbnail_url ||
+            "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&auto=format&fit=crop&q=80",
+          createdAt: p.created_at,
+          updatedAt: p.updated_at,
+        }));
+dispatch({
+          type: "LOAD_USER_PROJECTS",
+          payload: mappedProjects,
+        });
+} catch (error) {
+if (!mounted) return;
+
+        const details = [
+          error?.message,
+          error?.details,
+          error?.hint,
+          error?.code,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+}
+    }
+
+    async function initializeProjects() {
+      try {
+        const supabase = createBrowserSupabaseClient();
+const {
+          data: { session },
+        } = await supabase.auth.getSession();
+if (session?.user && mounted) {
+          await loadProjects();
+        }
+
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+if (!mounted) return;
+
+          if (nextSession?.user) {
+            await loadProjects();
+          }
+        });
+
+        authSubscription = subscription;
+      } catch (error) {
+}
+    }
+
+    initializeProjects();
+
+    return () => {
+      mounted = false;
+
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
+    };
+  }, []);
   const showToast = (text, type = "info") => {
     dispatch({ type: "SHOW_TOAST", payload: { text, type } });
     setTimeout(() => dispatch({ type: "CLEAR_TOAST" }), 4500);
@@ -2700,22 +2814,51 @@ function CreateProjectModal({ dispatch, showToast }) {
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            if (!name)
-              return showToast("يرجى إدخال اسم المشروع أولاً", "error");
-            dispatch({
-              type: "CREATE_PROJECT",
-              payload: { name, industry, description },
-            });
-            showToast(
-              "تم إنشاء المشروع والدخول لمساحة العمل بنجاح!",
-              "success",
-            );
+               <button
+          onClick={async () => {
+            if (!name) {
+              return showToast("يرجى إدخال اسم المشروع", "error");
+            }
+
+            try {
+const payload = {
+                name,
+                industry,
+                description,
+                type: "صورة + نص",
+                language: "العربية",
+                tone: "احترافي",
+              };
+const project = await createUserProject(payload);
+dispatch({
+                type: "PROJECT_CREATED",
+                payload: {
+                  ...project,
+                  ownerId: project.owner_id,
+                  ownerName: "المستخدم",
+                  targetAudience: project.target_audience || "الجميع",
+                  timeAgo: "الآن",
+                  thumbnail: project.thumbnail_url || null,
+                  createdAt: project.created_at,
+                  updatedAt: project.updated_at,
+                },
+              });
+
+              showToast(
+                "تم إنشاء المشروع بنجاح!",
+                "success"
+              );
+            } catch (error) {
+showToast(
+                error?.message ||
+                  "حدث خطأ أثناء إنشاء المشروع.",
+                "error"
+              );
+            }
           }}
           className="w-full bg-[#FF2E4C] hover:bg-[#E50914] text-white font-bold text-xs py-3 rounded-xl transition"
         >
-          إنشاء وفتح مساحة العمل
+          إنشاء مشروع جديد
         </button>
       </div>
     </div>
