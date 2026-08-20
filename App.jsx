@@ -2282,23 +2282,47 @@ function UserChatView({ state, dispatch, showToast }) {
   ]);
   const [input, setInput] = useState("");
   const [selectedModel, setSelectedModel] = useState("openai/gpt-4o-mini");
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    const userMsg = { role: "user", text: input };
+  const handleSend = async () => {
+    const prompt = input.trim();
+    if (!prompt || isGenerating) return;
+    const userMsg = { role: "user", text: prompt };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setIsGenerating(true);
 
-    setTimeout(() => {
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (sessionError || !accessToken) throw new Error("يرجى تسجيل الدخول مرة أخرى");
+
+      const response = await fetch("/api/v1/generations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ generationType: "chat", modelId: selectedModel, prompt }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.errorMessage || result.error || "فشل التوليد");
+      }
+
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          text: `[تم التوليد بنجاح عبر نموذج ${selectedModel}]: بناءً على طلبك، يمكننا صياغة العرض الترويجي التالي بطريقة عصرية جذابة تحاكي التطلعات.`,
-        },
+        { role: "assistant", text: result.content || "تم التوليد بنجاح." },
       ]);
-      showToast("تم التوليد واستهلاك النقاط بنجاح!", "success");
-    }, 1000);
+      showToast(`تم التوليد بنجاح. الرصيد المتبقي: ${result.remainingBalance}`, "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر الاتصال بخدمة الذكاء الاصطناعي";
+      setMessages((prev) => [...prev, { role: "assistant", text: `تعذر إكمال الطلب: ${message}` }]);
+      showToast(message, "error");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -2341,16 +2365,18 @@ function UserChatView({ state, dispatch, showToast }) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          onKeyDown={(e) => e.key === "Enter" && !isGenerating && handleSend()}
+          disabled={isGenerating}
           placeholder="اكتب استفسارك أو طلبك التسويقي..."
           className="flex-1 bg-[#121520] border border-[#1F2438] text-white text-xs rounded-xl p-3 focus:outline-none"
         />
         <button
           onClick={handleSend}
-          className="bg-[#FF2E4C] hover:bg-[#E50914] text-white font-bold text-xs px-6 rounded-xl flex items-center gap-2 transition"
+          disabled={isGenerating}
+          className="bg-[#FF2E4C] hover:bg-[#E50914] disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-xs px-6 rounded-xl flex items-center gap-2 transition"
         >
           <Send className="w-4 h-4" />
-          <span>إرسال</span>
+          <span>{isGenerating ? "جاري التوليد..." : "إرسال"}</span>
         </button>
       </div>
     </div>
