@@ -11,7 +11,7 @@ import {
   InMemoryAuditStore, 
   StoredAuditEvent 
 } from '../audit/audit-logger';
-import { createServerSupabaseClient } from '../supabase/server';
+import { createPrivilegedSupabaseClient } from '../supabase/server';
 
 export interface AdminDashboardMetrics {
   totalUsers: number;
@@ -51,7 +51,7 @@ export interface PlanData {
 export class AdminService {
   public static async getDashboardMetrics(actor: AuthContext): Promise<AdminDashboardMetrics> {
     assertPermission(actor.role, 'ANALYTICS_READ');
-    const supabase = createServerSupabaseClient();
+    const supabase = createPrivilegedSupabaseClient();
 
     try {
       const [
@@ -110,7 +110,7 @@ export class AdminService {
 
   public static async getUsers(actor: AuthContext, options: UserFilterOptions = {}) {
     assertPermission(actor.role, 'USERS_READ');
-    const supabase = createServerSupabaseClient();
+    const supabase = createPrivilegedSupabaseClient();
 
     const page = options.page || 1;
     const limit = options.limit || 10;
@@ -158,7 +158,7 @@ export class AdminService {
       throw new Error('INVALID_INPUT: A valid suspension reason is required.');
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = createPrivilegedSupabaseClient();
 
     const { data: userProfile, error: fetchErr } = await supabase
       .from('profiles')
@@ -220,7 +220,7 @@ export class AdminService {
     targetUserId: string
   ): Promise<{ success: boolean; message: string }> {
     assertPermission(actor.role, 'USERS_MANAGE');
-    const supabase = createServerSupabaseClient();
+    const supabase = createPrivilegedSupabaseClient();
 
     const { data: userProfile, error: fetchErr } = await supabase
       .from('profiles')
@@ -286,7 +286,7 @@ export class AdminService {
       throw new Error('FORBIDDEN: Self-demotion is restricted to prevent platform lockout.');
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = createPrivilegedSupabaseClient();
 
     const { data: userProfile, error: fetchErr } = await supabase
       .from('profiles')
@@ -364,7 +364,7 @@ const result = await CreditEngine.grantCredits(
   adjustmentIdempotencyKey,
   actor.role,
   actor.userId,
-  amount >= 0 ? 'grant' : 'admin_adjustment'
+  'admin_adjustment'
 );
 
     const auditRecord = createAuditRecord(actor, {
@@ -378,7 +378,7 @@ const result = await CreditEngine.grantCredits(
     });
 
     try {
-      const supabase = createServerSupabaseClient();
+      const supabase = createPrivilegedSupabaseClient();
       await supabase.from('audit_logs').insert({
         id: auditRecord.id,
         actor_id: actor.userId,
@@ -409,7 +409,7 @@ const result = await CreditEngine.grantCredits(
       throw new Error('FORBIDDEN: Only SUPER_ADMIN can modify commercial plans and pricing.');
     }
 
-    const supabase = createServerSupabaseClient();
+    const supabase = createPrivilegedSupabaseClient();
 
     const { data: existingPlan, error: fetchErr } = await supabase
       .from('plans')
@@ -474,7 +474,7 @@ const result = await CreditEngine.grantCredits(
 
   public static async getPayments(actor: AuthContext) {
     assertPermission(actor.role, 'PAYMENTS_READ');
-    const supabase = createServerSupabaseClient();
+    const supabase = createPrivilegedSupabaseClient();
 
     const { data: payments, error } = await supabase
       .from('payment_transactions')
@@ -491,7 +491,7 @@ const result = await CreditEngine.grantCredits(
 
   public static async getAuditLogs(actor: AuthContext, limit = 50): Promise<StoredAuditEvent[]> {
     assertPermission(actor.role, 'AUDIT_LOGS_READ');
-    const supabase = createServerSupabaseClient();
+    const supabase = createPrivilegedSupabaseClient();
 
     const { data: logs, error } = await supabase
       .from('audit_logs')

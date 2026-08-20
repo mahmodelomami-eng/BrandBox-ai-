@@ -1,7 +1,5 @@
 import crypto from 'crypto';
-import { createServerSupabaseClient } from '../supabase/server';
-import { CreditEngine } from '../credits/credit-engine';
-import { createAuditRecord, InMemoryAuditStore } from '../audit/audit-logger';
+import { createPrivilegedSupabaseClient } from '../supabase/server';
 import { Logger } from '../observability/telemetry';
 
 export interface WebhookPayload {
@@ -10,7 +8,7 @@ export interface WebhookPayload {
   status: 'paid' | 'failed' | 'cancelled';
   userId: string;
   amountLYD: number;
-  currency: 'LYD' | 'USD';
+  currency: string;
   itemType: 'subscription' | 'purchase';
   planId?: string;
   packageId?: string;
@@ -24,260 +22,86 @@ export interface FulfillmentResult {
   message: string;
   creditsGranted?: number;
   subscriptionId?: string;
+  paymentId?: string;
+  newBalance?: number;
   errorCode?: string;
 }
 
-export const SERVER_PACKAGE_PRICING: Record<string, { credits: number; priceLYD: number }> = {
-  pkg_100: { credits: 100, priceLYD: 25 },
-  pkg_500: { credits: 550, priceLYD: 100 },
-  pkg_1000: { credits: 1150, priceLYD: 175 },
-  pkg_5000: { credits: 6000, priceLYD: 750 }
+type RpcRow = {
+  already_processed: boolean; success: boolean; message: string; credits_granted: number;
+  payment_id?: string | null; subscription_id?: string | null; new_balance?: number | null;
 };
-
-export const SERVER_PLAN_PRICING: Record<string, { monthlyCredits: number; priceLYD: number }> = {
-  free: { monthlyCredits: 50, priceLYD: 0 },
-  starter: { monthlyCredits: 200, priceLYD: 45 },
-  pro: { monthlyCredits: 1000, priceLYD: 145 },
-  business: { monthlyCredits: 5000, priceLYD: 395 }
-};
+type RpcClient = ReturnType<typeof createPrivilegedSupabaseClient>;
 
 export class EzonePayFulfillmentService {
-  private static localIdempotencyLedger: Map<string, FulfillmentResult> = new Map();
-
+  private static clientFactory: () => RpcClient = createPrivilegedSupabaseClient;
   public static verifySignature(rawBody: string, signature: string, hmacSecret: string): boolean {
     if (!rawBody || !signature || !hmacSecret) return false;
-
     try {
-      const computedHex = crypto
-        .createHmac('sha256', hmacSecret)
-        .update(rawBody)
-        .digest('hex');
-
-      const sigBuffer = Buffer.from(signature, 'hex');
-      const computedBuffer = Buffer.from(computedHex, 'hex');
-
-      if (sigBuffer.length !== computedBuffer.length) {
-        return false;
-      }
-
-      return crypto.timingSafeEqual(sigBuffer, computedBuffer);
-    } catch {
-      return false;
-    }
+      const computed = Buffer.from(crypto.createHmac('sha256', hmacSecret).update(rawBody).digest('hex'), 'hex');
+      const supplied = Buffer.from(signature, 'hex');
+      return supplied.length === computed.length && crypto.timingSafeEqual(supplied, computed);
+    } catch { return false; }
   }
 
-  public static async processWebhook(
-    rawBody: string,
-    signature: string,
-    hmacSecret: string,
-    requestId: string
-  ): Promise<FulfillmentResult> {
+  public static async processWebhook(rawBody: string, signature: string, hmacSecret: string, requestId: string): Promise<FulfillmentResult> {
     if (!this.verifySignature(rawBody, signature, hmacSecret)) {
       Logger.security('Ezone Pay HMAC signature validation failed', { requestId });
-      return {
-        success: false,
-        isDuplicate: false,
-        orderReference: 'UNKNOWN',
-        message: 'INVALID_SIGNATURE',
-        errorCode: 'UNAUTHORIZED_SIGNATURE'
-      };
+      return { success: false, isDuplicate: false, orderReference: 'UNKNOWN', message: 'INVALID_SIGNATURE', errorCode: 'UNAUTHORIZED_SIGNATURE' };
     }
 
     let payload: WebhookPayload;
-    try {
-      payload = JSON.parse(rawBody);
-    } catch {
-      return {
-        success: false,
-        isDuplicate: false,
-        orderReference: 'INVALID_JSON',
-        message: 'MALFORMED_JSON_PAYLOAD',
-        errorCode: 'BAD_REQUEST'
-      };
+    try { payload = JSON.parse(rawBody) as WebhookPayload; }
+    catch { return { success: false, isDuplicate: false, orderReference: 'INVALID_JSON', message: 'MALFORMED_JSON_PAYLOAD', errorCode: 'BAD_REQUEST' }; }
+
+    const { orderReference, providerTxId, status, userId, amountLYD, currency, itemType } = payload;
+    const itemId = itemType === 'purchase' ? payload.packageId : itemType === 'subscription' ? payload.planId : undefined;
+    if (!orderReference || !providerTxId || !userId || !status || !currency || !itemType || !itemId || !Number.isFinite(Number(amountLYD)) || Number(amountLYD) <= 0) {
+      return { success: false, isDuplicate: false, orderReference: orderReference || 'MISSING', message: 'MISSING_OR_INVALID_REQUIRED_PAYLOAD_FIELDS', errorCode: 'INVALID_PAYLOAD' };
     }
-
-    const { orderReference, providerTxId, status, userId, amountLYD, itemType, planId, packageId } = payload;
-
-    if (!orderReference || !userId || !amountLYD || !itemType) {
-      return {
-        success: false,
-        isDuplicate: false,
-        orderReference: orderReference || 'MISSING',
-        message: 'MISSING_REQUIRED_PAYLOAD_FIELDS',
-        errorCode: 'INVALID_PAYLOAD'
-      };
+    if (!['paid', 'failed', 'cancelled'].includes(status)) {
+      return { success: false, isDuplicate: false, orderReference, message: 'INVALID_PAYMENT_STATUS', errorCode: 'INVALID_PAYLOAD' };
     }
-
     if (status !== 'paid') {
-      Logger.info('Payment status is not paid; webhook recorded as failed payment.', { requestId, metadata: { orderReference, status } });
-      return {
-        success: true,
-        isDuplicate: false,
-        orderReference,
-        message: `PAYMENT_STATUS_${status.toUpperCase()}_ACKNOWLEDGED`
-      };
-    }
-
-    if (this.localIdempotencyLedger.has(orderReference)) {
-      const existing = this.localIdempotencyLedger.get(orderReference)!;
-      return {
-        ...existing,
-        isDuplicate: true,
-        message: 'IDEMPOTENT_DUPLICATE_SKIPPED'
-      };
+      Logger.info('Non-paid Ezone Pay status acknowledged without fulfillment.', { requestId, metadata: { orderReference, status } });
+      return { success: true, isDuplicate: false, orderReference, message: `PAYMENT_STATUS_${status.toUpperCase()}_ACKNOWLEDGED` };
     }
 
     try {
-      const supabase = createServerSupabaseClient();
       const payloadHash = crypto.createHash('sha256').update(rawBody).digest('hex');
-      const { data: rpcData, error: rpcError } = await supabase.rpc('fulfill_ezonepay_payment_atomic', {
-        p_order_reference: orderReference,
-        p_user_id: userId,
-        p_provider_tx_id: providerTxId || `tx_ezp_${Date.now()}`,
-        p_amount_lyd: amountLYD,
-        p_item_type: itemType,
-        p_payload_hash: payloadHash
+      const { data, error } = await this.clientFactory().rpc('fulfill_ezonepay_payment_atomic_v2', {
+        p_order_reference: orderReference, p_user_id: userId, p_provider_tx_id: providerTxId,
+        p_amount_lyd: Number(amountLYD), p_currency: currency, p_item_type: itemType,
+        p_item_id: itemId, p_payload_hash: payloadHash
       });
-
-      if (!rpcError && rpcData && rpcData.length > 0 && rpcData[0].already_processed) {
-        return {
-          success: true,
-          isDuplicate: true,
-          orderReference,
-          message: 'IDEMPOTENT_DUPLICATE_SKIPPED'
-        };
+      if (error) {
+        Logger.error('Ezone Pay atomic fulfillment RPC failed', new Error(error.message), { requestId, userId, metadata: { orderReference } });
+        return { success: false, isDuplicate: false, orderReference, message: `DATABASE_FULFILLMENT_FAILED: ${error.message}`, errorCode: 'DATABASE_FULFILLMENT_FAILED' };
       }
-    } catch {
-      // Fallback
-    }
-
-    let expectedLYD = 0;
-    let creditsToGrant = 0;
-
-    if (itemType === 'purchase') {
-      const pkg = SERVER_PACKAGE_PRICING[packageId || 'pkg_100'];
-      if (!pkg) {
-        return { success: false, isDuplicate: false, orderReference, message: 'INVALID_PACKAGE_ID' };
+      const row = (Array.isArray(data) ? data[0] : data) as RpcRow | null;
+      if (!row || row.success !== true) {
+        return { success: false, isDuplicate: false, orderReference, message: row?.message || 'DATABASE_FULFILLMENT_INVALID_RESPONSE', errorCode: 'DATABASE_FULFILLMENT_FAILED' };
       }
-      expectedLYD = pkg.priceLYD;
-      creditsToGrant = pkg.credits;
-    } else if (itemType === 'subscription') {
-      const plan = SERVER_PLAN_PRICING[planId || 'pro'];
-      if (!plan) {
-        return { success: false, isDuplicate: false, orderReference, message: 'INVALID_PLAN_ID' };
-      }
-      expectedLYD = plan.priceLYD;
-      creditsToGrant = plan.monthlyCredits;
-    }
-
-    if (Number(amountLYD) < Number(expectedLYD)) {
-      Logger.security('Payment amount tampering detected in Ezone Pay webhook', {
-        requestId,
-        userId,
-        metadata: { claimedAmount: amountLYD, expectedAmount: expectedLYD, orderReference }
-      });
       return {
-        success: false,
-        isDuplicate: false,
-        orderReference,
-        message: `AMOUNT_TAMPERING_DETECTED: Claimed ${amountLYD} LYD, but expected ${expectedLYD} LYD`,
-        errorCode: 'PAYMENT_AMOUNT_MISMATCH'
+        success: true, isDuplicate: Boolean(row.already_processed), orderReference,
+        message: row.message, creditsGranted: row.credits_granted,
+        paymentId: row.payment_id || undefined, subscriptionId: row.subscription_id || undefined,
+        newBalance: row.new_balance ?? undefined
       };
+    } catch (error) {
+      Logger.error('Ezone Pay database fulfillment unavailable', error instanceof Error ? error : new Error('Unknown database error'), { requestId, userId, metadata: { orderReference } });
+      return { success: false, isDuplicate: false, orderReference, message: 'DATABASE_FULFILLMENT_UNAVAILABLE', errorCode: 'DATABASE_FULFILLMENT_FAILED' };
     }
-
-    let subId: string | undefined;
-
-    if (itemType === 'subscription' && planId) {
-      subId = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-      try {
-        const supabase = createServerSupabaseClient();
-        const now = new Date();
-        const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-        await supabase.from('subscriptions').upsert({
-          id: subId,
-          user_id: userId,
-          plan_id: planId,
-          status: 'active',
-          provider: 'Ezone Pay',
-          external_subscription_id: providerTxId,
-          current_period_start: now.toISOString(),
-          current_period_end: nextMonth.toISOString(),
-          auto_renew: true,
-          updated_at: now.toISOString()
-        });
-      } catch {
-        // Fallback
-      }
-    }
-
-    const grantRes = await CreditEngine.grantCredits(
-      userId,
-      creditsToGrant,
-      `Ezone Pay ${itemType === 'subscription' ? 'Subscription' : 'Credit Purchase'} (${orderReference})`,
-      itemType,
-      orderReference,
-      undefined,
-      userId,
-      itemType === 'subscription' ? 'subscription' : 'purchase'
-    );
-
-    if (!grantRes.success) {
-      return {
-        success: false,
-        isDuplicate: false,
-        orderReference,
-        message: `CREDIT_GRANT_FAILED: ${grantRes.message}`
-      };
-    }
-
-    const auditRecord = createAuditRecord(
-      { userId, email: userId, role: 'USER' },
-      {
-        action: 'PAYMENT_EVENT',
-        entity: 'payment_transactions',
-        entityId: orderReference,
-        beforeState: { orderReference, status: 'pending' },
-        afterState: { orderReference, status: 'paid', amountLYD, creditsGranted: creditsToGrant },
-        result: { status: 'success', hmacVerified: true },
-        metadata: { provider: 'Ezone Pay', providerTxId, itemType, planId, packageId }
-      }
-    );
-
-    try {
-      const supabase = createServerSupabaseClient();
-      await supabase.from('audit_logs').insert({
-        id: auditRecord.id,
-        actor_id: userId,
-        actor_role: 'USER',
-        action: auditRecord.action,
-        resource: auditRecord.entity,
-        resource_id: auditRecord.entityId,
-        before_state: auditRecord.beforeState,
-        after_state: auditRecord.afterState,
-        metadata: auditRecord.metadata,
-        created_at: auditRecord.createdAt
-      });
-    } catch {
-      // Fallback
-    }
-
-    InMemoryAuditStore.getInstance().append(auditRecord);
-
-    const finalResult: FulfillmentResult = {
-      success: true,
-      isDuplicate: false,
-      orderReference,
-      message: 'FULFILLMENT_SUCCESSFUL',
-      creditsGranted: creditsToGrant,
-      subscriptionId: subId
-    };
-
-    this.localIdempotencyLedger.set(orderReference, finalResult);
-    return finalResult;
   }
 
-  public static clearLocalState(): void {
-    this.localIdempotencyLedger.clear();
+  /** @deprecated No process-local fulfillment state remains. */
+  public static clearLocalState(): void { /* compatibility no-op */ }
+  public static setClientFactoryForTesting(factory: () => RpcClient): void {
+    if (process.env.NODE_ENV !== 'test') throw new Error('TEST_HELPER_UNAVAILABLE');
+    this.clientFactory = factory;
+  }
+  public static resetClientFactoryForTesting(): void {
+    if (process.env.NODE_ENV !== 'test') throw new Error('TEST_HELPER_UNAVAILABLE');
+    this.clientFactory = createPrivilegedSupabaseClient;
   }
 }

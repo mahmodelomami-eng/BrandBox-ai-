@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useReducer } from "react";
+﻿import React, { useState, useEffect, useRef, useReducer } from "react";
 import { listUserProjects, createUserProject } from "./src/lib/projects/projects-service";
 import { createBrowserSupabaseClient } from "./src/lib/supabase/client";
 import {
@@ -473,6 +473,51 @@ const initialUsers = [
   },
 ];
 
+function mapProfileToAppUser(profile, authUser = null) {
+  if (!profile && !authUser) return null;
+
+  const firstName =
+    profile?.first_name ||
+    authUser?.user_metadata?.first_name ||
+    "";
+
+  const lastName =
+    profile?.last_name ||
+    authUser?.user_metadata?.last_name ||
+    "";
+
+  const email =
+    profile?.email ||
+    authUser?.email ||
+    "";
+
+  const avatarUrl =
+    profile?.avatar_url ||
+    authUser?.user_metadata?.avatar_url ||
+    "";
+
+  return {
+    id: profile?.id || authUser?.id,
+    firstName,
+    lastName,
+    email,
+    phone:
+      profile?.phone ||
+      authUser?.phone ||
+      authUser?.user_metadata?.phone ||
+      "",
+    avatarUrl,
+    adminRole: profile?.role || "USER",
+    status: profile?.status || "active",
+    planId: "free",
+    creditBalance: Number(profile?.credit_balance ?? 0),
+    createdAt:
+      profile?.created_at ||
+      authUser?.created_at ||
+      null,
+    lastActive: "الآن",
+  };
+}
 const initialState = {
   auth: {
     isAuthenticated: true,
@@ -837,6 +882,19 @@ function appReducer(state, action) {
             : null,
       };
 
+    case "SET_AUTH_USER":
+      return {
+        ...state,
+        auth: {
+          ...state.auth,
+          isAuthenticated: Boolean(action.payload),
+          user: action.payload || null,
+        },
+        credits: {
+          ...state.credits,
+          balance: Number(action.payload?.creditBalance ?? 0),
+        },
+      };
     case "PROJECT_CREATED":
       return {
         ...state,
@@ -1264,34 +1322,78 @@ export default function App() {
     let mounted = true;
     let authSubscription = null;
 
+    async function syncAuthUser(authUser) {
+      if (!authUser || !mounted) {
+        if (mounted) {
+          dispatch({
+            type: "SET_AUTH_USER",
+            payload: null,
+          });
+        }
+        return null;
+      }
+
+      const supabase = createBrowserSupabaseClient();
+
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase
+        .from("profiles")
+        .select(
+          "id,email,first_name,last_name,phone,avatar_url,role,status,credit_balance,created_at,updated_at"
+        )
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      console.log("[BrandBox] Auth user:", authUser);
+console.log("[BrandBox] Profile:", profile);
+const appUser = mapProfileToAppUser(profile, authUser);
+
+      if (mounted) {
+        dispatch({
+          type: "SET_AUTH_USER",
+          payload: appUser,
+        });
+      }
+
+      return appUser;
+    }
+
     async function loadProjects() {
       try {
-const supabase = createBrowserSupabaseClient();
+        const supabase = createBrowserSupabaseClient();
 
         const {
           data: { user },
           error: userError,
         } = await supabase.auth.getUser();
-if (userError) throw userError;
+
+        if (userError) throw userError;
 
         if (!user) {
-return;
+          return;
         }
-const projects = await listUserProjects();
+
+        const projects = await listUserProjects();
 
         if (!mounted) return;
 
         const mappedProjects = projects.map((p) => ({
           id: p.id,
           ownerId: p.owner_id,
-          ownerName: `${state.auth.user?.firstName || ""} ${state.auth.user?.lastName || ""}`.trim(),
+          ownerName: `${p.owner_id === user.id ? user.user_metadata?.first_name || "" : ""} ${p.owner_id === user.id ? user.user_metadata?.last_name || "" : ""}`.trim(),
           name: p.name,
           type: p.type || "صورة + نص",
           description: p.description || "",
           industry: p.industry || "عام",
-          targetAudience: "الجميع",
-          language: "العربية",
-          tone: "احترافي",
+          targetAudience: p.target_audience || "الجميع",
+          language: p.language || "العربية",
+          tone: p.tone || "احترافي",
           timeAgo: "الآن",
           thumbnail:
             p.thumbnail_url ||
@@ -1299,50 +1401,68 @@ const projects = await listUserProjects();
           createdAt: p.created_at,
           updatedAt: p.updated_at,
         }));
-dispatch({
+
+        dispatch({
           type: "LOAD_USER_PROJECTS",
           payload: mappedProjects,
         });
-} catch (error) {
-if (!mounted) return;
+      } catch (error) {
+        if (!mounted) return;
 
-        const details = [
-          error?.message,
-          error?.details,
-          error?.hint,
-          error?.code,
-        ]
-          .filter(Boolean)
-          .join(" | ");
-}
+        console.error("loadProjects error:", error);
+      }
     }
 
-    async function initializeProjects() {
+    async function initializeAuth() {
       try {
         const supabase = createBrowserSupabaseClient();
-const {
+
+        const {
           data: { session },
+          error: sessionError,
         } = await supabase.auth.getSession();
-if (session?.user && mounted) {
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        if (session?.user && mounted) {
+          await syncAuthUser(session.user);
           await loadProjects();
         }
 
         const {
           data: { subscription },
         } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-if (!mounted) return;
+          if (!mounted) return;
 
-          if (nextSession?.user) {
-            await loadProjects();
+          try {
+            if (nextSession?.user) {
+              await syncAuthUser(nextSession.user);
+              await loadProjects();
+            } else {
+              dispatch({
+                type: "SET_AUTH_USER",
+                payload: null,
+              });
+
+              dispatch({
+                type: "LOAD_USER_PROJECTS",
+                payload: [],
+              });
+            }
+          } catch (error) {
+            console.error("Auth/Profile sync error:", error);
           }
         });
 
         authSubscription = subscription;
       } catch (error) {
-}
+        console.error("initializeAuth error:", error);
+      }
     }
 
-    initializeProjects();
+    initializeAuth();
 
     return () => {
       mounted = false;
@@ -2714,6 +2834,18 @@ function UserSettingsView({ state, showToast }) {
       </div>
 
       <div className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl space-y-4 max-w-xl text-xs">
+        <div>
+          <label className="block text-gray-400 font-bold mb-1">
+            الاسم:
+          </label>
+          <input
+            type="text"
+            disabled
+            value={`${state.auth.user?.firstName || ""} ${state.auth.user?.lastName || ""}`.trim()}
+            className="w-full bg-[#0D0F17] border border-[#1F2438] text-gray-400 p-2.5 rounded-xl cursor-not-allowed"
+          />
+        </div>
+
         <div>
           <label className="block text-gray-400 font-bold mb-1">
             البريد الإلكتروني:
@@ -4574,6 +4706,7 @@ function AdminSettingsView({ state }) {
       </div>
 
       <div className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl space-y-4 max-w-xl text-xs">
+
         <div>
           <label className="block text-gray-400 font-bold mb-1">
             وضع الصيانة العام:

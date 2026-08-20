@@ -59,7 +59,7 @@ export async function runStagingEzonePayIntegrationTests(): Promise<{
     const passed =
       res1.success && !res1.isDuplicate &&
       res2.success && res2.isDuplicate &&
-      dbIdemp && dbIdemp.length === 1 &&
+      dbIdemp?.length === 1 &&
       profile?.credit_balance === 150;
 
     results.push({ testName: 'Real Staging DB Webhook Durable Idempotency & Credit Fulfillment', passed });

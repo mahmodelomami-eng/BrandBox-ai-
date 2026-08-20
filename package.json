@@ -8,6 +8,7 @@
         "start": "next start",
         "lint": "next lint",
         "test": "node --loader ts-node/register src/tests/production-hardening.test.ts",
+        "test:focused": "node src/tests/run-focused.cjs",
         "test:integration": "cross-env TEST_DATABASE_MODE=staging node --loader ts-node/register src/tests/run-staging-tests.ts",
         "db:test-reset": "cross-env TEST_DATABASE_MODE=staging node --loader ts-node/register -e \"import(\"./src/lib/supabase/test-db-reset\").then(m => m.resetStagingTestData())\""
     },
