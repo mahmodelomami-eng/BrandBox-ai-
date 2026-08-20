@@ -1,6 +1,7 @@
 import { CreditEngine } from '../credits/credit-engine';
 import { AuthContext } from '../auth/rbac-engine';
 import { createOpenRouterChatCompletion } from '../ai/openrouter-client';
+import { createPrivilegedSupabaseClient } from '../supabase/server';
 
 export interface GenerationRequest {
   generationType: 'chat' | 'image' | 'video';
@@ -67,22 +68,55 @@ export class GenerationEngine {
     }
 
     try {
+      const startedAt = Date.now();
+      const database = createPrivilegedSupabaseClient();
+      const { error: insertError } = await database.from('generations').insert({
+        id: generationId,
+        user_id: actor.userId,
+        project_id: request.projectId || null,
+        generation_type: request.generationType,
+        provider: 'openrouter',
+        model: request.modelId,
+        prompt: request.prompt,
+        settings: request.settings || {},
+        status: 'processing',
+        credits_reserved: requiredCredits,
+        credits_consumed: 0,
+        idempotency_key: deductDkey,
+      });
+      if (insertError) throw new Error(`GENERATION_LOG_CREATE_FAILED: ${insertError.message}`);
+
       if (request.simulateFailure) {
         throw new Error('SIMULATED_AI_PROVIDER_TIMEOUT');
       }
 
-      const responseContent = request.generationType === 'chat'
-        ? (await createOpenRouterChatCompletion({
+      const providerResult = request.generationType === 'chat'
+        ? await createOpenRouterChatCompletion({
             model: request.modelId,
             prompt: request.prompt,
             temperature: typeof request.settings?.temperature === 'number' ? request.settings.temperature : undefined,
             maxTokens: typeof request.settings?.maxTokens === 'number' ? request.settings.maxTokens : undefined,
-          })).content
+          })
         : undefined;
+      const responseContent = providerResult?.content;
 
       const responseUrl = request.generationType === 'image'
         ? 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=80'
         : undefined;
+
+      const { error: completeError } = await database.from('generations').update({
+        status: 'completed',
+        credits_consumed: requiredCredits,
+        result_content: responseContent || null,
+        result_url: responseUrl || null,
+        provider_request_id: providerResult?.requestId || null,
+        prompt_tokens: providerResult?.promptTokens ?? null,
+        completion_tokens: providerResult?.completionTokens ?? null,
+        total_tokens: providerResult?.totalTokens ?? null,
+        provider_cost_usd: providerResult?.costUsd ?? null,
+        duration_ms: Date.now() - startedAt,
+      }).eq('id', generationId).eq('user_id', actor.userId);
+      if (completeError) throw new Error(`GENERATION_LOG_COMPLETE_FAILED: ${completeError.message}`);
 
       return {
         success: true,
@@ -103,6 +137,16 @@ export class GenerationEngine {
         refundDkey,
         actor.userId
       );
+
+      try {
+        await createPrivilegedSupabaseClient().from('generations').update({
+          status: 'failed',
+          credits_consumed: 0,
+          error_message: err?.message || 'Generation failed',
+        }).eq('id', generationId).eq('user_id', actor.userId);
+      } catch {
+        // The original provider/persistence error remains the authoritative failure.
+      }
 
       return {
         success: false,

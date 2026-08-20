@@ -8,7 +8,7 @@ async function run() {
     return new Response(JSON.stringify({
       id: 'gen-test',
       choices: [{ message: { content: 'BrandBox response' } }],
-      usage: { prompt_tokens: 4, completion_tokens: 3 },
+      usage: { prompt_tokens: 4, completion_tokens: 3, total_tokens: 7, cost: 0.00001 },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
 
@@ -18,6 +18,8 @@ async function run() {
   );
   assert.equal(result.content, 'BrandBox response');
   assert.equal(result.promptTokens, 4);
+  assert.equal(result.totalTokens, 7);
+  assert.equal(result.costUsd, 0.00001);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://openrouter.ai/api/v1/chat/completions');
   assert.equal((calls[0].init?.headers as Record<string, string>).Authorization, 'Bearer test-key');
