@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useReducer } from "react";
+import React, { useState, useEffect, useRef, useReducer } from "react";
 import { listUserProjects, createUserProject } from "./src/lib/projects/projects-service";
 import { createBrowserSupabaseClient } from "./src/lib/supabase/client";
 import {
@@ -1350,8 +1350,6 @@ export default function App() {
         throw profileError;
       }
 
-      console.log("[BrandBox] Auth user:", authUser);
-console.log("[BrandBox] Profile:", profile);
 const appUser = mapProfileToAppUser(profile, authUser);
 
       if (mounted) {

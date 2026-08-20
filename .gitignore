@@ -32,3 +32,9 @@ yarn-error.log*
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Local Vercel state and environment secrets
+.vercel/
+.env
+.env.local
+.env.*.local
