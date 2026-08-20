@@ -1,6 +1,6 @@
 import { CreditEngine } from '../credits/credit-engine';
-import { createServerSupabaseClient } from '../supabase/server';
 import { AuthContext } from '../auth/rbac-engine';
+import { createOpenRouterChatCompletion } from '../ai/openrouter-client';
 
 export interface GenerationRequest {
   generationType: 'chat' | 'image' | 'video';
@@ -71,8 +71,13 @@ export class GenerationEngine {
         throw new Error('SIMULATED_AI_PROVIDER_TIMEOUT');
       }
 
-      const responseContent = request.generationType === 'chat' 
-        ? `[AI Generated Response using ${request.modelId}]`
+      const responseContent = request.generationType === 'chat'
+        ? (await createOpenRouterChatCompletion({
+            model: request.modelId,
+            prompt: request.prompt,
+            temperature: typeof request.settings?.temperature === 'number' ? request.settings.temperature : undefined,
+            maxTokens: typeof request.settings?.maxTokens === 'number' ? request.settings.maxTokens : undefined,
+          })).content
         : undefined;
 
       const responseUrl = request.generationType === 'image'
