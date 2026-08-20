@@ -12,6 +12,8 @@ export interface OpenRouterChatResult {
   requestId?: string;
   promptTokens?: number;
   completionTokens?: number;
+  totalTokens?: number;
+  costUsd?: number;
 }
 
 interface OpenRouterOptions {
@@ -58,13 +60,15 @@ export async function createOpenRouterChatCompletion(
     const choices = payload.choices as Array<{ message?: { content?: string } }> | undefined;
     const content = choices?.[0]?.message?.content;
     if (!content) throw new Error('OPENROUTER_EMPTY_RESPONSE');
-    const usage = payload.usage as { prompt_tokens?: number; completion_tokens?: number } | undefined;
+    const usage = payload.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number } | undefined;
 
     return {
       content,
       requestId: typeof payload.id === 'string' ? payload.id : undefined,
       promptTokens: usage?.prompt_tokens,
       completionTokens: usage?.completion_tokens,
+      totalTokens: usage?.total_tokens,
+      costUsd: usage?.cost,
     };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw new Error('OPENROUTER_TIMEOUT');
