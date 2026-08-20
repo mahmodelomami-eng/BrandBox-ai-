@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
   const requestId = req.headers.get('x-correlation-id') || `req_${Date.now()}`;
   try {
     const rawBody = await req.text();
-    const signature = req.headers.get('x-ezonepay-signature');
+    const signature = req.headers.get('x-signature');
     const hmacSecret = process.env.EZONEPAY_HMAC_SECRET;
 
     if (!signature || !hmacSecret) {

@@ -61,7 +61,6 @@ import {
   ChevronLeft,
   LockKeyhole,
   UserCheck,
-  ShieldQuestion,
   FileSpreadsheet,
   ToggleLeft,
   ToggleRight,
@@ -238,39 +237,34 @@ export const INITIAL_CREDIT_PACKAGES = [
   {
     id: "pkg_100",
     name: "باقة 100 نقطة",
+    purchasedCredits: 100,
     credits: 100,
-    priceLYD: 25,
-    priceUSD: 5,
+    priceLYD: 10,
     bonus: 0,
+    bonusValidDays: 90,
     isActive: true,
   },
   {
-    id: "pkg_500",
-    name: "باقة 500 نقطة",
-    credits: 500,
-    priceLYD: 100,
-    priceUSD: 20,
-    bonus: 50,
-    isActive: true,
+    id: "pkg_260", name: "باقة 260 نقطة", purchasedCredits: 250,
+    credits: 260, priceLYD: 25, bonus: 10, bonusValidDays: 90, isActive: true,
   },
   {
-    id: "pkg_1000",
-    name: "باقة 1000 نقطة",
-    credits: 1000,
-    priceLYD: 175,
-    priceUSD: 35,
-    bonus: 150,
+    id: "pkg_550", name: "باقة 550 نقطة", purchasedCredits: 500,
+    credits: 550, priceLYD: 50, bonus: 50, bonusValidDays: 90, isActive: true,
+  },
+  {
+    id: "pkg_1150", name: "الباقة الاحترافية", purchasedCredits: 1000,
+    credits: 1150, priceLYD: 100, bonus: 150, bonusValidDays: 90,
     isBestValue: true,
     isActive: true,
   },
   {
-    id: "pkg_5000",
-    name: "باقة 5000 نقطة",
-    credits: 5000,
-    priceLYD: 750,
-    priceUSD: 150,
-    bonus: 1000,
-    isActive: true,
+    id: "pkg_3000", name: "باقة 3,000 نقطة", purchasedCredits: 2500,
+    credits: 3000, priceLYD: 250, bonus: 500, bonusValidDays: 90, isActive: true,
+  },
+  {
+    id: "pkg_6000", name: "باقة 6,000 نقطة", purchasedCredits: 5000,
+    credits: 6000, priceLYD: 500, bonus: 1000, bonusValidDays: 90, isActive: true,
   },
 ];
 
@@ -922,20 +916,6 @@ function appReducer(state, action) {
     case "SET_PROJECT_WORKSPACE_TAB":
       return { ...state, projectWorkspaceTab: action.payload };
 
-    case "SWITCH_SIMULATED_ROLE": {
-      const selectedRole = action.payload;
-      const targetUser = state.usersList.find(
-        (u) => u.adminRole === selectedRole,
-      ) || {
-        ...state.auth.user,
-        adminRole: selectedRole,
-      };
-      return {
-        ...state,
-        auth: { ...state.auth, user: targetUser },
-      };
-    }
-
     case "UPDATE_BRAND_KIT":
       return {
         ...state,
@@ -1244,7 +1224,7 @@ function appReducer(state, action) {
     }
 
     case "ADMIN_UPDATE_PACKAGE": {
-      const { pkgId, newPriceLYD, newCredits } = action.payload;
+      const { pkgId, newPriceLYD, newCredits, newPurchasedCredits, newBonus, newBonusValidDays, newName, isBestValue, isActive } = action.payload;
       const actor = state.auth.user;
       const targetPkg = state.packagesList.find((p) => p.id === pkgId);
 
@@ -1252,7 +1232,10 @@ function appReducer(state, action) {
 
       const updatedPackages = state.packagesList.map((p) =>
         p.id === pkgId
-          ? { ...p, priceLYD: newPriceLYD, credits: newCredits }
+          ? { ...p, name: newName ?? p.name, priceLYD: newPriceLYD, credits: newCredits,
+              purchasedCredits: newPurchasedCredits ?? p.purchasedCredits,
+              bonus: newBonus ?? p.bonus, bonusValidDays: newBonusValidDays ?? p.bonusValidDays,
+              isBestValue: isBestValue ?? p.isBestValue, isActive: isActive ?? p.isActive }
           : p,
       );
 
@@ -1281,6 +1264,9 @@ function appReducer(state, action) {
         activePackageModal: null,
       };
     }
+
+    case "SET_CREDIT_PACKAGES":
+      return { ...state, packagesList: action.payload };
 
     case "SET_SELECTED_USER_MODAL":
       return { ...state, selectedUserModal: action.payload };
@@ -1411,6 +1397,21 @@ const appUser = mapProfileToAppUser(profile, authUser);
       }
     }
 
+    async function loadCreditPackages() {
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const response = await fetch("/api/v1/credit-packages", { headers: { Authorization: `Bearer ${session.access_token}` } });
+      if (!response.ok) return;
+      const result = await response.json();
+      if (!mounted || !Array.isArray(result.packages)) return;
+      dispatch({ type: "SET_CREDIT_PACKAGES", payload: result.packages.map((pkg) => ({
+        id: pkg.id, name: pkg.name, purchasedCredits: Number(pkg.purchased_credits),
+        credits: Number(pkg.credits), bonus: Number(pkg.bonus_credits), priceLYD: Number(pkg.price_lyd),
+        bonusValidDays: Number(pkg.bonus_valid_days), isBestValue: Boolean(pkg.is_featured), isActive: Boolean(pkg.is_active),
+      })) });
+    }
+
     async function initializeAuth() {
       try {
         const supabase = createBrowserSupabaseClient();
@@ -1427,6 +1428,7 @@ const appUser = mapProfileToAppUser(profile, authUser);
         if (session?.user && mounted) {
           await syncAuthUser(session.user);
           await loadProjects();
+          await loadCreditPackages();
         }
 
         const {
@@ -1438,6 +1440,7 @@ const appUser = mapProfileToAppUser(profile, authUser);
             if (nextSession?.user) {
               await syncAuthUser(nextSession.user);
               await loadProjects();
+              await loadCreditPackages();
             } else {
               dispatch({
                 type: "SET_AUTH_USER",
@@ -1612,57 +1615,21 @@ function Header({
           <Layers className="w-6 h-6" />
         </button>
 
-        <div
-          onClick={() => dispatch({ type: "SET_TAB", payload: "dashboard" })}
-          className="flex items-center gap-3 cursor-pointer group"
-        >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#E50914] to-[#FF2E4C] flex items-center justify-center font-black text-2xl text-white shadow-lg shadow-[#FF2E4C]/20 group-hover:scale-105 transition">
-            B
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <img src={state.auth.user.avatarUrl} alt="صورة المستخدم" className="h-10 w-10 rounded-full border-2 border-[#FF2E4C] object-cover" />
+            <span className="absolute -left-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF2E4C] px-1 text-[9px] font-black text-white">3</span>
           </div>
-          <div>
-            <span className="font-extrabold text-xl tracking-wider text-white">
-              BRAND <span className="text-[#FF2E4C]">BOX</span> AI
-            </span>
-            <span className="hidden sm:inline-block text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 font-bold mr-2">
-              PHASE 8.4 VERIFIED
-            </span>
+          <div className="hidden sm:block">
+            <div className="text-sm font-extrabold text-white">{state.auth.user.firstName || "USER"} {state.auth.user.lastName || ""}</div>
+            <div className="text-[10px] text-gray-500">{currentUserRole}</div>
           </div>
+          <Bell className="h-5 w-5 text-gray-400" />
+          <ChevronDown className="h-4 w-4 text-gray-500" />
         </div>
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Simulated Role Selector */}
-        <div className="flex items-center gap-1.5 bg-[#121520] border border-[#1F2438] px-2.5 py-1 rounded-xl text-xs">
-          <ShieldQuestion className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span className="hidden md:inline text-gray-400 font-bold text-[11px]">
-            اختبار الدور:
-          </span>
-          <select
-            value={currentUserRole}
-            onChange={(e) => {
-              dispatch({
-                type: "SWITCH_SIMULATED_ROLE",
-                payload: e.target.value,
-              });
-              showToast(`تم تغيير دور الحساب إلى: ${e.target.value}`, "info");
-            }}
-            className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer"
-          >
-            <option value="SUPER_ADMIN" className="bg-[#121520] text-white">
-              SUPER_ADMIN (كامل)
-            </option>
-            <option value="ADMIN" className="bg-[#121520] text-white">
-              ADMIN (تشغيلي)
-            </option>
-            <option value="SUPPORT" className="bg-[#121520] text-white">
-              SUPPORT (قراءة فقط)
-            </option>
-            <option value="USER" className="bg-[#121520] text-white">
-              USER (مستخدم عادي)
-            </option>
-          </select>
-        </div>
-
         {/* Toggle Admin Control Center Shell Switcher */}
         {currentUserRole !== "USER" && (
           <button
@@ -1716,6 +1683,9 @@ function UserWorkspaceLayout({
         className={`w-64 bg-[#0D0F17] border-l border-[#1F2438] flex-col justify-between fixed lg:static inset-y-0 right-0 z-30 transform ${mobileMenuOpen ? "translate-x-0" : "translate-x-full"} lg:translate-x-0 transition-transform duration-300 ease-in-out flex shrink-0`}
       >
         <div className="p-4 space-y-6 overflow-y-auto">
+          <button onClick={() => dispatch({ type: "SET_TAB", payload: "dashboard" })} className="mb-2 flex w-full items-center border-b border-[#1F2438] pb-5">
+            <img src="/brandbox-logo.png" alt="BrandBox AI" className="h-14 w-44 object-contain object-right" />
+          </button>
           <div className="space-y-1">
             <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider px-3 mb-2">
               منطقة العمل المركزية
@@ -1809,7 +1779,7 @@ function UserWorkspaceLayout({
             />
             <NavItem
               icon={<CreditCard className="w-4 h-4" />}
-              label="خطط الأسعار (Ezone Pay)"
+              label="شراء رصيد"
               active={state.activeTab === "pricing"}
               onClick={() => {
                 dispatch({ type: "SET_TAB", payload: "pricing" });
@@ -1882,7 +1852,7 @@ function UserWorkspaceLayout({
           <UserBillingView state={state} dispatch={dispatch} />
         )}
         {state.activeTab === "pricing" && (
-          <UserPricingView state={state} dispatch={dispatch} />
+          <UserPricingView state={state} dispatch={dispatch} showToast={showToast} />
         )}
         {state.activeTab === "settings" && (
           <UserSettingsView
@@ -1910,10 +1880,10 @@ function NavItem({ icon, label, active, onClick }) {
 
 function MetricCard({ label, value, subtitle, icon }) {
   return (
-    <div className="p-4 bg-[#121520] border border-[#1F2438] rounded-2xl flex items-center justify-between">
+    <div className="flex min-h-24 items-center justify-between rounded-2xl border border-[#2a2e38] bg-[#11131a] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,.02)]">
       <div>
         <div className="text-xs text-gray-400 font-medium mb-1">{label}</div>
-        <div className="text-xl font-bold text-white">{value}</div>
+        <div className="text-2xl font-black text-white">{value}</div>
         {subtitle && (
           <div className="text-[10px] text-gray-500 mt-0.5">{subtitle}</div>
         )}
@@ -1926,12 +1896,19 @@ function MetricCard({ label, value, subtitle, icon }) {
 }
 
 function UserDashboardView({ state, dispatch }) {
+  const recentActivities = [
+    { icon: <MessageSquare className="h-4 w-4" />, title: "تم بدء محادثة جديدة في المساعد الذكي", time: "منذ 10 دقائق" },
+    { icon: <ImageIcon className="h-4 w-4" />, title: "تم إنشاء 4 صور باستخدام Imagen 4.0", time: "منذ 25 دقيقة" },
+    { icon: <Palette className="h-4 w-4" />, title: "تم تحديث الهوية البصرية", time: "منذ ساعة" },
+    { icon: <FolderOpen className="h-4 w-4" />, title: "تم إنشاء مشروع جديد", time: "منذ ساعتين" },
+  ];
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="text-xs text-gray-500">الرئيسية <span className="px-2">/</span> لوحة التحكم</div>
+      <div className="flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-extrabold text-white">
-            مرحباً بك في Brand Box AI 👋
+          <h2 className="flex items-center gap-2 text-2xl font-extrabold text-white">
+            <Sparkles className="h-6 w-6 text-[#FF2E4C]" /> مرحباً بك في Brand Box AI
           </h2>
           <p className="text-xs text-gray-400 mt-1">
             منصة الذكاء الاصطناعي الشاملة لإدارة المحتوى والمشاريع التسويقية
@@ -1942,14 +1919,14 @@ function UserDashboardView({ state, dispatch }) {
           onClick={() =>
             dispatch({ type: "SET_CREATE_PROJECT_MODAL", payload: true })
           }
-          className="bg-[#FF2E4C] hover:bg-[#E50914] text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-[#FF2E4C]/20 transition"
+          className="flex w-fit items-center gap-2 rounded-lg bg-[#FF2E4C] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#FF2E4C]/20 transition hover:bg-[#E50914]"
         >
           <Plus className="w-4 h-4" />
           <span>مشروع جديد</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MetricCard
           label="المشاريع النشطة"
           value={state.projects.length}
@@ -1966,54 +1943,78 @@ function UserDashboardView({ state, dispatch }) {
           label="الأصول المنسقة"
           value={state.assets.length}
           subtitle="ملفات بصرية"
-          icon={<ImageIcon className="w-5 h-5 text-blue-400" />}
+          icon={<ImageIcon className="w-5 h-5 text-[#FF2E4C]" />}
         />
       </div>
 
       {/* Quick Shortcuts */}
-      <div className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl space-y-4">
+      <div className="space-y-4 rounded-2xl border border-[#2a2e38] bg-[#11131a] p-5">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-400" />
+          <Zap className="w-4 h-4 text-[#FF2E4C]" />
           <span>اختصارات التوليد السريع</span>
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={() => dispatch({ type: "SET_TAB", payload: "chat" })}
-            className="p-4 bg-[#0D0F17] border border-[#1F2438] hover:border-[#FF2E4C]/50 rounded-xl text-right transition group"
+            className="group flex items-center gap-4 rounded-xl border border-[#2a2e38] bg-[#0b0d12] p-4 text-right transition hover:border-[#FF2E4C]/60"
           >
-            <MessageSquare className="w-5 h-5 text-blue-400 mb-2 group-hover:scale-110 transition" />
-            <div className="font-bold text-xs text-white">
+            <span className="rounded-xl border border-[#343843] p-3 text-[#FF2E4C]"><MessageSquare className="h-6 w-6" /></span>
+            <div><div className="font-bold text-sm text-white">
               المساعد الذكي (AI Chat)
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
               صياغة نصوص إعلانية وتحليلات سريعة
-            </p>
+            </p></div>
           </button>
           <button
             onClick={() => dispatch({ type: "SET_TAB", payload: "images" })}
-            className="p-4 bg-[#0D0F17] border border-[#1F2438] hover:border-[#FF2E4C]/50 rounded-xl text-right transition group"
+            className="group flex items-center gap-4 rounded-xl border border-[#2a2e38] bg-[#0b0d12] p-4 text-right transition hover:border-[#FF2E4C]/60"
           >
-            <ImageIcon className="w-5 h-5 text-[#FF2E4C] mb-2 group-hover:scale-110 transition" />
-            <div className="font-bold text-xs text-white">
+            <span className="rounded-xl border border-[#343843] p-3 text-[#FF2E4C]"><ImageIcon className="h-6 w-6" /></span>
+            <div><div className="font-bold text-sm text-white">
               توليد الصور (Imagen 4.0)
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
               إنشاء تصاميم بصرية بدقة فائقة
-            </p>
+            </p></div>
           </button>
           <button
             onClick={() => dispatch({ type: "SET_TAB", payload: "brand-kit" })}
-            className="p-4 bg-[#0D0F17] border border-[#1F2438] hover:border-[#FF2E4C]/50 rounded-xl text-right transition group"
+            className="group flex items-center gap-4 rounded-xl border border-[#2a2e38] bg-[#0b0d12] p-4 text-right transition hover:border-[#FF2E4C]/60"
           >
-            <Palette className="w-5 h-5 text-emerald-400 mb-2 group-hover:scale-110 transition" />
-            <div className="font-bold text-xs text-white">
+            <span className="rounded-xl border border-[#343843] p-3 text-[#FF2E4C]"><Palette className="h-6 w-6" /></span>
+            <div><div className="font-bold text-sm text-white">
               إدارة الهوية البصرية
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
               ضبط ألوان ونبرة العلامة التجارية
-            </p>
+            </p></div>
           </button>
         </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_.95fr]">
+        <section className="overflow-hidden rounded-2xl border border-[#2a2e38] bg-[#11131a]">
+          <div className="flex items-center justify-between border-b border-[#2a2e38] px-5 py-4">
+            <h3 className="font-bold text-white">الرصيد والاستهلاك</h3>
+            <span className="rounded-lg border border-[#343843] px-3 py-1.5 text-xs text-gray-300">آخر 30 يومًا</span>
+          </div>
+          <div className="p-5">
+            <p className="text-xs text-gray-500">الرصيد الحالي</p>
+            <div className="mt-1 text-3xl font-black text-white">{state.auth.user.creditBalance ?? state.credits.balance} نقطة</div>
+            <img src="/brandbox-usage-chart.png" alt="مخطط الرصيد والاستهلاك" className="mt-3 h-48 w-full rounded-xl object-cover object-bottom opacity-90 sm:h-56" />
+          </div>
+        </section>
+        <section className="overflow-hidden rounded-2xl border border-[#2a2e38] bg-[#11131a]">
+          <div className="flex items-center justify-between border-b border-[#2a2e38] px-5 py-4"><h3 className="font-bold text-white">النشاط الأخير</h3><button className="text-xs font-bold text-[#FF2E4C]">عرض الكل</button></div>
+          <div className="divide-y divide-[#252933] px-5">
+            {recentActivities.map((activity) => <div key={activity.title} className="flex items-center gap-3 py-4">
+              <span className="text-[#FF2E4C]">{activity.icon}</span>
+              <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-gray-200">{activity.title}</p><p className="mt-1 text-[10px] text-gray-500">مشروع حملة صيف 2024</p></div>
+              <span className="whitespace-nowrap text-[10px] text-gray-500">{activity.time}</span>
+            </div>)}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -2804,48 +2805,146 @@ function UserBillingView({ state }) {
   );
 }
 
-function UserPricingView({ state }) {
+function UserPricingView({ state, dispatch, showToast }) {
+  const [loadingPackageId, setLoadingPackageId] = useState(null);
+
+  const startCheckout = async (packageId) => {
+    setLoadingPackageId(packageId);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data, error } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (error || !accessToken) throw new Error("يرجى تسجيل الدخول أولاً");
+      const response = await fetch("/api/v1/ezonepay/payment-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ itemType: "purchase", itemId: packageId }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.paymentUrl) throw new Error(result.error || "تعذر إنشاء رابط الدفع");
+      window.location.assign(result.paymentUrl);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "تعذر بدء عملية الدفع", "error");
+      setLoadingPackageId(null);
+    }
+
+  };
+
+  const currentBalance = Math.max(0, Number(state.auth.user?.creditBalance ?? 0));
+  const monthlyLimit = 10000;
+  const usedCredits = Math.max(0, monthlyLimit - currentBalance);
+  const remainingPercent = Math.min(100, (currentBalance / monthlyLimit) * 100);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-white">
-          خطط الأسعار واشتراكات Ezone Pay
-        </h2>
-        <p className="text-xs text-gray-400">
-          اختر الخطة المناسبة لحجم نشاطك التجاري.
-        </p>
+    <div className="space-y-7 pb-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-white sm:text-3xl">شراء رصيد</h2>
+          <p className="mt-2 text-sm text-gray-400">اشترِ نقاطًا لتشغيل أدوات الذكاء الاصطناعي وفتح إمكانات إبداعية أكبر.</p>
+        </div>
+        <button onClick={() => dispatch({ type: "SET_TAB", payload: "billing" })} className="rounded-xl border border-[#343846] bg-[#15171c] px-5 py-3 text-xs font-bold text-gray-200 transition hover:border-[#f31325]/60 hover:text-white">
+          عرض سجل الاستهلاك
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {state.plansList.map((plan) => (
-          <div
-            key={plan.id}
-            className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl space-y-4 flex flex-col justify-between"
-          >
-            <div className="space-y-2">
-              <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded font-bold">
-                {plan.badge}
-              </span>
-              <h3 className="font-bold text-white text-sm">{plan.name}</h3>
-              <div className="text-2xl font-black text-[#FF2E4C]">
-                {plan.priceMonthlyLYD} د.ل{" "}
-                <span className="text-xs text-gray-400 font-normal">
-                  / شهرياً
-                </span>
-              </div>
-              <p className="text-xs text-gray-400">{plan.description}</p>
+      <section className="overflow-hidden rounded-[26px] border border-[#353946] bg-[#141619] shadow-[0_24px_70px_rgba(0,0,0,.28)]">
+        <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.15fr_.85fr] lg:p-10">
+          <div>
+            <div className="text-sm font-bold text-gray-300">رصيدك الحالي</div>
+            <div className="mt-3 flex items-end gap-3">
+              <strong className="text-5xl font-black tracking-tight text-white sm:text-6xl">{currentBalance.toLocaleString("ar-LY")}</strong>
+              <span className="pb-2 text-lg font-bold text-gray-400">نقطة</span>
             </div>
-            <button className="w-full bg-[#FF2E4C] hover:bg-[#E50914] text-white font-bold text-xs py-2.5 rounded-xl transition">
-              اختيار الخطة عبر Ezone Pay
+            <div className="mt-7 h-3 overflow-hidden rounded-full bg-[#30333b]">
+              <div className="h-full rounded-full bg-[#d41b2c] transition-all" style={{ width: `${remainingPercent}%` }} />
+            </div>
+            <p className="mt-3 text-xs text-gray-500">{remainingPercent.toFixed(1)}% من الحد الشهري البالغ {monthlyLimit.toLocaleString("ar-LY")} نقطة</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 self-center">
+            <div className="rounded-2xl border border-[#30343e] bg-[#101215] p-5">
+              <div className="text-xs text-gray-500">المستخدم هذا الشهر</div>
+              <div className="mt-2 text-2xl font-black text-[#f31325]">{usedCredits.toLocaleString("ar-LY")}</div>
+            </div>
+            <div className="rounded-2xl border border-[#30343e] bg-[#101215] p-5">
+              <div className="text-xs text-gray-500">الرصيد المتبقي</div>
+              <div className="mt-2 text-2xl font-black text-white">{currentBalance.toLocaleString("ar-LY")}</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div>
+        <h3 className="text-xl font-black text-white">اختر باقة الرصيد</h3>
+        <p className="mt-1 text-xs text-gray-500">تُضاف النقاط إلى محفظتك فور تأكيد الدفع عبر Ezone Pay.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {state.packagesList.filter((pkg) => pkg.isActive).map((pkg) => (
+          <div
+            key={pkg.id}
+            className={`relative flex min-h-72 flex-col justify-between rounded-[24px] border bg-[#141619] p-6 transition hover:-translate-y-1 hover:shadow-[0_18px_55px_rgba(0,0,0,.35)] ${pkg.isBestValue ? "border-[#f31325] shadow-[0_0_35px_rgba(243,19,37,.12)]" : "border-[#343846] hover:border-[#f31325]/65"}`}
+          >
+            {pkg.isBestValue && <span className="absolute -top-3 right-1/2 translate-x-1/2 rounded-full bg-[#d41b2c] px-4 py-1.5 text-[10px] font-black text-white shadow-lg">الأكثر طلبًا</span>}
+            <div>
+              <div className="flex items-center gap-2 text-sm font-bold text-gray-300"><Wallet className="h-5 w-5 text-[#f31325]" /> {pkg.name}</div>
+              <div className="mt-7 text-center">
+                <div className="text-4xl font-black text-white">{pkg.credits.toLocaleString("ar-LY")}</div>
+                <div className="mt-1 text-xs font-bold text-gray-500">نقطة</div>
+                <div className="mt-5 text-2xl font-black text-white">{pkg.priceLYD.toLocaleString("ar-LY")} د.ل</div>
+                {pkg.bonus > 0 && <div className="mt-3 text-xs font-bold text-emerald-400">تشمل {pkg.bonus.toLocaleString("ar-LY")} نقطة هدية</div>}
+              </div>
+            </div>
+            <button
+              onClick={() => startCheckout(pkg.id)}
+              disabled={loadingPackageId !== null}
+              className="mt-7 w-full rounded-xl bg-[#c91a2a] py-3.5 text-sm font-black text-white transition hover:bg-[#ef2638] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loadingPackageId === pkg.id ? "جاري إنشاء رابط الدفع..." : "شراء الآن"}
             </button>
           </div>
         ))}
+      </div>
+
+      <div className="flex items-center justify-between rounded-2xl border border-[#30343e] bg-[#121417] px-5 py-4 text-xs text-gray-500">
+        <span>دفع آمن عبر Ezone Pay</span>
+        <span>النقاط المشتراة لا تنتهي • الهدية صالحة 90 يومًا وتُستهلك أولًا</span>
       </div>
     </div>
   );
 }
 
-function UserSettingsView({ state, showToast }) {
+function UserSettingsView({ state, dispatch, showToast }) {
+  const [firstName, setFirstName] = useState(state.auth.user?.firstName || "");
+  const [lastName, setLastName] = useState(state.auth.user?.lastName || "");
+  const [phone, setPhone] = useState(state.auth.user?.phone || "");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const saveProfile = async () => {
+    if (!firstName.trim() || !lastName.trim() || !phone.trim()) {
+      return showToast("يرجى إدخال الاسم الأول واسم العائلة ورقم الهاتف", "error");
+    }
+    setIsSaving(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { error } = await supabase.rpc("update_own_profile", {
+        p_first_name: firstName.trim(),
+        p_last_name: lastName.trim(),
+        p_phone: phone.trim(),
+        p_avatar_url: state.auth.user?.avatarUrl || "",
+      });
+      if (error) throw error;
+      dispatch({
+        type: "SET_AUTH_USER",
+        payload: { ...state.auth.user, firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim() },
+      });
+      showToast("تم حفظ بيانات الحساب بنجاح", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "تعذر حفظ بيانات الحساب", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -2860,14 +2959,24 @@ function UserSettingsView({ state, showToast }) {
       <div className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl space-y-4 max-w-xl text-xs">
         <div>
           <label className="block text-gray-400 font-bold mb-1">
-            الاسم:
+            الاسم الأول:
           </label>
           <input
             type="text"
-            disabled
-            value={`${state.auth.user?.firstName || ""} ${state.auth.user?.lastName || ""}`.trim()}
-            className="w-full bg-[#0D0F17] border border-[#1F2438] text-gray-400 p-2.5 rounded-xl cursor-not-allowed"
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
+            className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-2.5 rounded-xl"
           />
+        </div>
+
+        <div>
+          <label className="block text-gray-400 font-bold mb-1">اسم العائلة:</label>
+          <input type="text" value={lastName} onChange={(event) => setLastName(event.target.value)} className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-2.5 rounded-xl" />
+        </div>
+
+        <div>
+          <label className="block text-gray-400 font-bold mb-1">رقم الهاتف:</label>
+          <input type="tel" dir="ltr" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+2189XXXXXXXX" className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-2.5 rounded-xl font-mono" />
         </div>
 
         <div>
@@ -2892,12 +3001,11 @@ function UserSettingsView({ state, showToast }) {
         </div>
 
         <button
-          onClick={() =>
-            showToast("تم تحديث التفضيلات الشخصية بنجاح!", "success")
-          }
-          className="bg-[#FF2E4C] text-white font-bold px-5 py-2.5 rounded-xl transition"
+          onClick={saveProfile}
+          disabled={isSaving}
+          className="bg-[#FF2E4C] disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl transition"
         >
-          حفظ التفضيلات
+          {isSaving ? "جاري الحفظ..." : "حفظ بيانات الحساب"}
         </button>
       </div>
     </div>
@@ -3425,7 +3533,7 @@ function AdminDashboardView({ state, dispatch }) {
           label="توليدات AI المكتملة"
           value={state.generations.length}
           subtitle="طلبات الذكاء"
-          icon={<Sparkles className="w-5 h-5 text-purple-400" />}
+          icon={<Sparkles className="w-5 h-5 text-[#FF2E4C]" />}
         />
       </div>
 
@@ -3469,7 +3577,7 @@ function AdminDashboardView({ state, dispatch }) {
 
         <div className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl space-y-4">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <History className="w-4 h-4 text-blue-400" /> آخر السجلات الإدارية
+            <History className="w-4 h-4 text-[#FF2E4C]" /> آخر السجلات الإدارية
             (Audit)
           </h3>
           <div className="space-y-2">
@@ -4238,6 +4346,7 @@ function AdminPackagesView({ state, dispatch, showToast }) {
               النقاط:{" "}
               <span className="font-bold text-white">{pkg.credits}</span>
             </p>
+            <p className="text-xs text-emerald-400">هدية: {pkg.bonus || 0} نقطة • {pkg.bonusValidDays || 90} يومًا</p>
             {canManage && (
               <button
                 onClick={() =>
@@ -4256,8 +4365,42 @@ function AdminPackagesView({ state, dispatch, showToast }) {
 }
 
 function AdminPackageEditModal({ pkg, dispatch, showToast }) {
+  const [name, setName] = useState(pkg.name);
   const [price, setPrice] = useState(pkg.priceLYD);
-  const [credits, setCredits] = useState(pkg.credits);
+  const [purchasedCredits, setPurchasedCredits] = useState(pkg.purchasedCredits || (pkg.credits - pkg.bonus));
+  const [bonus, setBonus] = useState(pkg.bonus || 0);
+  const [bonusValidDays, setBonusValidDays] = useState(pkg.bonusValidDays || 90);
+  const [isBestValue, setIsBestValue] = useState(Boolean(pkg.isBestValue));
+  const [isActive, setIsActive] = useState(pkg.isActive !== false);
+  const [saving, setSaving] = useState(false);
+
+  const savePackage = async () => {
+    if (price <= 0 || purchasedCredits <= 0 || bonus < 0 || bonus * 5 > purchasedCredits) {
+      return showToast("تحقق من القيم: الهدية لا يمكن أن تتجاوز 20% من النقاط الأساسية", "error");
+    }
+    setSaving(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("يرجى تسجيل الدخول مجددًا");
+      const response = await fetch(`/api/v1/admin/credit-packages/${pkg.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ name, priceLYD: price, purchasedCredits, bonusCredits: bonus,
+          bonusValidDays, isFeatured: isBestValue, isActive }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "تعذر حفظ الحزمة");
+      dispatch({ type: "ADMIN_UPDATE_PACKAGE", payload: {
+        pkgId: pkg.id, newName: name, newPriceLYD: price, newPurchasedCredits: purchasedCredits,
+        newBonus: bonus, newCredits: purchasedCredits + bonus, newBonusValidDays: bonusValidDays,
+        isBestValue, isActive,
+      } });
+      showToast("تم حفظ الحزمة في قاعدة البيانات", "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "تعذر حفظ الحزمة", "error");
+    } finally { setSaving(false); }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -4275,6 +4418,10 @@ function AdminPackageEditModal({ pkg, dispatch, showToast }) {
           تعديل {pkg.name}
         </h3>
 
+        <div><label className="block text-gray-400 text-xs mb-1">اسم الحزمة:</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-2.5 rounded-xl text-xs" />
+        </div>
+
         <div>
           <label className="block text-gray-400 text-xs mb-1">
             السعر بالدينار (LYD):
@@ -4289,31 +4436,33 @@ function AdminPackageEditModal({ pkg, dispatch, showToast }) {
 
         <div>
           <label className="block text-gray-400 text-xs mb-1">
-            عدد النقاط:
+            النقاط الأساسية المشتراة:
           </label>
           <input
             type="number"
-            value={credits}
-            onChange={(e) => setCredits(Number(e.target.value))}
+            value={purchasedCredits}
+            onChange={(e) => setPurchasedCredits(Number(e.target.value))}
             className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-2.5 rounded-xl text-xs font-mono"
           />
         </div>
 
+        <div><label className="block text-gray-400 text-xs mb-1">نقاط الهدية (حد أقصى 20%):</label>
+          <input type="number" min="0" value={bonus} onChange={(e) => setBonus(Number(e.target.value))} className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-2.5 rounded-xl text-xs font-mono" />
+        </div>
+        <div><label className="block text-gray-400 text-xs mb-1">صلاحية الهدية بالأيام:</label>
+          <input type="number" min="1" max="365" value={bonusValidDays} onChange={(e) => setBonusValidDays(Number(e.target.value))} className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-2.5 rounded-xl text-xs font-mono" />
+        </div>
+        <div className="flex gap-5 text-xs text-gray-300">
+          <label className="flex items-center gap-2"><input type="checkbox" checked={isBestValue} onChange={(e) => setIsBestValue(e.target.checked)} /> باقة مميزة</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> مفعّلة</label>
+        </div>
+
         <button
-          onClick={() => {
-            dispatch({
-              type: "ADMIN_UPDATE_PACKAGE",
-              payload: {
-                pkgId: pkg.id,
-                newPriceLYD: price,
-                newCredits: credits,
-              },
-            });
-            showToast("تم تحديث الحزمة بنجاح", "success");
-          }}
+          onClick={savePackage}
+          disabled={saving}
           className="w-full bg-[#FF2E4C] text-white font-bold text-xs py-2.5 rounded-xl transition"
         >
-          حفظ والتأكيد
+          {saving ? "جاري الحفظ..." : "حفظ التعديلات"}
         </button>
       </div>
     </div>
@@ -4712,7 +4861,7 @@ function AdminAnalyticsView({ state }) {
           label="استقرار السيرفرات"
           value="99.98%"
           subtitle="جاهزية تشغيلية"
-          icon={<ShieldCheck className="w-5 h-5 text-blue-400" />}
+          icon={<ShieldCheck className="w-5 h-5 text-[#FF2E4C]" />}
         />
       </div>
     </div>

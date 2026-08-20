@@ -1,18 +1,15 @@
 import crypto from 'crypto';
 import { createPrivilegedSupabaseClient } from '../supabase/server';
 import { Logger } from '../observability/telemetry';
+import { EzonePayClient } from './ezonepay-client';
+import { parseEzonePayOrderReference } from './ezonepay-order-reference';
 
 export interface WebhookPayload {
+  event: number;
+  transactionId: number;
+  transactionType: string;
   orderReference: string;
-  providerTxId: string;
-  status: 'paid' | 'failed' | 'cancelled';
-  userId: string;
-  amountLYD: number;
-  currency: string;
-  itemType: 'subscription' | 'purchase';
-  planId?: string;
-  packageId?: string;
-  timestamp?: string;
+  updatedUtc?: string;
 }
 
 export interface FulfillmentResult {
@@ -35,11 +32,12 @@ type RpcClient = ReturnType<typeof createPrivilegedSupabaseClient>;
 
 export class EzonePayFulfillmentService {
   private static clientFactory: () => RpcClient = createPrivilegedSupabaseClient;
+  private static transactionFetcher = EzonePayClient.getOnlineTransaction.bind(EzonePayClient);
   public static verifySignature(rawBody: string, signature: string, hmacSecret: string): boolean {
     if (!rawBody || !signature || !hmacSecret) return false;
     try {
-      const computed = Buffer.from(crypto.createHmac('sha256', hmacSecret).update(rawBody).digest('hex'), 'hex');
-      const supplied = Buffer.from(signature, 'hex');
+      const computed = crypto.createHmac('sha256', hmacSecret).update(rawBody).digest();
+      const supplied = Buffer.from(signature, 'base64');
       return supplied.length === computed.length && crypto.timingSafeEqual(supplied, computed);
     } catch { return false; }
   }
@@ -54,18 +52,27 @@ export class EzonePayFulfillmentService {
     try { payload = JSON.parse(rawBody) as WebhookPayload; }
     catch { return { success: false, isDuplicate: false, orderReference: 'INVALID_JSON', message: 'MALFORMED_JSON_PAYLOAD', errorCode: 'BAD_REQUEST' }; }
 
-    const { orderReference, providerTxId, status, userId, amountLYD, currency, itemType } = payload;
-    const itemId = itemType === 'purchase' ? payload.packageId : itemType === 'subscription' ? payload.planId : undefined;
-    if (!orderReference || !providerTxId || !userId || !status || !currency || !itemType || !itemId || !Number.isFinite(Number(amountLYD)) || Number(amountLYD) <= 0) {
+    const orderReference = payload.orderReference;
+    const providerTxId = String(payload.transactionId ?? '');
+    const order = orderReference ? parseEzonePayOrderReference(orderReference) : null;
+    if (payload.event !== 2 || payload.transactionType?.toLowerCase() !== 'online' || !/^\d+$/.test(providerTxId) || !order) {
       return { success: false, isDuplicate: false, orderReference: orderReference || 'MISSING', message: 'MISSING_OR_INVALID_REQUIRED_PAYLOAD_FIELDS', errorCode: 'INVALID_PAYLOAD' };
     }
-    if (!['paid', 'failed', 'cancelled'].includes(status)) {
-      return { success: false, isDuplicate: false, orderReference, message: 'INVALID_PAYMENT_STATUS', errorCode: 'INVALID_PAYLOAD' };
+    let transaction;
+    try { transaction = await this.transactionFetcher(providerTxId); }
+    catch (error) {
+      Logger.error('Ezone Pay transaction verification failed', error instanceof Error ? error : new Error('Unknown provider error'), { requestId, metadata: { orderReference } });
+      return { success: false, isDuplicate: false, orderReference, message: 'PROVIDER_TRANSACTION_VERIFICATION_FAILED', errorCode: 'PROVIDER_VERIFICATION_FAILED' };
     }
-    if (status !== 'paid') {
-      Logger.info('Non-paid Ezone Pay status acknowledged without fulfillment.', { requestId, metadata: { orderReference, status } });
-      return { success: true, isDuplicate: false, orderReference, message: `PAYMENT_STATUS_${status.toUpperCase()}_ACKNOWLEDGED` };
+    if (transaction.id !== providerTxId || transaction.orderReference !== orderReference) {
+      return { success: false, isDuplicate: false, orderReference, message: 'PROVIDER_TRANSACTION_REFERENCE_MISMATCH', errorCode: 'INVALID_PAYLOAD' };
     }
+    if (!transaction.paidUtc || !/paid/i.test(transaction.statusName || '')) {
+      return { success: false, isDuplicate: false, orderReference, message: 'PROVIDER_TRANSACTION_NOT_PAID', errorCode: 'INVALID_PAYLOAD' };
+    }
+    const { userId, itemType, itemId } = order;
+    const amountLYD = transaction.amount;
+    const currency = 'LYD';
 
     try {
       const payloadHash = crypto.createHash('sha256').update(rawBody).digest('hex');
@@ -103,5 +110,10 @@ export class EzonePayFulfillmentService {
   public static resetClientFactoryForTesting(): void {
     if (process.env.NODE_ENV !== 'test') throw new Error('TEST_HELPER_UNAVAILABLE');
     this.clientFactory = createPrivilegedSupabaseClient;
+    this.transactionFetcher = EzonePayClient.getOnlineTransaction.bind(EzonePayClient);
+  }
+  public static setTransactionFetcherForTesting(fetcher: typeof EzonePayClient.getOnlineTransaction): void {
+    if (process.env.NODE_ENV !== 'test') throw new Error('TEST_HELPER_UNAVAILABLE');
+    this.transactionFetcher = fetcher;
   }
 }

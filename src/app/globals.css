@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand-bg: #050506;
+  --brand-surface: #0d0f17;
+  --brand-card: #121520;
+  --brand-border: #1f2438;
+  --brand-red: #f31325;
+  --brand-red-hover: #ff2637;
+  --brand-text: #f8fafc;
+  --brand-muted: #9ca3af;
+}
+
 html,
 body {
   margin: 0;
@@ -10,10 +21,23 @@ body {
 }
 
 body {
-  background: #090A0F;
-  color: #f3f4f6;
+  background: var(--brand-bg);
+  color: var(--brand-text);
 }
 
 * {
   box-sizing: border-box;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  accent-color: var(--brand-red);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-red);
+  outline-offset: 2px;
 }
