@@ -41,3 +41,8 @@ textarea {
   outline: 2px solid var(--brand-red);
   outline-offset: 2px;
 }
+
+/* The root layout owns the persistent navigation now. */
+main#home > header:first-child {
+  display: none;
+}
