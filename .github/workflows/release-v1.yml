@@ -40,4 +40,10 @@ jobs:
       - name: Unit tests
         run: npm test
       - name: Build
+        env:
+          # Public, non-secret placeholders let client-only Supabase initialization
+          # survive static prerendering in CI. Deployment readiness is verified
+          # separately against the real environment.
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
         run: npm run build
