@@ -10,7 +10,7 @@
     "test": "tsx src/tests/production-hardening.test.ts",
     "test:focused": "node src/tests/run-focused.cjs",
     "test:openrouter": "tsx src/tests/openrouter-client.test.ts",
-    "test:integration": "cross-env TEST_DATABASE_MODE=staging tsx src/tests/run-staging-tests.ts",
+    "test:integration": "cross-env NODE_ENV=test TEST_DATABASE_MODE=staging node src/tests/run-staging.cjs",
     "db:test-reset": "cross-env TEST_DATABASE_MODE=staging tsx -e \"import('./src/lib/supabase/test-db-reset').then(m => m.resetStagingTestData())\""
   },
   "dependencies": {

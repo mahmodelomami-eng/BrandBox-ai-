@@ -6,14 +6,16 @@ export async function main() {
   const dbMode = process.env.TEST_DATABASE_MODE;
   const hasUrl = Boolean(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
   const hasServiceKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const hasDedicatedUser = Boolean(process.env.STAGING_TEST_USER_ID);
 
-  if (dbMode !== 'staging' || !hasUrl || !hasServiceKey) {
+  if (dbMode !== 'staging' || !hasUrl || !hasServiceKey || !hasDedicatedUser) {
     console.log('\n==================================================');
     console.log('REAL INTEGRATION TESTS: NOT RUN — STAGING CREDENTIALS NOT PROVIDED');
     console.log('==================================================');
     console.log('To execute real staging integration tests:');
     console.log('1. Set TEST_DATABASE_MODE=staging');
     console.log('2. Provide SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+    console.log('3. Provide STAGING_TEST_USER_ID for a dedicated test.staging profile');
     console.log('==================================================\n');
     return;
   }

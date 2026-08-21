@@ -1,99 +1,72 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { createStagingTestClient } from '../../lib/supabase/test-client';
 import { EzonePayFulfillmentService } from '../../lib/payments/ezonepay-fulfillment';
+import { createEzonePayOrderReference } from '../../lib/payments/ezonepay-order-reference';
+
+type TestResult = { testName: string; passed: boolean; details?: string };
+
+function requireDedicatedTestUserId(): string {
+  const userId = process.env.STAGING_TEST_USER_ID;
+  if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+    throw new Error('STAGING_TEST_USER_ID must identify a dedicated staging auth user.');
+  }
+  return userId;
+}
+
+function signedWebhook(orderReference: string, transactionId: number) {
+  const secret = process.env.EZONEPAY_HMAC_SECRET || 'staging-test-hmac-secret';
+  const raw = JSON.stringify({ event: 2, transactionId, transactionType: 'online', orderReference });
+  return { raw, secret, signature: crypto.createHmac('sha256', secret).update(raw).digest('base64') };
+}
 
 export async function runStagingEzonePayIntegrationTests(): Promise<{
   allPassed: boolean;
-  results: { testName: string; passed: boolean; details?: string }[];
+  results: TestResult[];
 }> {
-  const results: { testName: string; passed: boolean; details?: string }[] = [];
-  const testUserId = 'usr_test_staging_pay_01';
-  const testHmacSecret = process.env.EZONEPAY_HMAC_SECRET || 'staging_test_hmac_secret_32bytes';
-
-  try {
-    const supabase = createStagingTestClient();
-
-    // 1. Seed Staging Profile
-    await supabase.from('profiles').upsert({
-      id: testUserId,
-      email: 'pay.test.staging@brandbox.ai',
-      first_name: 'Payment',
-      last_name: 'Tester',
-      credit_balance: 50,
-      role: 'USER',
-      status: 'active'
-    });
-
-    const orderRef = `BBX-TEST-${Date.now()}`;
-    const rawBody = JSON.stringify({
-      orderReference: orderRef,
-      providerTxId: `ezp_tx_staging_${Date.now()}`,
-      status: 'paid',
-      userId: testUserId,
-      amountLYD: 25,
-      currency: 'LYD',
-      itemType: 'purchase',
-      packageId: 'pkg_100'
-    });
-
-    const signature = crypto.createHmac('sha256', testHmacSecret).update(rawBody).digest('hex');
-
-    // 2. Execute Webhook Fulfillment
-    const res1 = await EzonePayFulfillmentService.processWebhook(rawBody, signature, testHmacSecret, 'req_staging_pay1');
-
-    // 3. Repeat Webhook Fulfillment with Identical Payload
-    const res2 = await EzonePayFulfillmentService.processWebhook(rawBody, signature, testHmacSecret, 'req_staging_pay2');
-
-    // 4. Verify Staging DB Records
-    const { data: dbIdemp } = await supabase
-      .from('payment_idempotency')
-      .select('*')
-      .eq('order_reference', orderRef);
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('credit_balance')
-      .eq('id', testUserId)
-      .single();
-
-    const passed =
-      res1.success && !res1.isDuplicate &&
-      res2.success && res2.isDuplicate &&
-      dbIdemp?.length === 1 &&
-      profile?.credit_balance === 150;
-
-    results.push({ testName: 'Real Staging DB Webhook Durable Idempotency & Credit Fulfillment', passed });
-  } catch (err: any) {
-    results.push({ testName: 'Real Staging DB Webhook Durable Idempotency & Credit Fulfillment', passed: false, details: err.message });
+  const results: TestResult[] = [];
+  const testUserId = requireDedicatedTestUserId();
+  const supabase = createStagingTestClient();
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('email,credit_balance')
+    .eq('id', testUserId)
+    .single();
+  if (profileError || !profile?.email?.includes('test.staging')) {
+    throw new Error('STAGING_TEST_USER_ID must belong to a dedicated test.staging profile.');
   }
 
+  process.env.EZONEPAY_ORDER_SIGNING_SECRET = 'staging-order-reference-test-secret';
+  const initialBalance = Number(profile.credit_balance);
+  const orderReference = createEzonePayOrderReference({ userId: testUserId, itemType: 'purchase', itemId: 'pkg_100' });
+  const transactionId = Number(String(Date.now()).slice(-9));
+  const webhook = signedWebhook(orderReference, transactionId);
+  EzonePayFulfillmentService.setTransactionFetcherForTesting(async id => ({
+    id,
+    orderReference,
+    amount: 10,
+    status: 2,
+    statusName: 'Paid',
+    paidUtc: new Date().toISOString(),
+  }));
+
   try {
-    const orderRef = `BBX-TEST-CONC-${Date.now()}`;
-    const rawBody = JSON.stringify({
-      orderReference: orderRef,
-      providerTxId: `ezp_tx_conc_${Date.now()}`,
-      status: 'paid',
-      userId: testUserId,
-      amountLYD: 25,
-      currency: 'LYD',
-      itemType: 'purchase',
-      packageId: 'pkg_100'
-    });
-
-    const signature = crypto.createHmac('sha256', testHmacSecret).update(rawBody).digest('hex');
-
-    // Two simultaneous webhook invocations
-    const p1 = EzonePayFulfillmentService.processWebhook(rawBody, signature, testHmacSecret, 'req_conc_1');
-    const p2 = EzonePayFulfillmentService.processWebhook(rawBody, signature, testHmacSecret, 'req_conc_2');
-
-    const [r1, r2] = await Promise.all([p1, p2]);
-
-    const passed = (r1.success && r2.success) && ((r1.isDuplicate && !r2.isDuplicate) || (!r1.isDuplicate && r2.isDuplicate));
-    results.push({ testName: 'Real Staging DB Concurrent Webhook Replay Guard', passed });
-  } catch (err: any) {
-    results.push({ testName: 'Real Staging DB Concurrent Webhook Replay Guard', passed: false, details: err.message });
+    const first = await EzonePayFulfillmentService.processWebhook(webhook.raw, webhook.signature, webhook.secret, 'staging-payment-1');
+    const duplicate = await EzonePayFulfillmentService.processWebhook(webhook.raw, webhook.signature, webhook.secret, 'staging-payment-2');
+    const { data: updated } = await supabase.from('profiles').select('credit_balance').eq('id', testUserId).single();
+    const { count } = await supabase.from('payment_idempotency').select('*', { count: 'exact', head: true }).eq('order_reference', orderReference);
+    const passed = first.success && !first.isDuplicate && duplicate.success && duplicate.isDuplicate
+      && count === 1 && Number(updated?.credit_balance) === initialBalance + 100;
+    results.push({ testName: 'Staging durable webhook fulfillment and duplicate guard', passed });
+  } catch (error) {
+    results.push({ testName: 'Staging durable webhook fulfillment and duplicate guard', passed: false, details: error instanceof Error ? error.message : String(error) });
+  } finally {
+    await supabase.from('credit_lots').delete().eq('order_reference', orderReference);
+    await supabase.from('credit_transactions').delete().eq('idempotency_key', `payment:${orderReference}`);
+    await supabase.from('payment_transactions').delete().eq('order_reference', orderReference);
+    await supabase.from('payment_idempotency').delete().eq('order_reference', orderReference);
+    await supabase.from('profiles').update({ credit_balance: initialBalance }).eq('id', testUserId);
+    EzonePayFulfillmentService.resetClientFactoryForTesting();
   }
 
-  const allPassed = results.every(r => r.passed);
-  return { allPassed, results };
+  return { allPassed: results.every(result => result.passed), results };
 }

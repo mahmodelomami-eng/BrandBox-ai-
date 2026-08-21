@@ -1,65 +1,54 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { EzonePayFulfillmentService } from '../lib/payments/ezonepay-fulfillment';
-import { CreditEngine } from '../lib/credits/credit-engine';
+import { createEzonePayOrderReference } from '../lib/payments/ezonepay-order-reference';
+
+type TestResult = { testName: string; passed: boolean; details?: string };
 
 export async function runPhase10EzonePayTests(): Promise<{
   allPassed: boolean;
-  results: { testName: string; passed: boolean; details?: string }[];
+  results: TestResult[];
 }> {
-  const results: { testName: string; passed: boolean; details?: string }[] = [];
-  const testSecret = 'test_ezonepay_hmac_secret_99999999';
-  const testUserId = 'usr_payment_test_101';
+  const results: TestResult[] = [];
+  const hmacSecret = 'phase10-test-hmac-secret';
+  process.env.EZONEPAY_ORDER_SIGNING_SECRET = 'phase10-order-signing-secret';
+  const orderReference = createEzonePayOrderReference({
+    userId: '00000000-0000-4000-8000-000000000001',
+    itemType: 'purchase',
+    itemId: 'pkg_100',
+  });
+  const rawBody = JSON.stringify({ event: 2, transactionId: 1001, transactionType: 'online', orderReference });
+  const signature = crypto.createHmac('sha256', hmacSecret).update(rawBody).digest('base64');
+
+  results.push({
+    testName: 'Constant-time HMAC-SHA256 signature verification',
+    passed: EzonePayFulfillmentService.verifySignature(rawBody, signature, hmacSecret),
+  });
 
   try {
-    EzonePayFulfillmentService.clearLocalState();
-    CreditEngine.clearLocalState();
-
-    const rawBody = JSON.stringify({
-      orderReference: 'BBX-TEST-001',
-      providerTxId: 'ezp_tx_1001',
-      status: 'paid',
-      userId: testUserId,
-      amountLYD: 25,
-      currency: 'LYD',
-      itemType: 'purchase',
-      packageId: 'pkg_100'
+    EzonePayFulfillmentService.setTransactionFetcherForTesting(async id => ({
+      id,
+      orderReference,
+      amount: 10,
+      status: 2,
+      statusName: 'Paid',
+      paidUtc: new Date().toISOString(),
+    }));
+    EzonePayFulfillmentService.setClientFactoryForTesting(() => ({
+      rpc: async () => ({
+        data: [{ already_processed: false, success: true, message: 'SUCCESS', credits_granted: 100, payment_id: 'pay-test', subscription_id: null, new_balance: 150 }],
+        error: null,
+      }),
+    } as never));
+    const fulfillment = await EzonePayFulfillmentService.processWebhook(rawBody, signature, hmacSecret, 'phase10-test');
+    results.push({
+      testName: 'Atomic credit package fulfillment',
+      passed: fulfillment.success && fulfillment.creditsGranted === 100 && fulfillment.newBalance === 150,
     });
-
-    const validSig = crypto.createHmac('sha256', testSecret).update(rawBody).digest('hex');
-    const isValid = EzonePayFulfillmentService.verifySignature(rawBody, validSig, testSecret);
-
-    results.push({ testName: 'Constant-Time HMAC-SHA256 Signature Verification', passed: isValid });
-  } catch (err: any) {
-    results.push({ testName: 'Constant-Time HMAC-SHA256 Signature Verification', passed: false, details: err.message });
+  } catch (error) {
+    results.push({ testName: 'Atomic credit package fulfillment', passed: false, details: error instanceof Error ? error.message : String(error) });
+  } finally {
+    EzonePayFulfillmentService.resetClientFactoryForTesting();
   }
 
-  try {
-    EzonePayFulfillmentService.clearLocalState();
-    CreditEngine.clearLocalState();
-    CreditEngine.setLocalBalanceForTesting(testUserId, 50);
-
-    const orderRef = 'BBX-PKG-PURCHASE-01';
-    const rawBody = JSON.stringify({
-      orderReference: orderRef,
-      providerTxId: 'ezp_tx_2002',
-      status: 'paid',
-      userId: testUserId,
-      amountLYD: 25,
-      currency: 'LYD',
-      itemType: 'purchase',
-      packageId: 'pkg_100'
-    });
-
-    const sig = crypto.createHmac('sha256', testSecret).update(rawBody).digest('hex');
-    const fulfillment = await EzonePayFulfillmentService.processWebhook(rawBody, sig, testSecret, 'req_test_01');
-    const newBalance = await CreditEngine.getBalance(testUserId);
-
-    const passed = fulfillment.success && fulfillment.creditsGranted === 100 && newBalance === 150;
-    results.push({ testName: 'Standalone Credit Package Purchase Fulfillment', passed });
-  } catch (err: any) {
-    results.push({ testName: 'Standalone Credit Package Purchase Fulfillment', passed: false, details: err.message });
-  }
-
-  const allPassed = results.every(r => r.passed);
-  return { allPassed, results };
+  return { allPassed: results.every(result => result.passed), results };
 }
