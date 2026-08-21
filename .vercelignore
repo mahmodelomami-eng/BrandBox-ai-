@@ -1,0 +1,7 @@
+App.jsx.before-*.backup
+*.tsbuildinfo
+design-qa.md
+*-ui-qa.png
+.env
+.env.*
+!.env.example

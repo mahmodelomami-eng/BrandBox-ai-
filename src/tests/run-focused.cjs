@@ -11,3 +11,4 @@ require.extensions['.ts'] = function transpileTypeScript(module, filename) {
 };
 
 require('./credit-payment-hardening.test.ts');
+require('./openrouter-client.test.ts');
