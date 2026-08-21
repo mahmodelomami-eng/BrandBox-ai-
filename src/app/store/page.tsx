@@ -26,7 +26,14 @@ export default async function StorePage() {
               أدوات ذكاء اصطناعي، برامج، اشتراكات، ألعاب وبطاقات رقمية مع تسعير واضح بالدينار الليبي.
             </p>
           </div>
-          <Link href="/" className="text-sm text-zinc-400 transition hover:text-white">العودة للمنصة</Link>
+          <div className="flex items-center gap-4 text-sm">
+            <Link href="/store/purchases" className="font-semibold text-white transition hover:text-red-400">مشترياتي</Link>
+            <Link href="/" className="text-zinc-400 transition hover:text-white">العودة للمنصة</Link>
+          </div>
+        </div>
+
+        <div className="mb-7 rounded-2xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm leading-6 text-zinc-400">
+          لا يتم تفعيل أي خدمة مدفوعة إلا بعد اعتماد قناة توريد رسمية والتحقق من صلاحية المنطقة والتفعيل الآلي. المنتجات غير المعتمدة تبقى للعرض فقط.
         </div>
 
         {products.length === 0 ? (
