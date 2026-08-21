@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - release/v1.0.0-production
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -13,12 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - name: Generate npm lockfile
         run: npm install --package-lock-only --ignore-scripts
-      - name: Commit lockfile when changed
+      - name: Commit lockfile when changed on release branch
+        if: github.event_name == 'push'
         run: |
           if ! git diff --quiet -- package-lock.json || [ -n "$(git ls-files --others --exclude-standard package-lock.json)" ]; then
             git config user.name "github-actions[bot]"
