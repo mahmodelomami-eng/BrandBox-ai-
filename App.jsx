@@ -128,33 +128,33 @@ export const UNIFIED_MODEL_REGISTRY = {
   ],
   image: [
     {
-      id: "imagen-4.0-generate-001",
-      displayName: "Imagen 4.0 Ultra",
-      provider: "Google",
-      creditCost: 5,
+      id: "openai/gpt-image-2",
+      displayName: "GPT Image 2",
+      provider: "OpenAI",
+      creditCost: 6,
       minPlan: "starter",
       isActive: true,
-      capabilities: ["photorealistic", "3d", "cinematic"],
+      capabilities: ["photorealistic", "editing", "high-quality"],
       environment: "production",
     },
     {
-      id: "gemini-3.1-flash-image-preview",
-      displayName: "Gemini Flash Image",
+      id: "bytedance-seed/seedream-5-0-lite",
+      displayName: "Seedream 5.0 Lite",
+      provider: "ByteDance",
+      creditCost: 4,
+      minPlan: "free",
+      isActive: true,
+      capabilities: ["fast", "text-to-image", "image-editing"],
+      environment: "production",
+    },
+    {
+      id: "google/gemini-3.1-flash-lite-image",
+      displayName: "Nano Banana 2 Lite",
       provider: "Google",
       creditCost: 4,
       minPlan: "free",
       isActive: true,
-      capabilities: ["editing", "fast"],
-      environment: "production",
-    },
-    {
-      id: "flux-1-schnell",
-      displayName: "Flux 1 Schnell",
-      provider: "Black Forest Labs",
-      creditCost: 3,
-      minPlan: "free",
-      isActive: true,
-      capabilities: ["anime", "minimalist"],
+      capabilities: ["fast", "multimodal", "image-editing"],
       environment: "production",
     },
   ],
@@ -876,6 +876,25 @@ function appReducer(state, action) {
             : null,
       };
 
+    case "LOAD_PROJECT_CONTENT":
+      return {
+        ...state,
+        generations: action.payload.generations,
+        assets: action.payload.assets,
+      };
+
+    case "GENERATION_COMPLETED":
+      return {
+        ...state,
+        generations: [action.payload.generation, ...state.generations],
+        assets: [...action.payload.assets, ...state.assets],
+        credits: { ...state.credits, balance: action.payload.remainingBalance },
+        auth: {
+          ...state.auth,
+          user: state.auth.user ? { ...state.auth.user, creditBalance: action.payload.remainingBalance } : null,
+        },
+      };
+
     case "SET_AUTH_USER":
       return {
         ...state,
@@ -1412,6 +1431,46 @@ const appUser = mapProfileToAppUser(profile, authUser);
       })) });
     }
 
+    async function loadProjectContent(accessToken, userId) {
+      const response = await fetch("/api/v1/generations", { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!response.ok) return;
+      const result = await response.json();
+      if (!mounted || !Array.isArray(result.generations) || !Array.isArray(result.assets)) return;
+      dispatch({
+        type: "LOAD_PROJECT_CONTENT",
+        payload: {
+          generations: result.generations.map((generation) => ({
+            id: generation.id,
+            userId,
+            type: generation.generation_type,
+            provider: generation.provider,
+            model: generation.model,
+            prompt: generation.prompt,
+            settings: generation.settings || {},
+            status: generation.status,
+            creditsUsed: Number(generation.credits_consumed || 0),
+            projectId: generation.project_id,
+            resultUrl: null,
+            createdAt: generation.created_at,
+          })),
+          assets: result.assets.map((asset) => ({
+            id: asset.id,
+            generationId: asset.generation_id,
+            userId,
+            projectId: asset.project_id,
+            type: "image",
+            name: asset.name,
+            filePath: asset.signed_url,
+            storagePath: asset.file_path,
+            mimeType: asset.mime_type,
+            width: asset.width,
+            height: asset.height,
+            createdAt: asset.created_at,
+          })).filter((asset) => Boolean(asset.filePath)),
+        },
+      });
+    }
+
     async function initializeAuth() {
       try {
         const supabase = createBrowserSupabaseClient();
@@ -1429,6 +1488,7 @@ const appUser = mapProfileToAppUser(profile, authUser);
           await syncAuthUser(session.user);
           await loadProjects();
           await loadCreditPackages();
+          await loadProjectContent(session.access_token, session.user.id);
         }
 
         const {
@@ -1441,6 +1501,7 @@ const appUser = mapProfileToAppUser(profile, authUser);
               await syncAuthUser(nextSession.user);
               await loadProjects();
               await loadCreditPackages();
+              await loadProjectContent(nextSession.access_token, nextSession.user.id);
             } else {
               dispatch({
                 type: "SET_AUTH_USER",
@@ -1451,6 +1512,7 @@ const appUser = mapProfileToAppUser(profile, authUser);
                 type: "LOAD_USER_PROJECTS",
                 payload: [],
               });
+              dispatch({ type: "LOAD_PROJECT_CONTENT", payload: { generations: [], assets: [] } });
             }
           } catch (error) {
             console.error("Auth/Profile sync error:", error);
@@ -1708,33 +1770,6 @@ function UserWorkspaceLayout({
               }
               onClick={() => {
                 dispatch({ type: "SET_TAB", payload: "projects" });
-                setMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon={<MessageSquare className="w-4 h-4" />}
-              label="المساعد الذكي (AI Chat)"
-              active={state.activeTab === "chat"}
-              onClick={() => {
-                dispatch({ type: "SET_TAB", payload: "chat" });
-                setMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon={<ImageIcon className="w-4 h-4" />}
-              label="مولد الصور (AI Images)"
-              active={state.activeTab === "images"}
-              onClick={() => {
-                dispatch({ type: "SET_TAB", payload: "images" });
-                setMobileMenuOpen(false);
-              }}
-            />
-            <NavItem
-              icon={<Video className="w-4 h-4" />}
-              label="مولد الفيديو (AI Video)"
-              active={state.activeTab === "video"}
-              onClick={() => {
-                dispatch({ type: "SET_TAB", payload: "video" });
                 setMobileMenuOpen(false);
               }}
             />
@@ -2021,73 +2056,88 @@ function UserDashboardView({ state, dispatch }) {
 }
 
 function UserProjectsView({ state, dispatch }) {
+  const getProjectMedia = (projectId) => {
+    const projectAssets = state.assets.filter((asset) => asset.projectId === projectId);
+    const projectGenerations = state.generations.filter((generation) => generation.projectId === projectId && generation.type !== "image");
+    return {
+      count: projectAssets.length + projectGenerations.length,
+      images: [
+        ...projectAssets.map((asset) => asset.filePath),
+        ...projectGenerations.map((generation) => generation.resultUrl),
+      ].filter(Boolean),
+    };
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8" dir="rtl">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-bold text-white">المشاريع التسويقية</h2>
-          <p className="text-xs text-gray-400">
-            إدارة ومتابعة سياق الهويات التجارية وحملاتها.
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF2E4C]">
+            مساحة العمل
+          </p>
+          <h2 className="text-2xl font-black text-white">مشاريعي</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            كل صورك ومحادثاتك وفيديوهاتك محفوظة داخل المشروع الذي تنتمي إليه.
           </p>
         </div>
-        <button
-          onClick={() =>
-            dispatch({ type: "SET_CREATE_PROJECT_MODAL", payload: true })
-          }
-          className="bg-[#FF2E4C] hover:bg-[#E50914] text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>مشروع جديد</span>
-        </button>
+        <div className="flex items-center gap-2 rounded-2xl border border-[#1F2438] bg-[#0D0F17] p-1.5">
+          <button className="rounded-xl bg-[#1A1E2C] px-4 py-2 text-xs font-bold text-white">الأحدث</button>
+          <button className="rounded-xl px-4 py-2 text-xs font-bold text-gray-500 transition hover:text-white">الكل</button>
+          <Search className="mx-2 h-4 w-4 text-gray-500" />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {state.projects.map((p) => (
-          <div
-            key={p.id}
-            onClick={() =>
-              dispatch({ type: "SET_ACTIVE_PROJECT", payload: p.id })
-            }
-            className="p-5 bg-[#121520] border border-[#1F2438] hover:border-[#FF2E4C]/50 rounded-2xl cursor-pointer transition space-y-3 group"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2.5 py-0.5 rounded-full font-bold border border-amber-500/30">
-                {p.industry}
+      <div className="grid grid-cols-1 gap-x-5 gap-y-8 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <button
+          onClick={() => dispatch({ type: "SET_CREATE_PROJECT_MODAL", payload: true })}
+          className="group text-right"
+        >
+          <div className="flex aspect-[4/3] items-center justify-center rounded-2xl border border-dashed border-[#34394C] bg-[#121520] transition group-hover:border-[#FF2E4C] group-hover:bg-[#FF2E4C]/5">
+            <div className="text-center">
+              <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#202433] text-gray-300 transition group-hover:bg-[#FF2E4C] group-hover:text-white">
+                <Plus className="h-6 w-6" />
               </span>
-              <span className="text-[10px] text-gray-500">{p.timeAgo}</span>
-            </div>
-            <h3 className="font-bold text-white text-sm group-hover:text-[#FF2E4C] transition">
-              {p.name}
-            </h3>
-            <p className="text-xs text-gray-400 line-clamp-2">
-              {p.description}
-            </p>
-            <div className="flex items-center justify-between pt-2 border-t border-[#1F2438] text-xs">
-              <span className="text-gray-400">
-                الجمهور:{" "}
-                <strong className="text-gray-200">{p.targetAudience}</strong>
-              </span>
-              <span className="text-[#FF2E4C] font-bold flex items-center gap-1">
-                دخول مساحة العمل <ArrowLeft className="w-3.5 h-3.5" />
-              </span>
+              <span className="text-sm font-bold text-white">مشروع جديد</span>
             </div>
           </div>
-        ))}
+          <p className="mt-3 text-sm font-bold text-white">ابدأ مساحة إبداعية</p>
+          <p className="mt-1 text-xs text-gray-500">اجمع الصور والفيديو والمحادثات</p>
+        </button>
+
+        {state.projects.map((p) => {
+          const media = getProjectMedia(p.id);
+          const cover = media.images[0] || p.thumbnail;
+          return (
+          <button
+            key={p.id}
+            onClick={() => dispatch({ type: "SET_ACTIVE_PROJECT", payload: p.id })}
+            className="group min-w-0 text-right"
+          >
+            <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-[#1F2438] bg-[#121520]">
+              {cover ? (
+                <img src={cover} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+              ) : (
+                <div className="flex h-full items-center justify-center"><ImageIcon className="h-9 w-9 text-gray-700" /></div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+              <span className="absolute bottom-3 right-3 rounded-full border border-white/10 bg-black/65 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur-md">
+                {media.count} توليد
+              </span>
+              <span className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-md transition group-hover:opacity-100">
+                <ChevronLeft className="h-4 w-4" />
+              </span>
+            </div>
+            <div className="mt-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-extrabold text-white transition group-hover:text-[#FF2E4C]">{p.name}</h3>
+                <p className="mt-1 truncate text-xs text-gray-500">{p.industry} · {p.timeAgo || "تم التحديث مؤخراً"}</p>
+              </div>
+              <FolderOpen className="mt-0.5 h-4 w-4 shrink-0 text-gray-600" />
+            </div>
+          </button>
+        )})}
       </div>
     </div>
-  );
-}
-
-function ArrowLeft(props) {
-  return (
-    <svg {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M10 19l-7-7m0 0l7-7m-7 7h18"
-      />
-    </svg>
   );
 }
 
@@ -2095,181 +2145,188 @@ function ProjectWorkspaceView({ state, dispatch, showToast }) {
   const activeProj =
     state.projects.find((p) => p.id === state.activeProjectId) ||
     state.projects[0];
-  const activeTab = state.projectWorkspaceTab || "overview";
+  const [mode, setMode] = useState("image");
+  const [prompt, setPrompt] = useState("");
+  const [aspectRatio, setAspectRatio] = useState("1:1");
+  const [aspectMenuOpen, setAspectMenuOpen] = useState(false);
+  const [count, setCount] = useState(1);
+  const imageModels = state.modelRegistry.image.filter((model) => model.isActive);
+  const [selectedImageModel, setSelectedImageModel] = useState(imageModels[0]?.id || "");
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [useBrandKit, setUseBrandKit] = useState(true);
+  const [showSettings, setShowSettings] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const workspaceTabs = [
-    {
-      id: "overview",
-      label: "نظرة عامة",
-      icon: <Target className="w-4 h-4" />,
-    },
-    {
-      id: "chat",
-      label: "المساعد الذكي",
-      icon: <MessageSquare className="w-4 h-4" />,
-    },
-    {
-      id: "image",
-      label: "مولد الصور",
-      icon: <ImageIcon className="w-4 h-4" />,
-    },
-    { id: "video", label: "مولد الفيديو", icon: <Video className="w-4 h-4" /> },
-    {
-      id: "assets",
-      label: "الأصول (Assets)",
-      icon: <Database className="w-4 h-4" />,
-    },
-    {
-      id: "history",
-      label: "سجل التوليد",
-      icon: <History className="w-4 h-4" />,
-    },
-    {
-      id: "templates",
-      label: "القوالب المتاحة",
-      icon: <Layers3 className="w-4 h-4" />,
-    },
-    {
-      id: "brand-kit",
-      label: "هوية المشروع",
-      icon: <Palette className="w-4 h-4" />,
-    },
-  ];
+  if (!activeProj) {
+    return <div className="py-20 text-center text-sm text-gray-500">أنشئ مشروعك الأول للبدء.</div>;
+  }
+
+  const projectAssets = state.assets.filter((asset) => asset.projectId === activeProj.id);
+  const projectGenerations = state.generations.filter((generation) => generation.projectId === activeProj.id);
+  const timelineItems = [
+    ...projectAssets.map((asset) => ({ id: asset.id, type: asset.type || "image", url: asset.filePath, title: asset.name, createdAt: asset.createdAt })),
+    ...projectGenerations.filter((generation) => generation.type !== "image").map((generation) => ({ id: generation.id, type: generation.type, url: generation.resultUrl, title: generation.prompt, createdAt: generation.createdAt })),
+  ].filter((item) => filter === "all" || item.type === filter);
+  const selectedModel = imageModels.find((model) => model.id === selectedImageModel);
+  const aspectRatios = ["Auto", "4:1", "3:1", "21:9", "2:1", "17:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16"];
+
+  const startGeneration = async () => {
+    if (mode === "video") return showToast("مولد الفيديو سيُتاح بعد اكتمال ربط المزود", "error");
+    if (!prompt.trim()) return showToast("اكتب وصفاً واضحاً للتوليد أولاً", "error");
+    if (isGenerating) return;
+    setIsGenerating(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (sessionError || !accessToken) throw new Error("يجب تسجيل الدخول قبل بدء التوليد");
+      const modelId = mode === "image" ? selectedImageModel : state.modelRegistry.chat.find((model) => model.isActive)?.id;
+      if (!modelId) throw new Error("لا توجد أداة توليد متاحة حالياً");
+      const response = await fetch("/api/v1/generations", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          generationType: mode,
+          modelId,
+          prompt: prompt.trim(),
+          projectId: activeProj.id,
+          settings: mode === "image" ? {
+            aspectRatio: aspectRatio === "Auto" ? "auto" : aspectRatio,
+            count,
+            resolution: "1K",
+            useBrandKit,
+          } : {},
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.errorMessage || result.error || "فشل التوليد");
+      const createdAt = new Date().toISOString();
+      const resultUrls = Array.isArray(result.resultUrls) ? result.resultUrls : result.resultUrl ? [result.resultUrl] : [];
+      const storagePaths = Array.isArray(result.storagePaths) ? result.storagePaths : [];
+      dispatch({
+        type: "GENERATION_COMPLETED",
+        payload: {
+          generation: {
+            id: result.generationId,
+            projectId: activeProj.id,
+            userId: state.auth.user?.id,
+            type: mode,
+            provider: "openrouter",
+            model: modelId,
+            prompt: prompt.trim(),
+            settings: mode === "image" ? { aspectRatio, count, useBrandKit } : {},
+            status: "completed",
+            creditsUsed: result.creditsConsumed,
+            resultUrl: resultUrls[0] || null,
+            content: result.content || null,
+            createdAt,
+          },
+          assets: resultUrls.map((url, index) => ({
+            id: `asset_${result.generationId}_${index + 1}`,
+            projectId: activeProj.id,
+            generationId: result.generationId,
+            userId: state.auth.user?.id,
+            name: `BrandBox ${index + 1}`,
+            type: "image",
+            filePath: url,
+            storagePath: storagePaths[index] || null,
+            createdAt,
+          })),
+          remainingBalance: result.remainingBalance,
+        },
+      });
+      dispatch({ type: "SET_PROJECT_WORKSPACE_TAB", payload: mode });
+      setPrompt("");
+      showToast(`اكتمل ${mode === "chat" ? "الرد" : `توليد ${resultUrls.length} ${resultUrls.length === 1 ? "صورة" : "صور"}`}. الرصيد المتبقي: ${result.remainingBalance}`, "success");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "تعذر إكمال التوليد", "error");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Workspace Header */}
-      <div className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <button
-              onClick={() => dispatch({ type: "SET_TAB", payload: "projects" })}
-              className="text-xs text-gray-400 hover:text-white flex items-center gap-1"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-              <span>المشاريع</span>
-            </button>
-            <span className="text-gray-600">/</span>
-            <span className="text-xs font-bold text-[#FF2E4C]">
-              {activeProj.name}
-            </span>
+    <div className="-m-4 flex min-h-[calc(100vh-8rem)] flex-col overflow-hidden rounded-2xl border border-[#1F2438] bg-[#090A0F] lg:-m-8 lg:flex-row" dir="rtl">
+      <aside className="order-1 flex w-full shrink-0 flex-col border-b border-[#1F2438] bg-[#11131A] lg:order-none lg:w-[340px] lg:border-b-0 lg:border-l">
+        <div className="flex items-center justify-between border-b border-[#242837] px-5 py-4">
+          <div>
+            <p className="text-[10px] font-bold text-[#FF2E4C]">إنشاء داخل المشروع</p>
+            <h3 className="mt-0.5 max-w-[220px] truncate text-sm font-extrabold text-white">{activeProj.name}</h3>
           </div>
-          <h2 className="text-lg font-extrabold text-white">
-            {activeProj.name}
-          </h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {activeProj.description}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs bg-[#0D0F17] border border-[#1F2438] text-gray-300 px-3 py-1.5 rounded-xl font-bold">
-            النبرة: {activeProj.tone}
-          </span>
-          <span className="text-xs bg-[#0D0F17] border border-[#1F2438] text-amber-400 px-3 py-1.5 rounded-xl font-bold">
-            المجال: {activeProj.industry}
-          </span>
-        </div>
-      </div>
-
-      {/* Sub-Tabs Bar */}
-      <div className="flex items-center gap-1 border-b border-[#1F2438] overflow-x-auto pb-2">
-        {workspaceTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() =>
-              dispatch({ type: "SET_PROJECT_WORKSPACE_TAB", payload: tab.id })
-            }
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition shrink-0 ${
-              activeTab === tab.id
-                ? "bg-[#FF2E4C] text-white shadow-lg shadow-[#FF2E4C]/20"
-                : "text-gray-400 hover:text-white hover:bg-[#121520]"
-            }`}
-          >
-            {tab.icon}
-            <span>{tab.label}</span>
+          <button onClick={() => setShowSettings((value) => !value)} className="rounded-xl border border-[#2B3041] p-2 text-gray-400 transition hover:text-white" aria-label="إعدادات التوليد">
+            <SlidersHorizontal className="h-4 w-4" />
           </button>
-        ))}
-      </div>
+        </div>
 
-      {/* Sub-Tab Content Rendering */}
-      {activeTab === "overview" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl space-y-3">
-            <h3 className="font-bold text-white text-sm flex items-center gap-2">
-              <Target className="w-4 h-4 text-[#FF2E4C]" /> إعدادات الهوية وسياق
-              التوليد
-            </h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-1 border-b border-[#1F2438]">
-                <span className="text-gray-400">اسم العلامة:</span>
-                <span className="font-bold text-white">
-                  {state.brandKit.brandName}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#1F2438]">
-                <span className="text-gray-400">الجمهور المستهدف:</span>
-                <span className="font-bold text-white">
-                  {activeProj.targetAudience}
-                </span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#1F2438]">
-                <span className="text-gray-400">اللغة الرسمية:</span>
-                <span className="font-bold text-white">
-                  {activeProj.language}
-                </span>
-              </div>
-            </div>
+        <div className="flex gap-1 border-b border-[#242837] p-3">
+          {[
+            { id: "image", label: "صورة", icon: ImageIcon },
+            { id: "chat", label: "محادثة", icon: MessageSquare },
+            { id: "video", label: "فيديو", icon: Video },
+          ].map((item) => {
+            const Icon = item.icon;
+            return <button key={item.id} onClick={() => setMode(item.id)} className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-xs font-bold transition ${mode === item.id ? "bg-white text-black" : "text-gray-500 hover:bg-[#1A1D27] hover:text-white"}`}><Icon className="h-3.5 w-3.5" />{item.label}</button>;
+          })}
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          <div>
+            <label className="mb-2 block text-xs font-bold text-gray-300">الوصف</label>
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={7} placeholder={mode === "chat" ? "اكتب سؤالك أو الفكرة التي تريد تطويرها..." : mode === "video" ? "صف المشهد والحركة والمدة..." : "صف البوستر، العناصر، الألوان والأسلوب البصري..."} className="w-full resize-none rounded-2xl border border-[#2B3041] bg-[#1A1D25] p-3 text-sm leading-6 text-white placeholder:text-gray-600" />
           </div>
-          <div className="p-5 bg-[#121520] border border-[#1F2438] rounded-2xl space-y-3">
-            <h3 className="font-bold text-white text-sm flex items-center gap-2">
-              <Database className="w-4 h-4 text-emerald-400" /> أصول المشروع
-            </h3>
-            <p className="text-xs text-gray-400">
-              إجمالي الأصول المخصصة لهذا المشروع:{" "}
-              {state.assets.filter((a) => a.projectId === activeProj.id).length}
-            </p>
+
+          {showSettings && mode !== "chat" && <div className="space-y-3">
+            <div className="relative">
+              <label className="mb-2 block text-xs font-bold text-gray-300">حجم البوستر</label>
+              <button onClick={() => { setAspectMenuOpen((value) => !value); setModelMenuOpen(false); }} className="flex w-full items-center justify-between rounded-2xl border border-[#2B3041] bg-[#171922] px-3 py-3 text-xs font-bold text-white transition hover:border-[#41475B]" aria-haspopup="listbox" aria-expanded={aspectMenuOpen}>
+                <span className="flex items-center gap-2"><ImageIcon className="h-4 w-4 text-gray-500" />{aspectRatio}</span><ChevronDown className={`h-4 w-4 text-gray-500 transition ${aspectMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+              {aspectMenuOpen && <div role="listbox" aria-label="أحجام البوستر" className="absolute inset-x-0 top-full z-30 mt-2 rounded-2xl border border-[#353A4B] bg-[#292A2E] p-1.5 shadow-2xl shadow-black/60">
+                {aspectRatios.map((ratio) => <button key={ratio} role="option" aria-selected={aspectRatio === ratio} onClick={() => { setAspectRatio(ratio); setAspectMenuOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-xs font-bold transition ${aspectRatio === ratio ? "bg-white/10 text-white" : "text-gray-300 hover:bg-white/5 hover:text-white"}`}><span className="flex items-center gap-3"><ImageIcon className="h-4 w-4 text-gray-400" />{ratio}</span>{aspectRatio === ratio && <Check className="h-4 w-4 text-white" />}</button>)}
+              </div>}
+            </div>
+            <div className="relative">
+              <label className="mb-2 block text-xs font-bold text-gray-300">أداة توليد الصورة</label>
+              <button onClick={() => { setModelMenuOpen((value) => !value); setAspectMenuOpen(false); }} className="flex w-full items-center justify-between rounded-2xl border border-[#2B3041] bg-[#171922] px-3 py-3 text-right transition hover:border-[#41475B]" aria-haspopup="listbox" aria-expanded={modelMenuOpen}>
+                <span className="min-w-0"><span className="block truncate text-xs font-bold text-white">{selectedModel?.displayName || "اختر النموذج"}</span><span className="mt-0.5 block text-[10px] text-gray-500">OpenRouter · {selectedModel?.provider || "AI"}</span></span><ChevronDown className={`h-4 w-4 shrink-0 text-gray-500 transition ${modelMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+              {modelMenuOpen && <div role="listbox" aria-label="نماذج توليد الصور" className="absolute inset-x-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-[#353A4B] bg-[#292A2E] p-1.5 shadow-2xl shadow-black/60">
+                {imageModels.map((model) => <button key={model.id} role="option" aria-selected={selectedImageModel === model.id} onClick={() => { setSelectedImageModel(model.id); setModelMenuOpen(false); }} className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-right transition ${selectedImageModel === model.id ? "bg-white/10" : "hover:bg-white/5"}`}><span className="min-w-0"><span className="block truncate text-xs font-extrabold text-white">{model.displayName}</span><span className="mt-1 block text-[10px] text-gray-500">{model.provider} عبر OpenRouter · {model.creditCost} نقاط</span></span>{selectedImageModel === model.id && <Check className="h-4 w-4 shrink-0 text-[#FF2E4C]" />}</button>)}
+              </div>}
+            </div>
+            <div className="flex items-center justify-between rounded-2xl border border-[#2B3041] bg-[#171922] p-3">
+              <span className="text-xs font-bold text-gray-300">عدد النتائج</span>
+              <div className="flex gap-1">{[1, 2, 4].map((value) => <button key={value} onClick={() => setCount(value)} className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${count === value ? "bg-white text-black" : "text-gray-500 hover:bg-[#252936] hover:text-white"}`}>{value}</button>)}</div>
+            </div>
+            <button onClick={() => setUseBrandKit((value) => !value)} className="flex w-full items-center justify-between rounded-2xl border border-[#2B3041] bg-[#171922] p-3 text-xs font-bold">
+              <span className="flex items-center gap-2 text-gray-300"><Palette className="h-4 w-4 text-[#FF2E4C]" />استخدام هوية المشروع</span>
+              <span className={`relative h-5 w-9 rounded-full transition ${useBrandKit ? "bg-[#FF2E4C]" : "bg-[#343847]"}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${useBrandKit ? "right-0.5" : "right-[18px]"}`} /></span>
+            </button>
+            <button className="flex w-full items-center justify-between rounded-2xl border border-[#2B3041] bg-[#171922] p-3 text-xs font-bold text-gray-300"><span className="flex items-center gap-2"><Layers className="h-4 w-4" />المرفقات والمراجع</span><Plus className="h-4 w-4 text-gray-500" /></button>
+          </div>}
+        </div>
+
+        <div className="border-t border-[#242837] p-4">
+          <button onClick={startGeneration} disabled={mode === "video" || isGenerating} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF2E4C] py-3.5 text-sm font-extrabold text-white shadow-lg shadow-[#FF2E4C]/15 transition hover:bg-[#E50914] disabled:cursor-not-allowed disabled:bg-[#303441] disabled:text-gray-500 disabled:shadow-none"><Sparkles className="h-4 w-4" />{isGenerating ? "جاري التوليد..." : mode === "video" ? "قريباً بعد ربط المزود" : mode === "chat" ? "ابدأ المحادثة" : `توليد ${count} ${count === 1 ? "صورة" : "صور"}`}</button>
+        </div>
+      </aside>
+
+      <section className="order-2 min-w-0 flex-1 bg-[#090A0F] lg:order-none">
+        <div className="flex flex-col gap-4 border-b border-[#1F2438] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <button onClick={() => dispatch({ type: "SET_TAB", payload: "projects" })} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#272B39] text-gray-400 transition hover:text-white" aria-label="العودة للمشاريع"><ChevronRight className="h-4 w-4" /></button>
+            <div className="min-w-0"><h2 className="truncate text-base font-black text-white">{activeProj.name}</h2><p className="mt-0.5 truncate text-[11px] text-gray-500">{activeProj.description || `${activeProj.industry} · ${activeProj.tone}`}</p></div>
+          </div>
+          <div className="flex items-center gap-1 rounded-xl bg-[#12141B] p-1">
+            {[{ id: "all", label: "الكل" }, { id: "image", label: "الصور" }, { id: "video", label: "الفيديو" }, { id: "chat", label: "المحادثات" }].map((item) => <button key={item.id} onClick={() => setFilter(item.id)} className={`rounded-lg px-3 py-2 text-[11px] font-bold transition ${filter === item.id ? "bg-[#272B37] text-white" : "text-gray-500 hover:text-white"}`}>{item.label}</button>)}
           </div>
         </div>
-      )}
 
-      {activeTab === "chat" && (
-        <UserChatView state={state} dispatch={dispatch} showToast={showToast} />
-      )}
-      {activeTab === "image" && (
-        <UserImageView
-          state={state}
-          dispatch={dispatch}
-          showToast={showToast}
-        />
-      )}
-      {activeTab === "video" && (
-        <UserVideoView
-          state={state}
-          dispatch={dispatch}
-          showToast={showToast}
-        />
-      )}
-      {activeTab === "assets" && (
-        <UserAssetsView state={state} activeProjectId={activeProj.id} />
-      )}
-      {activeTab === "history" && (
-        <UserHistoryView state={state} activeProjectId={activeProj.id} />
-      )}
-      {activeTab === "templates" && (
-        <TemplatesLibraryView
-          state={state}
-          dispatch={dispatch}
-          showToast={showToast}
-        />
-      )}
-      {activeTab === "brand-kit" && (
-        <BrandKitManagerView
-          state={state}
-          dispatch={dispatch}
-          showToast={showToast}
-        />
-      )}
+        <div className="h-[calc(100%-73px)] overflow-y-auto p-4 sm:p-6">
+          {timelineItems.length === 0 ? <div className="flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#272B39] bg-[#0E1016] text-center"><span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#171A23]"><Sparkles className="h-7 w-7 text-[#FF2E4C]" /></span><h3 className="text-base font-extrabold text-white">ابدأ أول توليد في هذا المشروع</h3><p className="mt-2 max-w-sm text-xs leading-6 text-gray-500">اكتب الوصف في اللوحة الجانبية، واختر المقاس والعدد. ستظهر كل النتائج هنا تلقائياً.</p></div> : <div className="columns-1 gap-4 sm:columns-2 xl:columns-3">{timelineItems.map((item) => <article key={item.id} className="group relative mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-[#1F2438] bg-[#121520]">{item.url ? <img src={item.url} alt={item.title || "توليد محفوظ"} className="h-auto w-full object-cover" /> : <div className="flex aspect-square items-center justify-center"><MessageSquare className="h-8 w-8 text-gray-700" /></div>}<div className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black via-black/75 to-transparent p-4 pt-14 transition duration-300 group-hover:translate-y-0"><p className="line-clamp-2 text-xs font-bold leading-5 text-white">{item.title || "توليد محفوظ"}</p><div className="mt-3 flex items-center gap-2"><button className="rounded-lg bg-white/10 p-2 text-white backdrop-blur-md" aria-label="تنزيل"><Download className="h-3.5 w-3.5" /></button><button className="rounded-lg bg-white/10 p-2 text-white backdrop-blur-md" aria-label="نسخ"><Copy className="h-3.5 w-3.5" /></button></div></div></article>)}</div>}
+        </div>
+      </section>
     </div>
   );
 }

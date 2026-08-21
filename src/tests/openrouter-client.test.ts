@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createOpenRouterChatCompletion } from '../lib/ai/openrouter-client';
+import { createOpenRouterChatCompletion, createOpenRouterImageGeneration } from '../lib/ai/openrouter-client';
 
 async function run() {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
@@ -31,6 +31,48 @@ async function run() {
       fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'denied' } }), { status: 401 }),
     }),
     /OPENROUTER_HTTP_401: denied/
+  );
+
+  const imageCalls: Array<{ url: string; init?: RequestInit }> = [];
+  const imageResult = await createOpenRouterImageGeneration({
+    model: 'openai/gpt-image-2',
+    prompt: '  a red poster  ',
+    aspectRatio: '4:5',
+    count: 2,
+    resolution: '1K',
+  }, {
+    apiKey: 'test-key',
+    fetchImpl: async (input, init) => {
+      imageCalls.push({ url: String(input), init });
+      return new Response(JSON.stringify({
+        data: [
+          { b64_json: 'aW1hZ2Ux', media_type: 'image/png' },
+          { b64_json: 'aW1hZ2Uy', media_type: 'image/webp' },
+        ],
+        usage: { total_tokens: 12, cost: 0.03 },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    },
+  });
+  assert.equal(imageCalls[0].url, 'https://openrouter.ai/api/v1/images');
+  assert.deepEqual(JSON.parse(String(imageCalls[0].init?.body)), {
+    model: 'openai/gpt-image-2', prompt: 'a red poster', aspect_ratio: '4:5', resolution: '1K', n: 2,
+  });
+  assert.deepEqual(imageResult.images, [
+    { base64: 'aW1hZ2Ux', mediaType: 'image/png' },
+    { base64: 'aW1hZ2Uy', mediaType: 'image/webp' },
+  ]);
+  assert.equal(imageResult.costUsd, 0.03);
+
+  await assert.rejects(
+    () => createOpenRouterImageGeneration({ model: 'unknown/image-model', prompt: 'hello' }, { apiKey: 'test-key', fetchImpl }),
+    /OPENROUTER_IMAGE_MODEL_NOT_ALLOWED/
+  );
+  await assert.rejects(
+    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello' }, {
+      apiKey: 'test-key',
+      fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'provider down' } }), { status: 503 }),
+    }),
+    /OPENROUTER_IMAGE_HTTP_503: provider down/
   );
   console.log('OpenRouter client tests passed.');
 }

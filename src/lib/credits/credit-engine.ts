@@ -14,7 +14,9 @@ export const SERVER_MODEL_PRICING: Record<string, number> = {
   'openai/gpt-4o-mini': 2, 'anthropic/claude-3.5-sonnet': 4,
   'meta-llama/llama-3.3-70b-instruct': 2, 'google/gemini-2.5-flash': 1,
   'imagen-4.0-generate-001': 5, 'gemini-3.1-flash-image-preview': 4,
-  'flux-1-schnell': 3, 'runway-gen3-alpha': 15
+  'flux-1-schnell': 3, 'openai/gpt-image-2': 6,
+  'bytedance-seed/seedream-5-0-lite': 4, 'google/gemini-3.1-flash-lite-image': 4,
+  'runway-gen3-alpha': 15
 };
 
 function failedResult(message: string): CreditResult { return { success: false, newBalance: 0, message }; }
