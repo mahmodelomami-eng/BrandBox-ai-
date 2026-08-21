@@ -1,8 +1,10 @@
 # Dependencies
 /node_modules
 /.pnpm-store
-/yarn.lock
-/package-lock.json
+yarn.lock
+
+# Keep npm lockfile committed for reproducible production builds.
+!package-lock.json
 
 # Next.js build output & caches
 /.next/
