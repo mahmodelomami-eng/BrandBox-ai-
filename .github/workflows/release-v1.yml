@@ -16,11 +16,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - name: Generate npm lockfile when missing
+      - name: Generate npm lockfile
         run: npm install --package-lock-only --ignore-scripts
-      - name: Commit lockfile
+      - name: Commit lockfile when changed
         run: |
           if ! git diff --quiet -- package-lock.json || [ -n "$(git ls-files --others --exclude-standard package-lock.json)" ]; then
             git config user.name "github-actions[bot]"
