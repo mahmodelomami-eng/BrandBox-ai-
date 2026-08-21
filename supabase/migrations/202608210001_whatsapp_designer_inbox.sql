@@ -24,20 +24,23 @@ create table if not exists public.whatsapp_messages (
 
 create index if not exists whatsapp_conversations_assignee_idx on public.whatsapp_conversations(assigned_designer_id, last_message_at desc);
 create index if not exists whatsapp_messages_conversation_idx on public.whatsapp_messages(conversation_id, created_at);
+create index if not exists whatsapp_messages_sender_user_idx on public.whatsapp_messages(sender_user_id);
 
 alter table public.whatsapp_conversations enable row level security;
 alter table public.whatsapp_messages enable row level security;
 
 -- Webhook/API writes use the server-only service role. Authenticated staff only read assigned conversations.
+drop policy if exists whatsapp_conversations_assigned_read on public.whatsapp_conversations;
 create policy whatsapp_conversations_assigned_read on public.whatsapp_conversations
 for select to authenticated
-using (assigned_designer_id = auth.uid());
+using (assigned_designer_id = (select auth.uid()));
 
+drop policy if exists whatsapp_messages_assigned_read on public.whatsapp_messages;
 create policy whatsapp_messages_assigned_read on public.whatsapp_messages
 for select to authenticated
 using (exists (
   select 1 from public.whatsapp_conversations c
-  where c.id = conversation_id and c.assigned_designer_id = auth.uid()
+  where c.id = conversation_id and c.assigned_designer_id = (select auth.uid())
 ));
 
 revoke all on public.whatsapp_conversations from anon;
