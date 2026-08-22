@@ -7,6 +7,8 @@ import ProjectDeleteEnhancer from '../components/ProjectDeleteEnhancer';
 import LegacyProjectsRouteBridge from '../components/LegacyProjectsRouteBridge';
 import AdminUserManagementEnhancer from '../components/AdminUserManagementEnhancer';
 import UserExperienceEnhancer from '../components/UserExperienceEnhancer';
+import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
+import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
 
 export default function HomePage() {
   return (
@@ -15,6 +17,8 @@ export default function HomePage() {
       <LegacyProjectsRouteBridge />
       <AdminUserManagementEnhancer />
       <UserExperienceEnhancer />
+      <SidebarPricingEnhancer />
+      <PricingRouteIntentEnhancer />
       <App />
     </AuthGate>
   );
