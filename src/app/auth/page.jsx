@@ -15,18 +15,12 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [nextPath, setNextPath] = useState('/projects');
+  const nextPath = '/projects';
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const requestedMode = params.get('mode');
-    const requestedNext = params.get('next');
-    if (requestedMode === 'signup' || requestedMode === 'login') setMode(requestedMode);
-    if (requestedNext && requestedNext.startsWith('/') && !requestedNext.startsWith('//')) setNextPath(requestedNext);
-
     const supabase = createBrowserSupabaseClient();
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) window.location.replace(requestedNext && requestedNext.startsWith('/') ? requestedNext : '/projects');
+      if (data.session?.user) window.location.replace('/projects');
     });
   }, []);
 
