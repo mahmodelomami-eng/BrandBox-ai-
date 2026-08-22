@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { FolderOpen, Image as ImageIcon, Plus, Sparkles, Video, MessageSquare, X } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../../lib/supabase/client';
@@ -14,25 +15,31 @@ export default function ProjectsPage() {
   const [type, setType] = useState('صورة + نص');
   const [error, setError] = useState('');
 
-  async function load() {
-    try {
-      setError('');
-      const supabase = createBrowserSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        window.location.replace('/auth?mode=login&next=/projects');
-        return;
-      }
-      const rows = await listUserProjects();
-      setProjects(rows);
-    } catch (err) {
-      setError(err?.message || 'تعذر تحميل المشاريع.');
-    } finally {
-      setLoading(false);
-    }
-  }
+  useEffect(() => {
+    let mounted = true;
+    const supabase = createBrowserSupabaseClient();
 
-  useEffect(() => { load(); }, []);
+    supabase.auth.getSession()
+      .then(async ({ data }) => {
+        if (!data.session?.user) {
+          window.location.replace('/auth?mode=login&next=/projects');
+          return null;
+        }
+        return listUserProjects();
+      })
+      .then((rows) => {
+        if (!mounted || !rows) return;
+        setProjects(rows);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err?.message || 'تعذر تحميل المشاريع.');
+        setLoading(false);
+      });
+
+    return () => { mounted = false; };
+  }, []);
 
   async function createProject(event) {
     event.preventDefault();
@@ -94,7 +101,7 @@ export default function ProjectsPage() {
                   <span>{project.industry || 'عام'}</span>
                   <span>{project.updated_at ? new Date(project.updated_at).toLocaleDateString('ar-LY') : ''}</span>
                 </div>
-                <a href="/" className="mt-5 flex w-full items-center justify-center rounded-xl border border-[#303747] py-3 text-xs font-black text-gray-300 transition hover:border-[#f31325]/50 hover:text-white">فتح مساحة العمل</a>
+                <Link href="/" className="mt-5 flex w-full items-center justify-center rounded-xl border border-[#303747] py-3 text-xs font-black text-gray-300 transition hover:border-[#f31325]/50 hover:text-white">فتح مساحة العمل</Link>
               </article>
             ))}
           </div>
