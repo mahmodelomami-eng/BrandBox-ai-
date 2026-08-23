@@ -25,9 +25,9 @@ create policy home_tickers_public_read on public.home_tickers
 for select
 to anon, authenticated
 using (
-  is_active = true
+  (is_active = true
   and (starts_at is null or starts_at <= now())
-  and (ends_at is null or ends_at >= now())
+  and (ends_at is null or ends_at >= now()))
   or exists (
     select 1 from public.profiles p
     where p.id = auth.uid() and p.role in ('ADMIN','SUPER_ADMIN')
