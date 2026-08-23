@@ -7,13 +7,13 @@ import HomeExperience from '../components/HomeExperience';
 import AuthGate from '../components/AuthGate';
 import ProjectDeleteEnhancer from '../components/ProjectDeleteEnhancer';
 import LegacyWorkspaceStateBridge from '../components/LegacyWorkspaceStateBridge';
+import LegacyAdminStateBridge from '../components/LegacyAdminStateBridge';
 import AdminUserManagementEnhancer from '../components/AdminUserManagementEnhancer';
 import AdminNavigationStabilizer from '../components/AdminNavigationStabilizer';
 import UserExperienceEnhancer from '../components/UserExperienceEnhancer';
 import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
 import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
 import UserDashboardToolChooserEnhancer from '../components/UserDashboardToolChooserEnhancer';
-import AdminWorkspaceReturnFix from '../components/AdminWorkspaceReturnFix';
 
 function CanonicalRedirect({ target }) {
   const router = useRouter();
@@ -28,13 +28,12 @@ function CanonicalRedirect({ target }) {
 function LegacyAdminExperience() {
   return (
     <AuthGate>
-      <LegacyWorkspaceStateBridge view="admin">
+      <LegacyAdminStateBridge>
         <AdminNavigationStabilizer>
           <AdminUserManagementEnhancer />
         </AdminNavigationStabilizer>
-        <AdminWorkspaceReturnFix />
         <App />
-      </LegacyWorkspaceStateBridge>
+      </LegacyAdminStateBridge>
     </AuthGate>
   );
 }
