@@ -1,4 +1,5 @@
-'use client';
-import WorkspaceDashboardShell from '../../../components/WorkspaceDashboardShell';
-import AdminDepartmentDashboard from '../../../components/AdminDepartmentDashboard';
-export default function Page(){return <WorkspaceDashboardShell admin title="المحتوى والتسويق" subtitle="إدارة محتوى المنصة والحملات"><AdminDepartmentDashboard type="content"/></WorkspaceDashboardShell>;}
+import { redirect } from 'next/navigation';
+
+export default function Page() {
+  redirect('/admin/home-content');
+}
