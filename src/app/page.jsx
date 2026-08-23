@@ -1,7 +1,7 @@
 'use client';
 
-import React, { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import App from '../../App';
 import HomeExperience from '../components/HomeExperience';
 import AuthGate from '../components/AuthGate';
@@ -17,11 +17,25 @@ import ProjectsToolHub from '../components/ProjectsToolHub';
 import UserDashboardToolChooserEnhancer from '../components/UserDashboardToolChooserEnhancer';
 import AdminWorkspaceReturnFix from '../components/AdminWorkspaceReturnFix';
 
+function LegacyDashboardRedirect() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace('/dashboard');
+  }, [router]);
+
+  return <div className="min-h-screen bg-[#050506]" />;
+}
+
 function RootExperience() {
   const searchParams = useSearchParams();
   const legacyView = searchParams.get('view');
 
   if (!legacyView) return <HomeExperience />;
+
+  if (legacyView === 'dashboard') {
+    return <LegacyDashboardRedirect />;
+  }
 
   if (legacyView === 'projects') {
     return (
