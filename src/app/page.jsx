@@ -34,6 +34,7 @@ function RootExperience() {
 
   const canonicalTargets = {
     dashboard: '/dashboard',
+    admin: '/admin',
     projects: '/projects',
     images: projectId ? `/projects/images/workspace?project=${encodeURIComponent(projectId)}` : '/projects/images',
     video: '/projects/video',
