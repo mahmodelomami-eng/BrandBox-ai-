@@ -1,4 +1,12 @@
 'use client';
+
 import WorkspaceDashboardShell from '../../../components/WorkspaceDashboardShell';
-import DashboardSpecialtyPage from '../../../components/DashboardSpecialtyPage';
-export default function Page(){return <WorkspaceDashboardShell title="الحساب والرصيد" subtitle="بيانات الحساب، الرصيد والمشتريات"><DashboardSpecialtyPage type="account"/></WorkspaceDashboardShell>;}
+import AccountSettings from '../../../components/AccountSettings';
+
+export default function Page() {
+  return (
+    <WorkspaceDashboardShell title="إعدادات الحساب" subtitle="تعديل البروفايل والبيانات والروابط الخاصة بك">
+      <AccountSettings />
+    </WorkspaceDashboardShell>
+  );
+}
