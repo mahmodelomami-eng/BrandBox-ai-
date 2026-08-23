@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   const database = createPrivilegedSupabaseClient();
   const [{ data: generations, error: generationsError }, { data: assets, error: assetsError }] = await Promise.all([
-    database.from('generations').select('id,project_id,generation_type,provider,model,prompt,settings,status,credits_consumed,result_url,error_message,duration_ms,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+    database.from('generations').select('id,project_id,generation_type,provider,model,prompt,settings,status,credits_consumed,result_url,result_content,error_message,duration_ms,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
     database.from('assets').select('id,project_id,generation_id,name,file_path,mime_type,width,height,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(200),
   ]);
   if (generationsError || assetsError) return NextResponse.json({ error: 'GENERATION_HISTORY_UNAVAILABLE' }, { status: 503 });
