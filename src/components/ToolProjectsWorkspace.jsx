@@ -3,8 +3,30 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CalendarDays, FolderOpen, Image as ImageIcon, Loader2, MessageSquare, Mic2, Plus, Search, Video, X } from 'lucide-react';
-import { createUserProject, listUserProjects } from '../lib/projects/projects-service';
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckSquare,
+  FolderOpen,
+  Heart,
+  Image as ImageIcon,
+  Loader2,
+  MessageSquare,
+  Mic2,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  Video,
+  X,
+} from 'lucide-react';
+import {
+  createUserProject,
+  deleteUserProject,
+  listUserProjects,
+  setUserProjectFavorite,
+} from '../lib/projects/projects-service';
+import { createBrowserSupabaseClient } from '../lib/supabase/client';
 
 const TOOL_CONFIG = {
   images: {
@@ -54,6 +76,7 @@ function normalizeProject(project) {
     type: project.type || '',
     description: project.description || '',
     thumbnail: project.thumbnail_url || '',
+    isFavorite: Boolean(project.is_favorite),
     updatedAt: project.updated_at || project.created_at || null,
   };
 }
@@ -63,6 +86,10 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
   const config = TOOL_CONFIG[tool] || TOOL_CONFIG.images;
   const ActiveIcon = config.icon;
   const [projects, setProjects] = useState([]);
+  const [generationCounts, setGenerationCounts] = useState({});
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [deletingIds, setDeletingIds] = useState(() => new Set());
+  const [favoriteIds, setFavoriteIds] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -76,7 +103,19 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
       try {
         const rows = await listUserProjects();
         if (!mounted) return;
-        setProjects((rows || []).map(normalizeProject));
+        const normalized = (rows || []).map(normalizeProject);
+        setProjects(normalized);
+
+        const supabase = createBrowserSupabaseClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token || !mounted) return;
+        const response = await fetch(`/api/v1/project-stats?tool=${encodeURIComponent(tool)}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (response.ok) {
+          const result = await response.json();
+          if (mounted && result?.counts) setGenerationCounts(result.counts);
+        }
       } catch (err) {
         if (mounted) setError(err instanceof Error ? err.message : 'تعذر تحميل المشاريع.');
       } finally {
@@ -84,14 +123,91 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [tool]);
 
   const toolProjects = useMemo(() => {
     const term = search.trim().toLowerCase();
     return projects
       .filter((project) => config.matches(project.type))
-      .filter((project) => !term || project.name.toLowerCase().includes(term) || project.description.toLowerCase().includes(term));
+      .filter((project) => !term || project.name.toLowerCase().includes(term) || project.description.toLowerCase().includes(term))
+      .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite) || new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
   }, [projects, config, search]);
+
+  const selectedCount = selectedIds.size;
+  const allVisibleSelected = toolProjects.length > 0 && toolProjects.every((project) => selectedIds.has(project.id));
+
+  function toggleSelection(projectId) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) toolProjects.forEach((project) => next.delete(project.id));
+      else toolProjects.forEach((project) => next.add(project.id));
+      return next;
+    });
+  }
+
+  async function toggleFavorite(project) {
+    if (favoriteIds.has(project.id)) return;
+    setFavoriteIds((current) => new Set(current).add(project.id));
+    setError('');
+    try {
+      const updated = await setUserProjectFavorite(project.id, !project.isFavorite);
+      setProjects((current) => current.map((item) => item.id === project.id ? normalizeProject(updated) : item));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر تحديث المفضلة.');
+    } finally {
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+        next.delete(project.id);
+        return next;
+      });
+    }
+  }
+
+  async function deleteProjects(ids) {
+    const uniqueIds = [...new Set(ids)].filter(Boolean);
+    if (!uniqueIds.length) return;
+    const message = uniqueIds.length === 1
+      ? 'هل تريد حذف هذا المشروع؟ لا يمكن التراجع عن حذف المشروع.'
+      : `هل تريد حذف ${uniqueIds.length} مشاريع محددة؟ لا يمكن التراجع عن العملية.`;
+    if (!window.confirm(message)) return;
+
+    setError('');
+    setDeletingIds((current) => new Set([...current, ...uniqueIds]));
+    try {
+      const results = await Promise.allSettled(uniqueIds.map((id) => deleteUserProject(id)));
+      const deleted = uniqueIds.filter((_, index) => results[index].status === 'fulfilled');
+      const failed = results.length - deleted.length;
+      setProjects((current) => current.filter((project) => !deleted.includes(project.id)));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        deleted.forEach((id) => next.delete(id));
+        return next;
+      });
+      setGenerationCounts((current) => {
+        const next = { ...current };
+        deleted.forEach((id) => delete next[id]);
+        return next;
+      });
+      if (failed) setError(`تم حذف ${deleted.length} مشروع، وتعذر حذف ${failed}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر حذف المشروع.');
+    } finally {
+      setDeletingIds((current) => {
+        const next = new Set(current);
+        uniqueIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+  }
 
   async function createProject(event) {
     event.preventDefault();
@@ -109,6 +225,7 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
       });
       const project = normalizeProject(created);
       setProjects((current) => [project, ...current]);
+      setGenerationCounts((current) => ({ ...current, [project.id]: 0 }));
       setCreateOpen(false);
       setNewName('');
       router.push(config.workspace(project.id));
@@ -158,6 +275,23 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
           </div>
         </div>
 
+        {!loading && toolProjects.length > 0 && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0d0f14] px-4 py-3">
+            <button onClick={toggleSelectAll} className="flex items-center gap-2 text-xs font-black text-gray-300 transition hover:text-white">
+              <CheckSquare size={17} className={allVisibleSelected ? 'text-[#ff3344]' : 'text-gray-500'} />
+              {allVisibleSelected ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
+            </button>
+            {selectedCount > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-black text-[#ff3344]">تم تحديد {selectedCount}</span>
+                <button onClick={() => deleteProjects([...selectedIds])} className="flex items-center gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2 text-xs font-black text-red-300 transition hover:bg-red-500/20">
+                  <Trash2 size={15} /> حذف المحدد
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {error && <div className="mb-5 rounded-xl border border-red-500/25 bg-red-500/8 px-4 py-3 text-sm font-bold text-red-300">{error}</div>}
 
         {loading ? (
@@ -170,22 +304,48 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
               <div className="mt-2 text-xs leading-6 text-gray-500">أنشئ مشروعًا جديدًا لـ {config.label} وابدأ العمل مباشرة.</div>
             </button>
 
-            {toolProjects.map((project) => (
-              <button key={project.id} onClick={() => router.push(config.workspace(project.id))} className="group overflow-hidden rounded-3xl border border-white/10 bg-[#101217] text-right transition hover:-translate-y-1 hover:border-[#f31325]/45 hover:shadow-[0_22px_55px_rgba(0,0,0,.45)]">
-                <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(243,19,37,.13),transparent_45%),#0b0d12]">
-                  {project.thumbnail ? <img src={project.thumbnail} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" /> : <ActiveIcon size={44} className="text-[#ff3344]/70" />}
-                  <span className="absolute right-3 top-3 rounded-lg border border-white/10 bg-black/70 px-2.5 py-1 text-[10px] font-black text-gray-300">{config.label}</span>
-                </div>
-                <div className="p-5">
-                  <h2 className="truncate text-base font-black">{project.name}</h2>
-                  <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-gray-500">{project.description || 'مشروع جاهز لبدء التوليد والإنشاء.'}</p>
-                  <div className="mt-4 flex items-center justify-between border-t border-white/[.07] pt-4 text-[11px] text-gray-600">
-                    <span className="flex items-center gap-1.5"><CalendarDays size={14} />{project.updatedAt ? new Date(project.updatedAt).toLocaleDateString('ar-LY') : '—'}</span>
-                    <span className="flex items-center gap-1.5 font-black text-[#ff3344]">فتح المشروع <ArrowLeft size={14} /></span>
+            {toolProjects.map((project) => {
+              const isSelected = selectedIds.has(project.id);
+              const isDeleting = deletingIds.has(project.id);
+              const isFavoriting = favoriteIds.has(project.id);
+              return (
+                <article key={project.id} className={`group relative overflow-hidden rounded-3xl border bg-[#101217] text-right transition hover:-translate-y-1 hover:shadow-[0_22px_55px_rgba(0,0,0,.45)] ${isSelected ? 'border-[#f31325] ring-1 ring-[#f31325]/45' : 'border-white/10 hover:border-[#f31325]/45'} ${isDeleting ? 'pointer-events-none opacity-50' : ''}`}>
+                  <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
+                    <button onClick={() => toggleFavorite(project)} disabled={isFavoriting} title={project.isFavorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'} className={`flex h-9 w-9 items-center justify-center rounded-xl border backdrop-blur-sm transition ${project.isFavorite ? 'border-[#f31325]/40 bg-[#f31325] text-white' : 'border-white/10 bg-black/70 text-gray-400 hover:text-[#ff3344]'}`}>
+                      {isFavoriting ? <Loader2 size={15} className="animate-spin" /> : <Heart size={17} fill={project.isFavorite ? 'currentColor' : 'none'} />}
+                    </button>
+                    <button onClick={() => deleteProjects([project.id])} title="حذف المشروع" className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-500/20 bg-black/70 text-red-300 transition hover:bg-red-500/20">
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                </div>
-              </button>
-            ))}
+
+                  <label className="absolute right-3 top-3 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-black/70">
+                    <input type="checkbox" checked={isSelected} onChange={() => toggleSelection(project.id)} className="h-4 w-4 accent-[#f31325]" aria-label={`تحديد ${project.name}`} />
+                  </label>
+
+                  <button onClick={() => router.push(config.workspace(project.id))} className="block w-full text-right">
+                    <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(243,19,37,.13),transparent_45%),#0b0d12]">
+                      {project.thumbnail ? <img src={project.thumbnail} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" /> : <ActiveIcon size={44} className="text-[#ff3344]/70" />}
+                      <span className="absolute bottom-3 right-3 rounded-lg border border-white/10 bg-black/75 px-2.5 py-1 text-[10px] font-black text-gray-300">{config.label}</span>
+                      <span className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-lg border border-[#f31325]/20 bg-black/80 px-2.5 py-1 text-[10px] font-black text-[#ff6672]">
+                        <Sparkles size={12} /> {generationCounts[project.id] ?? 0} توليد
+                      </span>
+                    </div>
+                    <div className="p-5">
+                      <div className="flex items-center gap-2">
+                        <h2 className="min-w-0 flex-1 truncate text-base font-black">{project.name}</h2>
+                        {project.isFavorite && <Heart size={15} className="shrink-0 text-[#ff3344]" fill="currentColor" />}
+                      </div>
+                      <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-gray-500">{project.description || 'مشروع جاهز لبدء التوليد والإنشاء.'}</p>
+                      <div className="mt-4 flex items-center justify-between border-t border-white/[.07] pt-4 text-[11px] text-gray-600">
+                        <span className="flex items-center gap-1.5"><CalendarDays size={14} />{project.updatedAt ? new Date(project.updatedAt).toLocaleDateString('ar-LY') : '—'}</span>
+                        <span className="flex items-center gap-1.5 font-black text-[#ff3344]">فتح المشروع <ArrowLeft size={14} /></span>
+                      </div>
+                    </div>
+                  </button>
+                </article>
+              );
+            })}
           </div>
         )}
 
