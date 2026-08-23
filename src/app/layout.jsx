@@ -2,6 +2,7 @@ import './globals.css';
 import './dropdown-opaque.css';
 import React from 'react';
 import GlobalNavigation from '../components/GlobalNavigation';
+import GlobalNavigationProjectEnhancer from '../components/GlobalNavigationProjectEnhancer';
 
 export const metadata = {
   title: 'Brand Box AI — منصة الذكاء الاصطناعي الشاملة',
@@ -14,6 +15,7 @@ export default function RootLayout({ children }) {
     <html lang="ar" dir="rtl">
       <body className="bg-[#050506] text-gray-100 font-sans antialiased selection:bg-[#F31325] selection:text-white">
         <GlobalNavigation />
+        <GlobalNavigationProjectEnhancer />
         <div className="pt-20">
           {children}
         </div>

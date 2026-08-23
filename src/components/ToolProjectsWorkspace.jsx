@@ -22,7 +22,7 @@ const TOOL_CONFIG = {
     description: 'افتح مشروع فيديو سابقًا أو أنشئ مساحة جديدة للفيديو.',
     projectType: 'فيديو',
     icon: Video,
-    workspace: (id) => `/?view=video&project=${encodeURIComponent(id)}`,
+    workspace: (id) => `/projects/video/workspace?project=${encodeURIComponent(id)}`,
     matches: (type) => /فيديو|video/i.test(type || ''),
   },
   chat: {
@@ -31,7 +31,7 @@ const TOOL_CONFIG = {
     description: 'محادثاتك ومشاريع الكتابة والمحتوى محفوظة حسب المشروع.',
     projectType: 'محادثة',
     icon: MessageSquare,
-    workspace: (id) => `/?view=chat&project=${encodeURIComponent(id)}`,
+    workspace: (id) => `/projects/chat/workspace?project=${encodeURIComponent(id)}`,
     matches: (type) => /محادثة|chat|نص/i.test(type || ''),
   },
   audio: {
@@ -40,7 +40,7 @@ const TOOL_CONFIG = {
     description: 'مشاريع التعليق الصوتي وتوليد الصوت بالذكاء الاصطناعي.',
     projectType: 'صوت',
     icon: Mic2,
-    workspace: (id) => `/audio-ai?project=${encodeURIComponent(id)}`,
+    workspace: (id) => `/projects/audio/workspace?project=${encodeURIComponent(id)}`,
     matches: (type) => /صوت|audio/i.test(type || ''),
   },
 };

@@ -13,6 +13,7 @@ import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
 import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
 import ImageStudioWorkspace from '../components/ImageStudioWorkspace';
 import ProjectsToolHub from '../components/ProjectsToolHub';
+import UserDashboardToolChooserEnhancer from '../components/UserDashboardToolChooserEnhancer';
 
 function RootExperience() {
   const searchParams = useSearchParams();
@@ -44,6 +45,7 @@ function RootExperience() {
         <UserExperienceEnhancer />
         <SidebarPricingEnhancer />
         <PricingRouteIntentEnhancer />
+        <UserDashboardToolChooserEnhancer />
         <App />
       </LegacyWorkspaceStateBridge>
     </AuthGate>
