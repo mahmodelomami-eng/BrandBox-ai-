@@ -3,11 +3,14 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-const ROUTES = {
+const HEADER_ROUTES = {
   '/images-ai': '/projects/images',
   '/video-ai': '/projects/video',
   '/chat-ai': '/projects/chat',
   '/audio-ai': '/projects/audio',
+};
+
+const LEGACY_ROUTES = {
   '/?view=images': '/projects/images',
   '/?view=video': '/projects/video',
   '/?view=chat': '/projects/chat',
@@ -18,13 +21,20 @@ export default function GlobalNavigationProjectEnhancer() {
   const router = useRouter();
 
   useEffect(() => {
+    const rewriteAnchor = (anchor, target) => {
+      anchor.dataset.brandboxProjectRoute = target;
+      anchor.setAttribute('href', target);
+    };
+
     const rewrite = () => {
-      document.querySelectorAll('a[href]').forEach((anchor) => {
+      document.querySelectorAll('.brandbox-global-nav a[href]').forEach((anchor) => {
         const raw = anchor.getAttribute('href');
-        if (raw && ROUTES[raw]) {
-          anchor.dataset.brandboxProjectRoute = ROUTES[raw];
-          anchor.setAttribute('href', ROUTES[raw]);
-        }
+        if (raw && HEADER_ROUTES[raw]) rewriteAnchor(anchor, HEADER_ROUTES[raw]);
+      });
+
+      document.querySelectorAll('a[href^="/?view="]').forEach((anchor) => {
+        const raw = anchor.getAttribute('href');
+        if (raw && LEGACY_ROUTES[raw]) rewriteAnchor(anchor, LEGACY_ROUTES[raw]);
       });
     };
 
