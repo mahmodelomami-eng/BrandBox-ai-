@@ -1,5 +1,6 @@
 import './globals.css';
 import './dropdown-opaque.css';
+import './auth-cleanup.css';
 import React from 'react';
 import GlobalNavigation from '../components/GlobalNavigation';
 import GlobalNavigationProjectEnhancer from '../components/GlobalNavigationProjectEnhancer';
