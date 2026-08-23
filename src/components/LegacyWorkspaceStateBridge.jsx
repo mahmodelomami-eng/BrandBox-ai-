@@ -179,7 +179,10 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
       const control = event.target?.closest?.('button, [role="button"]');
       if (!control || !root.contains(control)) return;
       const nextView = inferView(control.textContent);
-      if (nextView) setUrlView(nextView);
+      if (nextView) {
+        setSidebarOpen(false);
+        setUrlView(nextView);
+      }
     };
 
     root.addEventListener('click', handleClick, true);
@@ -216,10 +219,6 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
       root.removeEventListener('click', handleClick, true);
     };
   }, [supabase, targetView]);
-
-  useLayoutEffect(() => {
-    setSidebarOpen(false);
-  }, [targetView]);
 
   const navigateWorkspace = (nextView) => {
     setSidebarOpen(false);
