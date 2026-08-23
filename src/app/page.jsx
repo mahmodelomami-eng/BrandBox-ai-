@@ -25,6 +25,35 @@ function CanonicalRedirect({ target }) {
   return <div className="min-h-screen bg-[#050506]" />;
 }
 
+function LegacyAdminExperience() {
+  return (
+    <AuthGate>
+      <LegacyWorkspaceStateBridge view="admin">
+        <AdminNavigationStabilizer>
+          <AdminUserManagementEnhancer />
+        </AdminNavigationStabilizer>
+        <AdminWorkspaceReturnFix />
+        <App />
+      </LegacyWorkspaceStateBridge>
+    </AuthGate>
+  );
+}
+
+function LegacyUserExperience({ view }) {
+  return (
+    <AuthGate>
+      <LegacyWorkspaceStateBridge view={view}>
+        <ProjectDeleteEnhancer />
+        <UserExperienceEnhancer />
+        <SidebarPricingEnhancer />
+        <PricingRouteIntentEnhancer />
+        <UserDashboardToolChooserEnhancer />
+        <App />
+      </LegacyWorkspaceStateBridge>
+    </AuthGate>
+  );
+}
+
 function RootExperience() {
   const searchParams = useSearchParams();
   const legacyView = searchParams.get('view');
@@ -45,22 +74,11 @@ function RootExperience() {
     return <CanonicalRedirect target={canonicalTargets[legacyView]} />;
   }
 
-  return (
-    <AuthGate>
-      <LegacyWorkspaceStateBridge view={legacyView}>
-        <ProjectDeleteEnhancer />
-        <AdminNavigationStabilizer>
-          <AdminUserManagementEnhancer />
-        </AdminNavigationStabilizer>
-        <AdminWorkspaceReturnFix />
-        <UserExperienceEnhancer />
-        <SidebarPricingEnhancer />
-        <PricingRouteIntentEnhancer />
-        <UserDashboardToolChooserEnhancer />
-        <App />
-      </LegacyWorkspaceStateBridge>
-    </AuthGate>
-  );
+  if (legacyView === 'admin') {
+    return <LegacyAdminExperience />;
+  }
+
+  return <LegacyUserExperience view={legacyView} />;
 }
 
 export default function HomePage() {
