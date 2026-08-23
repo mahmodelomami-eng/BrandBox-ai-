@@ -130,6 +130,7 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
     let targetApplied = false;
     let expectedIdentity = '';
     let observer = null;
+    let revealScheduled = false;
 
     const root = rootRef.current;
     if (!root) return undefined;
@@ -154,7 +155,15 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
     };
 
     const maybeReveal = () => {
-      if (cancelled || !targetApplied || !identityIsReady()) return;
+      if (cancelled || revealScheduled || !targetApplied || !identityIsReady()) return;
+      revealScheduled = true;
+
+      // This observer is only needed during the initial legacy-state synchronization.
+      // Disconnecting it before the workspace becomes interactive prevents every
+      // subsequent dashboard/admin DOM update from triggering full-tree scans.
+      observer?.disconnect();
+      observer = null;
+
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           if (!cancelled) setReady(true);

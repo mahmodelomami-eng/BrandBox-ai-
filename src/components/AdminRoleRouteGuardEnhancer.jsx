@@ -1,66 +1,79 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 
 function normalize(value) {
   return (value || '').replace(/\s+/g, ' ').trim();
 }
 
-function findButtonByLabel(label) {
-  const buttons = Array.from(document.querySelectorAll('button, [role="button"]'));
-  return buttons.find((button) => normalize(button.textContent) === label)
-    || buttons.find((button) => normalize(button.textContent).includes(label));
+function findAdminUsersButton() {
+  const buttons = Array.from(document.querySelectorAll('aside button, aside [role="button"]'));
+  return buttons.find((button) => normalize(button.textContent) === 'المستخدمين')
+    || buttons.find((button) => normalize(button.textContent).includes('المستخدمين'))
+    || null;
+}
+
+function isSupportForbiddenDashboard() {
+  const text = normalize(document.body?.textContent);
+  return text.includes('FORBIDDEN 403')
+    && text.includes('ANALYTICS_READ')
+    && text.includes('SUPPORT');
 }
 
 export default function AdminRoleRouteGuardEnhancer() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const roleRef = useRef('USER');
-  const redirectingRef = useRef(false);
+  const cancelledRef = useRef(false);
+  const pendingFrameRef = useRef(null);
 
-  useLayoutEffect(() => {
-    let cancelled = false;
-    let observer = null;
+  useEffect(() => {
+    cancelledRef.current = false;
 
-    const routeToFirstAllowedAdminScreen = () => {
-      if (cancelled || roleRef.current !== 'SUPPORT' || redirectingRef.current) return;
+    const cancelPendingFrame = () => {
+      if (pendingFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingFrameRef.current);
+        pendingFrameRef.current = null;
+      }
+    };
 
-      const bodyText = normalize(document.body?.textContent);
-      const isForbiddenDashboard = bodyText.includes('FORBIDDEN 403')
-        && bodyText.includes('ANALYTICS_READ')
-        && bodyText.includes('SUPPORT');
+    const routeSupportToUsers = (attempt = 0) => {
+      if (cancelledRef.current || roleRef.current !== 'SUPPORT') return;
 
-      if (!isForbiddenDashboard) return;
-
-      const usersButton = findButtonByLabel('المستخدمين');
-      if (!usersButton) return;
-
-      redirectingRef.current = true;
-
-      const forbiddenCard = Array.from(document.querySelectorAll('div, section, main'))
-        .find((node) => normalize(node.textContent).includes('FORBIDDEN 403') && normalize(node.textContent).includes('ANALYTICS_READ'));
-
-      if (forbiddenCard instanceof HTMLElement) {
-        forbiddenCard.style.visibility = 'hidden';
+      const usersButton = findAdminUsersButton();
+      if (usersButton) {
+        usersButton.click();
+        cancelPendingFrame();
+        return;
       }
 
-      usersButton.click();
+      if (attempt >= 18) {
+        cancelPendingFrame();
+        return;
+      }
 
-      window.requestAnimationFrame(() => {
-        if (forbiddenCard instanceof HTMLElement) {
-          forbiddenCard.style.visibility = '';
-        }
-        redirectingRef.current = false;
+      pendingFrameRef.current = window.requestAnimationFrame(() => {
+        routeSupportToUsers(attempt + 1);
       });
     };
 
-    observer = new MutationObserver(routeToFirstAllowedAdminScreen);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    const handleAdminEntry = (event) => {
+      if (roleRef.current !== 'SUPPORT') return;
+      const control = event.target?.closest?.('button, [role="button"], a');
+      if (!control) return;
+      const label = normalize(control.textContent);
+      if (!label.includes('لوحة التحكم الإدارية')) return;
+
+      cancelPendingFrame();
+      window.setTimeout(() => routeSupportToUsers(0), 0);
+    };
+
+    document.addEventListener('click', handleAdminEntry, true);
 
     (async () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const user = sessionData.session?.user;
-      if (!user || cancelled) return;
+      if (!user || cancelledRef.current) return;
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -68,14 +81,19 @@ export default function AdminRoleRouteGuardEnhancer() {
         .eq('id', user.id)
         .maybeSingle();
 
-      if (cancelled) return;
+      if (cancelledRef.current) return;
       roleRef.current = profile?.role || 'USER';
-      routeToFirstAllowedAdminScreen();
+
+      // Covers refresh/direct entry while already on the forbidden SUPPORT dashboard.
+      if (roleRef.current === 'SUPPORT' && isSupportForbiddenDashboard()) {
+        routeSupportToUsers(0);
+      }
     })();
 
     return () => {
-      cancelled = true;
-      observer?.disconnect();
+      cancelledRef.current = true;
+      cancelPendingFrame();
+      document.removeEventListener('click', handleAdminEntry, true);
     };
   }, [supabase]);
 
