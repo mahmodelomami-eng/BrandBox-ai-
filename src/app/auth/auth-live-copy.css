@@ -1,7 +1,0 @@
-.brandbox-auth-live-route main > div > section:first-child h1 {
-  display: none !important;
-}
-
-.brandbox-auth-live-route main > div > section:last-child:has(> div:first-child > button:first-child[class*="bg-[#f31325]"]) > h2 {
-  display: none !important;
-}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bot, ChevronDown, Image as ImageIcon, MessageSquare, Play, SlidersHorizontal, Sparkles, Video } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 
@@ -27,35 +28,39 @@ const CHAT_RESULTS = [
 
 const CONFIG = {
   image: {
-    eyebrow: 'إنشاء داخل المشروع',
+    eyebrow: 'معاينة أداة الصور',
     title: 'مولد الصور AI',
-    subtitle: 'جرّب شكل مساحة التوليد وشاهد أمثلة للنتائج. التوليد الفعلي يتم بعد تسجيل الدخول واختيار مشروع.',
+    subtitle: 'شاهد أمثلة للنتائج. التوليد الفعلي يبدأ بعد تسجيل الدخول واختيار مشروع الصور.',
     prompt: 'صف البوستر، العناصر، الألوان والأسلوب البصري...',
     model: 'GPT Image 2',
     provider: 'OpenRouter · OpenAI',
     icon: ImageIcon,
+    projectHref: '/projects/images',
   },
   video: {
-    eyebrow: 'إنشاء داخل المشروع',
+    eyebrow: 'معاينة أداة الفيديو',
     title: 'مولد الفيديو AI',
-    subtitle: 'استكشف تجربة توليد الفيديو قبل الدخول. عند البدء ستنتقل إلى مشاريعك لحفظ كل فيديو ضمن سياقه.',
+    subtitle: 'استكشف تجربة الفيديو. كل توليد فعلي يبدأ من مشروع فيديو مخصص.',
     prompt: 'صف المشهد، الحركة، زاوية الكاميرا والإضاءة...',
     model: 'Video AI',
     provider: 'مزود الفيديو داخل Brand Box',
     icon: Video,
+    projectHref: '/projects/video',
   },
   chat: {
-    eyebrow: 'محادثة داخل المشروع',
+    eyebrow: 'معاينة شات AI',
     title: 'شات AI',
-    subtitle: 'شاهد أمثلة لكيفية استخدام المساعد في المحتوى والتسويق. المحادثات الفعلية تحفظ داخل مشاريع المستخدم.',
+    subtitle: 'شاهد أمثلة للمساعد الإبداعي. المحادثات الفعلية تحفظ داخل مشروع الشات.',
     prompt: 'اكتب سؤالك أو المهمة التي تريد من المساعد تنفيذها...',
     model: 'Brand Box Chat',
     provider: 'نماذج متعددة',
     icon: MessageSquare,
+    projectHref: '/projects/chat',
   },
 };
 
 export default function PublicGenerationDemo({ type = 'image' }) {
+  const router = useRouter();
   const config = CONFIG[type] || CONFIG.image;
   const Icon = config.icon;
   const [sessionUser, setSessionUser] = useState(null);
@@ -66,31 +71,38 @@ export default function PublicGenerationDemo({ type = 'image' }) {
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+
+    void supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      setSessionUser(data.session?.user || null);
+      const user = data.session?.user || null;
+      setSessionUser(user);
       setChecking(false);
+      if (user) router.replace(config.projectHref);
     });
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
-      setSessionUser(session?.user || null);
+      const user = session?.user || null;
+      setSessionUser(user);
       setChecking(false);
+      if (user) router.replace(config.projectHref);
     });
+
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [config.projectHref, router]);
 
   const samples = useMemo(() => (type === 'video' ? VIDEO_RESULTS : IMAGE_RESULTS), [type]);
 
   function continueToGeneration() {
     if (checking) return;
     if (sessionUser) {
-      window.location.href = '/projects';
+      router.push(config.projectHref);
       return;
     }
-    window.location.href = '/auth?mode=login&next=/projects';
+    router.push(`/auth?next=${encodeURIComponent(config.projectHref)}`);
   }
 
   return (
@@ -102,23 +114,18 @@ export default function PublicGenerationDemo({ type = 'image' }) {
             <h1 className="mt-1 text-2xl font-black">{config.title}</h1>
             <p className="mt-1 max-w-3xl text-xs leading-6 text-gray-500">{config.subtitle}</p>
           </div>
-          <button onClick={continueToGeneration} className="rounded-xl bg-[#f31325] px-5 py-3 text-sm font-black transition hover:bg-[#ff2637]">
-            {sessionUser ? 'الانتقال إلى مشاريعي' : 'سجل الدخول وابدأ التوليد'}
+          <button type="button" onClick={continueToGeneration} disabled={checking} className="rounded-xl bg-[#f31325] px-5 py-3 text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">
+            {checking ? 'جاري التحقق...' : sessionUser ? 'الانتقال إلى المشاريع' : 'سجل الدخول وابدأ'}
           </button>
         </div>
 
         <div className="grid min-h-[690px] overflow-hidden rounded-2xl border border-[#252b3a] bg-[#07090e] xl:grid-cols-[1fr_405px]">
-          <section className="order-2 border-t border-[#252b3a] p-4 xl:order-1 xl:border-l xl:border-t-0 sm:p-6">
+          <section className="order-2 border-t border-[#252b3a] p-4 sm:p-6 xl:order-1 xl:border-l xl:border-t-0">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div className="flex rounded-xl bg-[#10131b] p-1 text-xs font-bold text-gray-500">
-                <span className="rounded-lg bg-[#262b37] px-5 py-3 text-white">الكل</span>
-                <span className="px-5 py-3">الصور</span>
-                <span className="px-5 py-3">الفيديو</span>
-                <span className="px-5 py-3">المحادثات</span>
+                <span className="rounded-lg bg-[#262b37] px-5 py-3 text-white">أمثلة</span>
               </div>
-              <div className="flex items-center gap-3 text-xs text-gray-500">
-                <Sparkles size={17} className="text-[#ff3344]" /> أمثلة توضيحية لنتائج Brand Box AI
-              </div>
+              <div className="flex items-center gap-3 text-xs text-gray-500"><Sparkles size={17} className="text-[#ff3344]" /> أمثلة توضيحية لنتائج Brand Box AI</div>
             </div>
 
             {type === 'chat' ? (
@@ -133,8 +140,8 @@ export default function PublicGenerationDemo({ type = 'image' }) {
               </div>
             ) : (
               <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
-                {samples.map((item, index) => (
-                  <article key={item.src} className={`group relative mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-[#252b3a] bg-[#10131b] ${index === 0 ? 'sm:col-span-2' : ''}`}>
+                {samples.map((item) => (
+                  <article key={item.src} className="group relative mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-[#252b3a] bg-[#10131b]">
                     <img src={item.src} alt={item.title} className={`w-full ${item.ratio} object-cover opacity-90 transition duration-500 group-hover:scale-[1.02] group-hover:opacity-100`} />
                     <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
                       <div><div className="text-sm font-black">{item.title}</div><div className="mt-1 text-[10px] text-gray-400">مثال توليد</div></div>
@@ -151,28 +158,40 @@ export default function PublicGenerationDemo({ type = 'image' }) {
               <div><div className="text-xs font-black text-[#ff3344]">{config.eyebrow}</div><div className="mt-1 text-lg font-black">معاينة الأداة</div></div>
               <span className="rounded-xl border border-[#283040] p-3 text-gray-400"><SlidersHorizontal size={19} /></span>
             </div>
+
             <div className="space-y-5 p-5">
               <div>
                 <label className="mb-2 block text-sm font-black">الوصف</label>
-                <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onFocus={continueToGeneration} placeholder={config.prompt} className="h-52 w-full resize-none rounded-2xl border border-[#303747] bg-[#191d27] p-4 text-sm leading-7 text-white outline-none placeholder:text-gray-600 focus:border-[#f31325]" />
+                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onFocus={continueToGeneration} placeholder={config.prompt} className="h-52 w-full resize-none rounded-2xl border border-[#303747] bg-[#191d27] p-4 text-sm leading-7 text-white outline-none placeholder:text-gray-600 focus:border-[#f31325]" />
               </div>
 
-              {type !== 'chat' && <div>
-                <label className="mb-2 block text-sm font-black">الحجم / النسبة</label>
-                <button onClick={continueToGeneration} className="flex w-full items-center justify-between rounded-2xl border border-[#303747] bg-[#151923] px-4 py-4 text-sm font-black"><span className="flex items-center gap-2"><Icon size={18} className="text-gray-500" /> 1:1</span><ChevronDown size={17} className="text-gray-500" /></button>
-              </div>}
+              {type !== 'chat' && (
+                <div>
+                  <label className="mb-2 block text-sm font-black">الحجم / النسبة</label>
+                  <button type="button" onClick={continueToGeneration} className="flex w-full items-center justify-between rounded-2xl border border-[#303747] bg-[#151923] px-4 py-4 text-sm font-black"><span className="flex items-center gap-2"><Icon size={18} className="text-gray-500" /> 1:1</span><ChevronDown size={17} className="text-gray-500" /></button>
+                </div>
+              )}
 
               <div>
                 <label className="mb-2 block text-sm font-black">نموذج التوليد</label>
-                <button onClick={continueToGeneration} className="flex w-full items-center justify-between rounded-2xl border border-[#303747] bg-[#151923] px-4 py-4 text-right"><span><span className="block text-sm font-black">{config.model}</span><span className="mt-1 block text-[11px] text-gray-500">{config.provider}</span></span><ChevronDown size={17} className="text-gray-500" /></button>
+                <button type="button" onClick={continueToGeneration} className="flex w-full items-center justify-between rounded-2xl border border-[#303747] bg-[#151923] px-4 py-4 text-right"><span><span className="block text-sm font-black">{config.model}</span><span className="mt-1 block text-[11px] text-gray-500">{config.provider}</span></span><ChevronDown size={17} className="text-gray-500" /></button>
               </div>
 
-              {type === 'image' && <div className="flex items-center justify-between rounded-2xl border border-[#303747] bg-[#151923] p-4"><span className="text-sm font-black">عدد النتائج</span><div className="flex gap-1">{[1, 2, 4].map((count) => <button key={count} onClick={() => { setResultCount(count); continueToGeneration(); }} className={`h-10 w-10 rounded-lg text-sm font-black ${resultCount === count ? 'bg-white text-black' : 'text-gray-500 hover:bg-white/5'}`}>{count}</button>)}</div></div>}
+              {type === 'image' && (
+                <div className="flex items-center justify-between rounded-2xl border border-[#303747] bg-[#151923] p-4">
+                  <span className="text-sm font-black">عدد النتائج</span>
+                  <div className="flex gap-1">
+                    {[1, 2, 4].map((count) => (
+                      <button key={count} type="button" onClick={() => { setResultCount(count); continueToGeneration(); }} className={`h-10 w-10 rounded-lg text-sm font-black ${resultCount === count ? 'bg-white text-black' : 'text-gray-500 hover:bg-white/5'}`}>{count}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              <button onClick={continueToGeneration} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f31325] py-4 text-sm font-black shadow-[0_14px_40px_rgba(243,19,37,.18)] transition hover:bg-[#ff2637]">
-                <Sparkles size={18} /> {sessionUser ? 'اختر مشروعًا وابدأ التوليد' : 'ابدأ التوليد'}
+              <button type="button" onClick={continueToGeneration} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f31325] py-4 text-sm font-black shadow-[0_14px_40px_rgba(243,19,37,.18)] transition hover:bg-[#ff2637]">
+                <Sparkles size={18} /> اختر مشروعًا وابدأ التوليد
               </button>
-              <p className="text-center text-[11px] leading-5 text-gray-600">الأمثلة أعلاه للعرض فقط. لن يتم استهلاك نقاط قبل تسجيل الدخول وبدء توليد حقيقي داخل مشروع.</p>
+              <p className="text-center text-[11px] leading-5 text-gray-600">الأمثلة للعرض فقط. التوليدات الحقيقية تحفظ داخل المشروع المختار.</p>
             </div>
           </aside>
         </div>
