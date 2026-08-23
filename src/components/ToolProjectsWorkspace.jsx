@@ -35,7 +35,7 @@ const TOOL_CONFIG = {
     description: 'كل مشاريع توليد الصور الخاصة بك في مكان واحد.',
     projectType: 'صورة',
     icon: ImageIcon,
-    workspace: (id) => `/?view=images&project=${encodeURIComponent(id)}`,
+    workspace: (id) => `/projects/images/workspace?project=${encodeURIComponent(id)}`,
     matches: (type) => /صورة|image/i.test(type || ''),
   },
   video: {
@@ -99,18 +99,22 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
 
   useEffect(() => {
     let mounted = true;
+
     (async () => {
+      setLoading(true);
+      setError('');
       try {
         const rows = await listUserProjects();
         if (!mounted) return;
-        const normalized = (rows || []).map(normalizeProject);
-        setProjects(normalized);
+        setProjects((rows || []).map(normalizeProject));
 
         const supabase = createBrowserSupabaseClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.access_token || !mounted) return;
+
         const response = await fetch(`/api/v1/project-stats?tool=${encodeURIComponent(tool)}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
         });
         if (response.ok) {
           const result = await response.json();
@@ -122,6 +126,7 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
         if (mounted) setLoading(false);
       }
     })();
+
     return () => { mounted = false; };
   }, [tool]);
 
@@ -175,17 +180,18 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
   async function deleteProjects(ids) {
     const uniqueIds = [...new Set(ids)].filter(Boolean);
     if (!uniqueIds.length) return;
-    const message = uniqueIds.length === 1
-      ? 'هل تريد حذف هذا المشروع؟ لا يمكن التراجع عن حذف المشروع.'
-      : `هل تريد حذف ${uniqueIds.length} مشاريع محددة؟ لا يمكن التراجع عن العملية.`;
-    if (!window.confirm(message)) return;
+    const confirmation = uniqueIds.length === 1
+      ? 'هل تريد حذف هذا المشروع؟ لا يمكن التراجع عن الحذف.'
+      : `هل تريد حذف ${uniqueIds.length} مشاريع؟ لا يمكن التراجع عن الحذف.`;
+    if (!window.confirm(confirmation)) return;
 
-    setError('');
     setDeletingIds((current) => new Set([...current, ...uniqueIds]));
+    setError('');
     try {
       const results = await Promise.allSettled(uniqueIds.map((id) => deleteUserProject(id)));
       const deleted = uniqueIds.filter((_, index) => results[index].status === 'fulfilled');
-      const failed = results.length - deleted.length;
+      const failed = uniqueIds.length - deleted.length;
+
       setProjects((current) => current.filter((project) => !deleted.includes(project.id)));
       setSelectedIds((current) => {
         const next = new Set(current);
@@ -266,27 +272,26 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
               </div>
             </div>
           </div>
+
           <div className="flex flex-col gap-3 sm:flex-row">
             <label className="flex min-w-[260px] items-center gap-2 rounded-xl border border-white/10 bg-[#101217] px-4 py-3 text-gray-500 focus-within:border-[#f31325]/40">
               <Search size={17} />
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث في المشاريع..." className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-600" />
             </label>
-            <button onClick={() => setCreateOpen(true)} className="flex items-center justify-center gap-2 rounded-xl bg-[#f31325] px-5 py-3 text-sm font-black shadow-[0_12px_35px_rgba(243,19,37,.18)] transition hover:bg-[#ff2637]"><Plus size={18} /> مشروع جديد</button>
+            <button type="button" onClick={() => setCreateOpen(true)} className="flex items-center justify-center gap-2 rounded-xl bg-[#f31325] px-5 py-3 text-sm font-black shadow-[0_12px_35px_rgba(243,19,37,.18)] transition hover:bg-[#ff2637]"><Plus size={18} /> مشروع جديد</button>
           </div>
         </div>
 
         {!loading && toolProjects.length > 0 && (
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0d0f14] px-4 py-3">
-            <button onClick={toggleSelectAll} className="flex items-center gap-2 text-xs font-black text-gray-300 transition hover:text-white">
+            <button type="button" onClick={toggleSelectAll} className="flex items-center gap-2 text-xs font-black text-gray-300 transition hover:text-white">
               <CheckSquare size={17} className={allVisibleSelected ? 'text-[#ff3344]' : 'text-gray-500'} />
               {allVisibleSelected ? 'إلغاء تحديد الكل' : 'تحديد الكل'}
             </button>
             {selectedCount > 0 && (
               <div className="flex items-center gap-3">
                 <span className="text-xs font-black text-[#ff3344]">تم تحديد {selectedCount}</span>
-                <button onClick={() => deleteProjects([...selectedIds])} className="flex items-center gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2 text-xs font-black text-red-300 transition hover:bg-red-500/20">
-                  <Trash2 size={15} /> حذف المحدد
-                </button>
+                <button type="button" onClick={() => deleteProjects([...selectedIds])} className="flex items-center gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2 text-xs font-black text-red-300 transition hover:bg-red-500/20"><Trash2 size={15} /> حذف المحدد</button>
               </div>
             )}
           </div>
@@ -298,7 +303,7 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
           <div className="flex min-h-[340px] items-center justify-center rounded-3xl border border-white/10 bg-[#0b0d12]"><div className="flex items-center gap-3 text-sm font-bold text-gray-400"><Loader2 className="h-5 w-5 animate-spin text-[#f31325]" /> جاري تحميل المشاريع...</div></div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            <button onClick={() => setCreateOpen(true)} className="group min-h-[250px] rounded-3xl border border-dashed border-[#3a3d46] bg-[#0c0e13] p-6 text-center transition hover:border-[#f31325]/60 hover:bg-[#f31325]/5">
+            <button type="button" onClick={() => setCreateOpen(true)} className="group min-h-[250px] rounded-3xl border border-dashed border-[#3a3d46] bg-[#0c0e13] p-6 text-center transition hover:border-[#f31325]/60 hover:bg-[#f31325]/5">
               <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#171a21] text-[#ff3344] transition group-hover:bg-[#f31325] group-hover:text-white"><Plus size={30} /></span>
               <div className="mt-5 text-lg font-black">إنشاء مشروع جديد</div>
               <div className="mt-2 text-xs leading-6 text-gray-500">أنشئ مشروعًا جديدًا لـ {config.label} وابدأ العمل مباشرة.</div>
@@ -308,28 +313,25 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
               const isSelected = selectedIds.has(project.id);
               const isDeleting = deletingIds.has(project.id);
               const isFavoriting = favoriteIds.has(project.id);
+
               return (
                 <article key={project.id} className={`group relative overflow-hidden rounded-3xl border bg-[#101217] text-right transition hover:-translate-y-1 hover:shadow-[0_22px_55px_rgba(0,0,0,.45)] ${isSelected ? 'border-[#f31325] ring-1 ring-[#f31325]/45' : 'border-white/10 hover:border-[#f31325]/45'} ${isDeleting ? 'pointer-events-none opacity-50' : ''}`}>
                   <div className="absolute left-3 top-3 z-20 flex items-center gap-2">
-                    <button onClick={() => toggleFavorite(project)} disabled={isFavoriting} title={project.isFavorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'} className={`flex h-9 w-9 items-center justify-center rounded-xl border backdrop-blur-sm transition ${project.isFavorite ? 'border-[#f31325]/40 bg-[#f31325] text-white' : 'border-white/10 bg-black/70 text-gray-400 hover:text-[#ff3344]'}`}>
+                    <button type="button" onClick={() => toggleFavorite(project)} disabled={isFavoriting} title={project.isFavorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'} className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${project.isFavorite ? 'border-[#f31325]/40 bg-[#f31325] text-white' : 'border-white/10 bg-black/85 text-gray-400 hover:text-[#ff3344]'}`}>
                       {isFavoriting ? <Loader2 size={15} className="animate-spin" /> : <Heart size={17} fill={project.isFavorite ? 'currentColor' : 'none'} />}
                     </button>
-                    <button onClick={() => deleteProjects([project.id])} title="حذف المشروع" className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-500/20 bg-black/70 text-red-300 transition hover:bg-red-500/20">
-                      <Trash2 size={16} />
-                    </button>
+                    <button type="button" onClick={() => deleteProjects([project.id])} title="حذف المشروع" className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-500/20 bg-black/85 text-red-300 transition hover:bg-red-500/20"><Trash2 size={16} /></button>
                   </div>
 
-                  <label className="absolute right-3 top-3 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-black/70">
+                  <label className="absolute right-3 top-3 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-black/85">
                     <input type="checkbox" checked={isSelected} onChange={() => toggleSelection(project.id)} className="h-4 w-4 accent-[#f31325]" aria-label={`تحديد ${project.name}`} />
                   </label>
 
-                  <button onClick={() => router.push(config.workspace(project.id))} className="block w-full text-right">
+                  <button type="button" onClick={() => router.push(config.workspace(project.id))} className="block w-full text-right">
                     <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(243,19,37,.13),transparent_45%),#0b0d12]">
                       {project.thumbnail ? <img src={project.thumbnail} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" /> : <ActiveIcon size={44} className="text-[#ff3344]/70" />}
-                      <span className="absolute bottom-3 right-3 rounded-lg border border-white/10 bg-black/75 px-2.5 py-1 text-[10px] font-black text-gray-300">{config.label}</span>
-                      <span className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-lg border border-[#f31325]/20 bg-black/80 px-2.5 py-1 text-[10px] font-black text-[#ff6672]">
-                        <Sparkles size={12} /> {generationCounts[project.id] ?? 0} توليد
-                      </span>
+                      <span className="absolute bottom-3 right-3 rounded-lg border border-white/10 bg-black/85 px-2.5 py-1 text-[10px] font-black text-gray-300">{config.label}</span>
+                      <span className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-lg border border-[#f31325]/20 bg-black/90 px-2.5 py-1 text-[10px] font-black text-[#ff6672]"><Sparkles size={12} /> {generationCounts[project.id] ?? 0} توليد</span>
                     </div>
                     <div className="p-5">
                       <div className="flex items-center gap-2">
@@ -353,7 +355,7 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
       </section>
 
       {createOpen && (
-        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/75 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateOpen(false); }}>
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/80 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setCreateOpen(false); }}>
           <form onSubmit={createProject} className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0d1016] p-6 shadow-[0_28px_90px_rgba(0,0,0,.7)]">
             <div className="flex items-start justify-between gap-4">
               <div><div className="text-xs font-black text-[#ff3344]">{config.label}</div><h2 className="mt-1 text-xl font-black">مشروع جديد</h2></div>
