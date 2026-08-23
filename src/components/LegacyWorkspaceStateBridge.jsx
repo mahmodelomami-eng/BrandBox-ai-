@@ -51,6 +51,18 @@ function matchesView(text, view) {
   return tokens.every((token) => text.includes(token)) || tokens.some((token) => text.includes(token));
 }
 
+function isAdminControl(control) {
+  const text = normalize(control?.textContent);
+  if (!text) return false;
+
+  return (
+    text.includes('لوحة التحكم الإدارية') ||
+    text.includes('العودة لمساحة العمل') ||
+    text === 'لوحة التحكم (Dashboard)' ||
+    Boolean(control?.closest?.('[data-admin-shell], .admin-shell'))
+  );
+}
+
 function inferView(text) {
   const normalized = normalize(text);
   if (!normalized) return null;
@@ -146,7 +158,16 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
     };
 
     const findTargetControl = () => {
-      const controls = Array.from(root.querySelectorAll('button, [role="button"]'));
+      const controls = Array.from(root.querySelectorAll('button, [role="button"]'))
+        .filter((control) => !isAdminControl(control));
+
+      if (targetView === 'dashboard') {
+        // The page contains both the user dashboard button and the admin dashboard
+        // switch. The previous fuzzy matcher could click the admin switch first,
+        // leaving normal users inside AdminShell and producing a 403 ANALYTICS_READ.
+        return controls.find((control) => normalize(control.textContent) === 'لوحة التحكم') || null;
+      }
+
       return controls.find((control) => matchesView(normalize(control.textContent), targetView)) || null;
     };
 
@@ -158,12 +179,6 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
 
     const maybeReveal = () => {
       if (cancelled || revealScheduled || !targetApplied) return;
-
-      // On desktop we can normally verify the authenticated identity from the DOM.
-      // On mobile the user name can be omitted from the rendered header, so requiring
-      // that text forever caused the full-screen "opening workspace" overlay to deadlock.
-      // Once Supabase auth/profile resolution completes, the workspace is safe to reveal
-      // even when the identity text is not present in the mobile DOM.
       if (!authResolved && !identityIsReady()) return;
 
       revealScheduled = true;
@@ -192,7 +207,7 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
 
     const handleClick = (event) => {
       const control = event.target?.closest?.('button, [role="button"]');
-      if (!control || !root.contains(control)) return;
+      if (!control || !root.contains(control) || isAdminControl(control)) return;
       const nextView = inferView(control.textContent);
       if (nextView) {
         setSidebarOpen(false);
@@ -208,8 +223,6 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
     });
     observer.observe(root, { childList: true, subtree: true, characterData: true });
 
-    // Never allow a transient profile/network issue to trap the user behind the loader.
-    // AuthGate has already validated that the route is authenticated before this bridge mounts.
     fallbackTimer = window.setTimeout(() => {
       authResolved = true;
       applyTarget();
