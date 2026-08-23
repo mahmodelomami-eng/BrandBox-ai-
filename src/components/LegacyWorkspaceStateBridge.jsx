@@ -128,9 +128,11 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
   useLayoutEffect(() => {
     let cancelled = false;
     let targetApplied = false;
+    let authResolved = false;
     let expectedIdentity = '';
     let observer = null;
     let revealScheduled = false;
+    let fallbackTimer = null;
 
     const root = rootRef.current;
     if (!root) return undefined;
@@ -155,12 +157,16 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
     };
 
     const maybeReveal = () => {
-      if (cancelled || revealScheduled || !targetApplied || !identityIsReady()) return;
-      revealScheduled = true;
+      if (cancelled || revealScheduled || !targetApplied) return;
 
-      // This observer is only needed during the initial legacy-state synchronization.
-      // Disconnecting it before the workspace becomes interactive prevents every
-      // subsequent dashboard/admin DOM update from triggering full-tree scans.
+      // On desktop we can normally verify the authenticated identity from the DOM.
+      // On mobile the user name can be omitted from the rendered header, so requiring
+      // that text forever caused the full-screen "opening workspace" overlay to deadlock.
+      // Once Supabase auth/profile resolution completes, the workspace is safe to reveal
+      // even when the identity text is not present in the mobile DOM.
+      if (!authResolved && !identityIsReady()) return;
+
+      revealScheduled = true;
       observer?.disconnect();
       observer = null;
 
@@ -202,28 +208,52 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
     });
     observer.observe(root, { childList: true, subtree: true, characterData: true });
 
-    (async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData.session?.user;
-      if (!user || cancelled) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('first_name,last_name')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (cancelled) return;
-      const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim();
-      expectedIdentity = fullName || user.email?.split('@')[0] || user.id;
+    // Never allow a transient profile/network issue to trap the user behind the loader.
+    // AuthGate has already validated that the route is authenticated before this bridge mounts.
+    fallbackTimer = window.setTimeout(() => {
+      authResolved = true;
       applyTarget();
       maybeReveal();
+    }, 2500);
+
+    (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
+
+        if (!user || cancelled) {
+          authResolved = true;
+          applyTarget();
+          maybeReveal();
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('first_name,last_name')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+        const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim();
+        expectedIdentity = fullName || user.email?.split('@')[0] || user.id;
+        authResolved = true;
+        applyTarget();
+        maybeReveal();
+      } catch (error) {
+        console.error('Legacy workspace auth sync error:', error);
+        if (cancelled) return;
+        authResolved = true;
+        applyTarget();
+        maybeReveal();
+      }
     })();
 
     applyTarget();
 
     return () => {
       cancelled = true;
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
       observer?.disconnect();
       root.removeEventListener('click', handleClick, true);
     };
