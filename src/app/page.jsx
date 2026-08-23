@@ -11,12 +11,21 @@ import AdminUserManagementEnhancer from '../components/AdminUserManagementEnhanc
 import UserExperienceEnhancer from '../components/UserExperienceEnhancer';
 import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
 import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
+import ImageStudioWorkspace from '../components/ImageStudioWorkspace';
 
 function RootExperience() {
   const searchParams = useSearchParams();
   const legacyView = searchParams.get('view');
 
   if (!legacyView) return <HomeExperience />;
+
+  if (legacyView === 'images') {
+    return (
+      <AuthGate>
+        <ImageStudioWorkspace />
+      </AuthGate>
+    );
+  }
 
   return (
     <AuthGate>
