@@ -1,7 +1,7 @@
 create table if not exists public.project_tool_items (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  project_id uuid not null references public.projects(id) on delete cascade,
+  project_id text not null references public.projects(id) on delete cascade,
   tool_type text not null check (tool_type in ('video', 'audio')),
   item_type text not null default 'draft' check (item_type in ('draft', 'generation')),
   prompt text not null default '',
