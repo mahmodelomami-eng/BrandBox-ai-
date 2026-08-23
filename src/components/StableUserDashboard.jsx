@@ -3,42 +3,56 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  CircleUserRound, CreditCard, FolderOpen, ImageIcon, LayoutDashboard, Menu,
-  MessageSquare, Palette, Printer, ShoppingBag, Sparkles, Video, WandSparkles, X
+  ArrowLeft, Crown, Folder, FolderOpen, ImageIcon, Info, Layers3, Menu,
+  MessageSquare, Mic2, MoreVertical, PlayCircle, Sparkles, Star, TrendingUp,
+  Video, WandSparkles, X
 } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 
-const nav = [
-  { href: '/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
-  { href: '/projects', label: 'مشاريعي', icon: FolderOpen },
-  { href: '/dashboard/studio', label: 'استوديو AI', icon: WandSparkles },
-  { href: '/dashboard/brand', label: 'الهوية والعلامة', icon: Palette },
-  { href: '/dashboard/marketing', label: 'التسويق والمحتوى', icon: Sparkles },
-  { href: '/dashboard/print', label: 'الطباعة والإنتاج', icon: Printer },
-  { href: '/dashboard/commerce', label: 'المتجر والمشتريات', icon: ShoppingBag },
-  { href: '/dashboard/account', label: 'الحساب والرصيد', icon: CircleUserRound },
+const toolCards = [
+  { href: '/images-ai', label: 'الصور AI', text: 'توليد وتحرير الصور بذكاء اصطناعي', icon: ImageIcon },
+  { href: '/video-ai', label: 'الفيديو AI', text: 'إنشاء فيديوهات احترافية بذكاء اصطناعي', icon: Video },
+  { href: '/chat-ai', label: 'الشات AI', text: 'محادثة ذكية ومساعدك الإبداعي', icon: MessageSquare },
+  { href: '/audio-ai', label: 'الصوت AI', text: 'توليد الصوت والتعليق الصوتي الاحترافي', icon: Mic2 },
 ];
 
-const tools = [
-  { href: '/images-ai', label: 'الصور AI', text: 'توليد وتحرير الصور والتصاميم', icon: ImageIcon },
-  { href: '/video-ai', label: 'الفيديو AI', text: 'إنشاء الفيديو والمشاهد', icon: Video },
-  { href: '/chat-ai', label: 'شات AI', text: 'الكتابة والمساعدة الذكية', icon: MessageSquare },
-  { href: '/projects', label: 'المشاريع', text: 'إدارة جميع أعمالك', icon: FolderOpen },
-];
+function MetricCard({ label, value, helper, action, href, icon: Icon, red = false }) {
+  return (
+    <div className="rounded-[18px] border border-white/[.08] bg-[linear-gradient(145deg,#111318,#0b0d11)] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,.025)]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold text-gray-400">{label}<Info size={14} /></div>
+          <div className="mt-4 text-3xl font-black tracking-tight text-white">{value}</div>
+          <div className="mt-2 text-xs text-gray-500">{helper}</div>
+        </div>
+        <div className={`grid h-16 w-16 place-items-center rounded-2xl ${red ? 'bg-[linear-gradient(135deg,#f31325,#980612)] text-white' : 'bg-white/[.07] text-gray-200'}`}>
+          <Icon size={30} />
+        </div>
+      </div>
+      <div className="mt-5 border-t border-white/[.06] pt-4">
+        <Link href={href} className={`inline-flex items-center gap-2 text-sm font-black ${red ? 'text-[#ff3344]' : 'text-gray-300 hover:text-white'}`}>
+          {action}<ArrowLeft size={15} />
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function StableUserDashboard() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [resolved, setResolved] = useState(false);
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [stats, setStats] = useState({ projects: 0, generations: 0, assets: 0 });
+  const [projects, setProjects] = useState([]);
+  const [generations, setGenerations] = useState([]);
+  const [stats, setStats] = useState({ projects: 0, generations: 0 });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    const timer = window.setTimeout(() => mounted && setResolved(true), 1800);
+    const fallback = window.setTimeout(() => mounted && setResolved(true), 1800);
 
-    const load = async () => {
+    (async () => {
       try {
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
@@ -47,48 +61,42 @@ export default function StableUserDashboard() {
         setResolved(true);
         if (!current?.user) return;
 
-        const [profileRes, projectsRes, generationsRes, assetsRes] = await Promise.allSettled([
+        const [profileRes, projectsRes, generationsRes, projectCountRes, generationCountRes] = await Promise.allSettled([
           supabase.from('profiles').select('first_name,last_name,avatar_url,role,credit_balance,status').eq('id', current.user.id).maybeSingle(),
-          supabase.from('projects').select('id', { count: 'exact', head: true }),
+          supabase.from('projects').select('id,name,type,thumbnail_url,updated_at,is_favorite').eq('owner_id', current.user.id).order('updated_at', { ascending: false }).limit(3),
+          supabase.from('generations').select('id,generation_type,prompt,created_at,result_url').order('created_at', { ascending: false }).limit(3),
+          supabase.from('projects').select('id', { count: 'exact', head: true }).eq('owner_id', current.user.id),
           supabase.from('generations').select('id', { count: 'exact', head: true }),
-          supabase.from('assets').select('id', { count: 'exact', head: true }),
         ]);
+
         if (!mounted) return;
         if (profileRes.status === 'fulfilled') setProfile(profileRes.value.data || null);
+        if (projectsRes.status === 'fulfilled' && !projectsRes.value.error) setProjects(projectsRes.value.data || []);
+        if (generationsRes.status === 'fulfilled' && !generationsRes.value.error) setGenerations(generationsRes.value.data || []);
         setStats({
-          projects: projectsRes.status === 'fulfilled' ? projectsRes.value.count || 0 : 0,
-          generations: generationsRes.status === 'fulfilled' ? generationsRes.value.count || 0 : 0,
-          assets: assetsRes.status === 'fulfilled' ? assetsRes.value.count || 0 : 0,
+          projects: projectCountRes.status === 'fulfilled' ? projectCountRes.value.count || 0 : 0,
+          generations: generationCountRes.status === 'fulfilled' ? generationCountRes.value.count || 0 : 0,
         });
       } catch (error) {
-        console.error('Dashboard session load error:', error);
+        console.error('Dashboard load error:', error);
         if (mounted) setResolved(true);
       }
-    };
-
-    load();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
-      if (!mounted) return;
-      setSession(next || null);
-      setResolved(true);
-    });
+    })();
 
     return () => {
       mounted = false;
-      window.clearTimeout(timer);
-      listener.subscription.unsubscribe();
+      window.clearTimeout(fallback);
     };
   }, [supabase]);
 
   const displayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || session?.user?.email?.split('@')[0] || 'المستخدم';
+  const firstName = profile?.first_name || displayName.split(' ')[0] || 'أحمد';
   const credits = Number(profile?.credit_balance || 0);
-  const role = profile?.role || 'USER';
-  const canAdmin = ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'].includes(role);
 
   if (resolved && !session?.user) {
     return (
-      <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#07090d] px-5 py-12 text-white">
-        <div className="mx-auto max-w-lg rounded-3xl border border-white/10 bg-[#10131a] p-8 text-center">
+      <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050608] px-5 py-12 text-white">
+        <div className="mx-auto max-w-lg rounded-3xl border border-white/10 bg-[#0d0f13] p-8 text-center">
           <h1 className="text-2xl font-black">لوحة تحكم Brand Box</h1>
           <p className="mt-3 text-sm leading-7 text-gray-400">يلزم تسجيل الدخول لعرض لوحة التحكم الخاصة بك.</p>
           <Link href="/auth?next=%2Fdashboard" className="mt-6 inline-flex rounded-xl bg-[#f31325] px-6 py-3 text-sm font-black">تسجيل الدخول</Link>
@@ -98,79 +106,108 @@ export default function StableUserDashboard() {
   }
 
   return (
-    <div dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#07090d] text-white">
-      <div className="mx-auto flex max-w-[1700px]">
-        <aside className="hidden min-h-[calc(100vh-5rem)] w-72 shrink-0 border-l border-white/5 bg-[#0b0d12] p-4 lg:flex lg:flex-col">
-          <Sidebar displayName={displayName} role={role} canAdmin={canAdmin} />
-        </aside>
+    <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050608] text-white">
+      <div className="mx-auto max-w-[1720px] px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mb-4 flex justify-end lg:hidden">
+          <button type="button" onClick={() => setMobileMenuOpen((v) => !v)} className="rounded-xl border border-white/10 bg-[#0d0f13] p-2.5"><Menu size={20}/></button>
+        </div>
 
-        <main className="min-w-0 flex-1">
-          <header className="sticky top-20 z-30 border-b border-white/5 bg-[#07090d]/95 px-4 py-4 backdrop-blur-xl sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setMenuOpen(true)} className="rounded-xl border border-white/10 p-2.5 lg:hidden" aria-label="فتح قائمة لوحة التحكم"><Menu size={20}/></button>
-              <div className="min-w-0 flex-1">
-                <h1 className="text-xl font-black sm:text-2xl">لوحة تحكم المستخدم</h1>
-                <p className="mt-1 text-xs text-gray-500">مساحة العمل الرئيسية داخل Brand Box AI</p>
-              </div>
-              <div className="hidden gap-2 sm:flex">
-                <span className="rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-xs font-black text-gray-300">{role}</span>
-                <span className="rounded-xl border border-[#f31325]/20 bg-[#f31325]/10 px-3 py-2 text-xs font-black text-[#ff6674]">{credits.toLocaleString('ar-LY')} نقطة</span>
-              </div>
-            </div>
-          </header>
-
-          <div className="space-y-7 p-4 sm:p-6 lg:p-8">
-            {!resolved && <div className="rounded-2xl border border-white/10 bg-[#10131a] px-4 py-3 text-xs text-gray-400">جاري مزامنة بيانات الحساب...</div>}
-
-            <section className="overflow-hidden rounded-3xl border border-[#f31325]/20 bg-[radial-gradient(circle_at_top_right,rgba(243,19,37,.18),transparent_35%),#10131a] p-6 sm:p-8">
-              <div className="text-xs font-black text-[#ff6674]">BRAND BOX WORKSPACE</div>
-              <h2 className="mt-3 text-3xl font-black sm:text-4xl">مرحبًا {displayName}</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-400">من هنا تدير مشاريعك وأدوات الذكاء الاصطناعي والهوية والتسويق والطباعة والمشتريات من مساحة واحدة.</p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link href="/projects" className="rounded-xl bg-[#f31325] px-5 py-3 text-sm font-black">فتح مشاريعي</Link>
-                <Link href="/dashboard/studio" className="rounded-xl border border-white/10 px-5 py-3 text-sm font-black">استوديو AI</Link>
-              </div>
-            </section>
-
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                ['الرصيد', credits.toLocaleString('ar-LY'), 'نقطة'],
-                ['المشاريع', stats.projects.toLocaleString('ar-LY'), 'مشروع'],
-                ['عمليات التوليد', stats.generations.toLocaleString('ar-LY'), 'عملية'],
-                ['الأصول', stats.assets.toLocaleString('ar-LY'), 'ملف'],
-              ].map(([label, value, unit]) => <div key={label} className="rounded-2xl border border-white/10 bg-[#10131a] p-5"><div className="text-xs text-gray-500">{label}</div><div className="mt-3 text-3xl font-black">{value}</div><div className="mt-1 text-[11px] text-gray-600">{unit}</div></div>)}
-            </section>
-
-            <section>
-              <h3 className="text-xl font-black">أدوات المنصة</h3>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {tools.map(({ href, label, text, icon: Icon }) => <Link key={href} href={href} className="rounded-2xl border border-white/10 bg-[#10131a] p-5 transition hover:border-[#f31325]/40"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#f31325]/10 text-[#ff3344]"><Icon size={21}/></span><div className="mt-4 font-black">{label}</div><div className="mt-2 text-xs leading-6 text-gray-500">{text}</div></Link>)}
-              </div>
-            </section>
+        <section className="relative overflow-hidden rounded-[20px] border border-white/[.08] bg-[radial-gradient(circle_at_13%_40%,rgba(183,10,22,.42),transparent_28%),linear-gradient(130deg,#0a0b0f,#12141a)] px-6 py-8 sm:px-9 lg:min-h-[180px] lg:px-16 lg:py-10">
+          <div className="absolute left-8 top-1/2 hidden h-28 w-28 -translate-y-1/2 rotate-45 rounded-[18px] border border-red-600/20 bg-[linear-gradient(145deg,#111,#020202)] shadow-[0_0_45px_rgba(243,19,37,.14)] lg:block" />
+          <div className="absolute left-24 top-1/2 hidden -translate-y-1/2 rounded-xl border border-red-500/20 bg-black/70 px-3 py-2 text-xl font-black text-[#ff2637] shadow-[0_0_25px_rgba(243,19,37,.24)] lg:block">AI</div>
+          <div className="relative z-10 max-w-3xl">
+            <h1 className="text-3xl font-black sm:text-4xl lg:text-5xl">مرحبًا بك، {firstName} 👋</h1>
+            <p className="mt-4 text-sm leading-7 text-gray-400 sm:text-base">جاهز لتحويل أفكارك إلى محتوى استثنائي باستخدام الذكاء الاصطناعي.</p>
           </div>
-        </main>
+        </section>
+
+        <section className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="الاشتراك" value="باقة برو" helper="الخطة الحالية" action="إدارة الاشتراك" href="/pricing" icon={Crown} red />
+          <MetricCard label="عمليات التوليد" value={stats.generations.toLocaleString('ar-LY')} helper="إجمالي العمليات" action="عرض التقارير" href="/dashboard/studio" icon={TrendingUp} red />
+          <MetricCard label="المشاريع النشطة" value={stats.projects.toLocaleString('ar-LY')} helper="مشروع في حسابك" action="عرض جميع المشاريع" href="/projects" icon={Folder} />
+          <MetricCard label="الرصيد" value={credits.toLocaleString('ar-LY')} helper="كريدت متاح" action="شحن الرصيد" href="/pricing" icon={Layers3} red />
+        </section>
+
+        <section className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {toolCards.map(({ href, label, text, icon: Icon }) => (
+            <div key={href} className="rounded-[18px] border border-white/[.1] bg-[linear-gradient(145deg,#101217,#0b0d11)] p-6">
+              <div className="flex items-start gap-4">
+                <div className="grid h-14 w-14 shrink-0 place-items-center text-[#ff2637]"><Icon size={38}/></div>
+                <div><h2 className="text-xl font-black">{label}</h2><p className="mt-2 text-sm leading-7 text-gray-400">{text}</p></div>
+              </div>
+              <Link href={href} className="mt-6 flex items-center justify-center gap-2 rounded-lg border border-red-500/35 bg-red-500/[.06] px-4 py-3 text-sm font-black text-[#ff3344] transition hover:bg-red-500/[.12]">
+                عرض المشاريع <ArrowLeft size={17}/>
+              </Link>
+            </div>
+          ))}
+        </section>
+
+        <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_1.9fr]">
+          <div className="rounded-[18px] border border-white/[.08] bg-[linear-gradient(145deg,#101217,#0b0d11)] p-5">
+            <div className="flex items-center justify-between"><h3 className="text-lg font-black">التوليدات الأخيرة</h3><Link href="/dashboard/studio" className="text-sm font-black text-[#ff3344]">عرض الكل</Link></div>
+            <div className="mt-4 space-y-3">
+              {(generations.length ? generations : [
+                { id: 'sample-1', prompt: 'صورة احترافية لمشروعك', generation_type: 'image' },
+                { id: 'sample-2', prompt: 'فيديو ترويجي جديد', generation_type: 'video' },
+                { id: 'sample-3', prompt: 'محتوى تسويقي مبتكر', generation_type: 'chat' },
+              ]).slice(0, 3).map((item, index) => (
+                <div key={item.id} className="flex items-center gap-3 rounded-xl border border-white/[.05] bg-black/15 p-3">
+                  <div className="grid h-14 w-24 shrink-0 place-items-center overflow-hidden rounded-lg bg-[linear-gradient(135deg,#e8dfd4,#82796f)] text-black/60">
+                    {item.generation_type === 'video' ? <PlayCircle size={26}/> : item.generation_type === 'chat' ? <MessageSquare size={24}/> : <ImageIcon size={24}/>} 
+                  </div>
+                  <div className="min-w-0 flex-1"><div className="truncate text-sm font-bold">{item.prompt || `توليد جديد ${index + 1}`}</div><div className="mt-1 text-[11px] text-gray-500">أحدث نشاط</div></div>
+                  <MoreVertical size={18} className="text-gray-500"/>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[18px] border border-white/[.08] bg-[linear-gradient(145deg,#101217,#0b0d11)] p-5">
+            <div className="flex items-center justify-between"><h3 className="text-lg font-black">المشاريع الأخيرة</h3><Link href="/projects" className="text-sm font-black text-[#ff3344]">عرض الكل</Link></div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {(projects.length ? projects : [
+                { id: 'p1', name: 'هوية العلامة التجارية', type: 'هوية' },
+                { id: 'p2', name: 'حملة الساعات الذكية', type: 'تسويق' },
+                { id: 'p3', name: 'إطلاق منتج العناية', type: 'صور' },
+              ]).slice(0, 3).map((project, index) => (
+                <Link key={project.id} href="/projects" className="overflow-hidden rounded-xl border border-white/[.08] bg-[#0a0b0e] transition hover:border-red-500/30">
+                  <div className="relative h-36 overflow-hidden bg-[radial-gradient(circle_at_center,rgba(255,255,255,.18),transparent_30%),linear-gradient(135deg,#2a1a1d,#0b0d11)]">
+                    {project.thumbnail_url ? <img src={project.thumbnail_url} alt={project.name} className="h-full w-full object-cover"/> : <div className="grid h-full place-items-center text-[#ff2637]"><Sparkles size={42}/></div>}
+                    <button type="button" onClick={(e) => e.preventDefault()} className="absolute left-3 top-3 rounded-full bg-black/55 p-2 text-gray-300"><Star size={15}/></button>
+                    <div className="absolute right-3 top-3 rounded-full bg-black/55 p-2 text-gray-300"><Info size={15}/></div>
+                  </div>
+                  <div className="p-4"><div className="truncate font-black">{project.name}</div><div className="mt-1 text-[11px] text-gray-500">{project.type || `مشروع ${index + 1}`}</div></div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-4 grid gap-4 xl:grid-cols-[1fr_2fr]">
+          <div className="rounded-[18px] border border-white/[.08] bg-[linear-gradient(145deg,#101217,#0b0d11)] p-5">
+            <h3 className="text-lg font-black">اشتراكك</h3>
+            <div className="mt-4 flex items-center gap-3"><Crown className="text-[#ff2637]"/><span className="rounded-xl border border-red-500/30 px-4 py-2 font-black text-[#ff3344]">باقة برو</span></div>
+            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full w-4/5 bg-[#f31325]"/></div>
+            <div className="mt-2 text-xs text-gray-500">استهلاك الرصيد ضمن خطتك الحالية</div>
+            <Link href="/pricing" className="mt-5 block rounded-xl border border-white/10 bg-white/[.025] px-4 py-3 text-center text-sm font-black">إدارة الاشتراك</Link>
+          </div>
+          <div className="rounded-[18px] border border-white/[.08] bg-[radial-gradient(circle_at_20%_50%,rgba(243,19,37,.10),transparent_30%),#0d0f13] p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="text-lg font-black">ابدأ مشروعًا جديدًا</h3><p className="mt-2 text-sm text-gray-500">اختر أداة من أدوات Brand Box AI وابدأ العمل مباشرة.</p></div><Link href="/dashboard/studio" className="inline-flex items-center gap-2 rounded-xl bg-[#f31325] px-5 py-3 text-sm font-black"><WandSparkles size={18}/> فتح الاستوديو</Link></div>
+          </div>
+        </section>
       </div>
 
-      {menuOpen && <button type="button" onClick={() => setMenuOpen(false)} className="fixed inset-0 z-[150] bg-black/70 lg:hidden" aria-label="إغلاق القائمة"/>}
-      <aside className={`fixed right-0 top-20 z-[160] h-[calc(100vh-5rem)] w-[86vw] max-w-80 border-l border-white/10 bg-[#0b0d12] p-4 shadow-2xl transition-transform lg:hidden ${menuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <button type="button" onClick={() => setMenuOpen(false)} className="mb-4 rounded-xl border border-white/10 p-2.5" aria-label="إغلاق"><X size={20}/></button>
-        <Sidebar displayName={displayName} role={role} canAdmin={canAdmin} onNavigate={() => setMenuOpen(false)} />
+      {mobileMenuOpen && <button type="button" onClick={() => setMobileMenuOpen(false)} className="fixed inset-0 z-[200] bg-black/70 lg:hidden" aria-label="إغلاق"/>}
+      <aside className={`fixed right-0 top-20 z-[210] h-[calc(100vh-5rem)] w-[86vw] max-w-80 border-l border-white/10 bg-[#0b0d12] p-4 transition-transform lg:hidden ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <button type="button" onClick={() => setMobileMenuOpen(false)} className="mb-4 rounded-xl border border-white/10 p-2.5"><X size={20}/></button>
+        <div className="rounded-2xl border border-white/10 bg-[#11141b] p-4"><div className="font-black">{displayName}</div><div className="mt-1 text-xs text-gray-500">مساحة المستخدم</div></div>
+        <nav className="mt-4 space-y-2">
+          <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl bg-[#f31325] px-4 py-3 text-sm font-black">لوحة التحكم</Link>
+          <Link href="/projects" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl border border-white/10 px-4 py-3 text-sm font-black">مشاريعي</Link>
+          <Link href="/dashboard/studio" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl border border-white/10 px-4 py-3 text-sm font-black">استوديو AI</Link>
+          <Link href="/dashboard/account" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl border border-white/10 px-4 py-3 text-sm font-black">الحساب والرصيد</Link>
+        </nav>
       </aside>
-    </div>
+    </main>
   );
-}
-
-function Sidebar({ displayName, role, canAdmin, onNavigate }) {
-  return <div className="flex h-full flex-col">
-    <div className="mb-5 rounded-2xl border border-white/10 bg-[#11141b] p-4">
-      <div className="text-sm font-black">{displayName}</div>
-      <div className="mt-1 text-[10px] text-gray-500">{role}</div>
-    </div>
-    <nav className="space-y-1">
-      {nav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} onClick={onNavigate} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold text-gray-400 transition hover:bg-white/5 hover:text-white"><Icon size={18}/><span>{label}</span></Link>)}
-    </nav>
-    <div className="mt-auto border-t border-white/5 pt-4">
-      {canAdmin && <Link href="/admin" onClick={onNavigate} className="flex items-center gap-3 rounded-xl border border-[#f31325]/20 bg-[#f31325]/5 px-3 py-3 text-sm font-black text-[#ff6674]"><CreditCard size={18}/>مركز الإدارة</Link>}
-    </div>
-  </div>;
 }
