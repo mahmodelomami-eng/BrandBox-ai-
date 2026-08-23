@@ -1,8 +1,7 @@
 'use client';
 
-import WorkspaceDashboardShell from '../../components/WorkspaceDashboardShell';
-import UserDashboardOverview from '../../components/UserDashboardOverview';
+import StableUserDashboard from '../../components/StableUserDashboard';
 
 export default function DashboardPage() {
-  return <WorkspaceDashboardShell title="لوحة تحكم المستخدم" subtitle="مساحة عملك الرئيسية داخل Brand Box AI"><UserDashboardOverview /></WorkspaceDashboardShell>;
+  return <StableUserDashboard />;
 }
