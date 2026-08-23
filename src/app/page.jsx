@@ -12,12 +12,21 @@ import UserExperienceEnhancer from '../components/UserExperienceEnhancer';
 import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
 import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
 import ImageStudioWorkspace from '../components/ImageStudioWorkspace';
+import ProjectsToolHub from '../components/ProjectsToolHub';
 
 function RootExperience() {
   const searchParams = useSearchParams();
   const legacyView = searchParams.get('view');
 
   if (!legacyView) return <HomeExperience />;
+
+  if (legacyView === 'projects') {
+    return (
+      <AuthGate>
+        <ProjectsToolHub />
+      </AuthGate>
+    );
+  }
 
   if (legacyView === 'images') {
     return (

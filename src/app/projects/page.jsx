@@ -1,5 +1,10 @@
-import { redirect } from 'next/navigation';
+import AuthGate from '../../components/AuthGate';
+import ProjectsToolHub from '../../components/ProjectsToolHub';
 
 export default function ProjectsPage() {
-  redirect('/?view=projects');
+  return (
+    <AuthGate>
+      <ProjectsToolHub />
+    </AuthGate>
+  );
 }
