@@ -8,13 +8,13 @@ import AuthGate from '../components/AuthGate';
 import ProjectDeleteEnhancer from '../components/ProjectDeleteEnhancer';
 import LegacyWorkspaceStateBridge from '../components/LegacyWorkspaceStateBridge';
 import AdminUserManagementEnhancer from '../components/AdminUserManagementEnhancer';
+import AdminNavigationStabilizer from '../components/AdminNavigationStabilizer';
 import UserExperienceEnhancer from '../components/UserExperienceEnhancer';
 import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
 import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
 import ImageStudioWorkspace from '../components/ImageStudioWorkspace';
 import ProjectsToolHub from '../components/ProjectsToolHub';
 import UserDashboardToolChooserEnhancer from '../components/UserDashboardToolChooserEnhancer';
-import AdminRoleRouteGuardEnhancer from '../components/AdminRoleRouteGuardEnhancer';
 import AdminWorkspaceReturnFix from '../components/AdminWorkspaceReturnFix';
 
 function RootExperience() {
@@ -43,8 +43,9 @@ function RootExperience() {
     <AuthGate>
       <LegacyWorkspaceStateBridge view={legacyView}>
         <ProjectDeleteEnhancer />
-        <AdminUserManagementEnhancer />
-        <AdminRoleRouteGuardEnhancer />
+        <AdminNavigationStabilizer>
+          <AdminUserManagementEnhancer />
+        </AdminNavigationStabilizer>
         <AdminWorkspaceReturnFix />
         <UserExperienceEnhancer />
         <SidebarPricingEnhancer />
