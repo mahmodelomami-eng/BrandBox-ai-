@@ -78,10 +78,6 @@ export default function WorkspaceDashboardShell({ children, admin = false, title
     return () => { mounted = false; };
   }, [supabase]);
 
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
-
   const role = profile?.role || 'USER';
   const canAdmin = elevatedRoles.has(role);
   const links = admin ? adminNav : userNav;
