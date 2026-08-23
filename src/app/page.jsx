@@ -14,6 +14,7 @@ import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer
 import ImageStudioWorkspace from '../components/ImageStudioWorkspace';
 import ProjectsToolHub from '../components/ProjectsToolHub';
 import UserDashboardToolChooserEnhancer from '../components/UserDashboardToolChooserEnhancer';
+import AdminRoleRouteGuardEnhancer from '../components/AdminRoleRouteGuardEnhancer';
 
 function RootExperience() {
   const searchParams = useSearchParams();
@@ -42,6 +43,7 @@ function RootExperience() {
       <LegacyWorkspaceStateBridge view={legacyView}>
         <ProjectDeleteEnhancer />
         <AdminUserManagementEnhancer />
+        <AdminRoleRouteGuardEnhancer />
         <UserExperienceEnhancer />
         <SidebarPricingEnhancer />
         <PricingRouteIntentEnhancer />
