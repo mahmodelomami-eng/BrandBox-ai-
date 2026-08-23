@@ -2,6 +2,8 @@
 
 import { createBrowserSupabaseClient } from '../supabase/client';
 
+const PROJECT_SELECT = 'id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,is_favorite,created_at,updated_at';
+
 export async function listUserProjects() {
   const supabase = createBrowserSupabaseClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -10,8 +12,9 @@ export async function listUserProjects() {
 
   const { data, error } = await supabase
     .from('projects')
-    .select('id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,created_at,updated_at')
+    .select(PROJECT_SELECT)
     .eq('owner_id', user.id)
+    .order('is_favorite', { ascending: false })
     .order('updated_at', { ascending: false });
 
   if (error) throw error;
@@ -38,17 +41,11 @@ export async function createUserProject(input) {
   const { data, error } = await supabase
     .from('projects')
     .insert(payload)
-    .select('id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,created_at,updated_at')
+    .select(PROJECT_SELECT)
     .single();
 
-  if (error) {
-throw error;
-  }
-
-  if (!data) {
-    throw new Error("Supabase لم يُرجع المشروع بعد عملية الإنشاء.");
-  }
-
+  if (error) throw error;
+  if (!data) throw new Error("Supabase لم يُرجع المشروع بعد عملية الإنشاء.");
   return data;
 }
 
@@ -66,6 +63,7 @@ export async function updateUserProject(projectId, input) {
     ...(input.targetAudience !== undefined ? { target_audience: input.targetAudience || null } : {}),
     ...(input.language !== undefined ? { language: input.language } : {}),
     ...(input.tone !== undefined ? { tone: input.tone } : {}),
+    ...(input.isFavorite !== undefined ? { is_favorite: Boolean(input.isFavorite) } : {}),
     updated_at: new Date().toISOString(),
   };
 
@@ -74,11 +72,15 @@ export async function updateUserProject(projectId, input) {
     .update(patch)
     .eq('id', projectId)
     .eq('owner_id', user.id)
-    .select('id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,created_at,updated_at')
+    .select(PROJECT_SELECT)
     .single();
 
   if (error) throw error;
   return data;
+}
+
+export async function setUserProjectFavorite(projectId, isFavorite) {
+  return updateUserProject(projectId, { isFavorite });
 }
 
 export async function deleteUserProject(projectId) {
