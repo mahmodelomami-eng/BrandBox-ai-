@@ -148,6 +148,23 @@ function AuthShell({ children }) {
     }
   }
 
+  async function social(provider) {
+    setError('');
+    setMessage('');
+    try {
+      localStorage.setItem('brandbox.oauth.next', '/projects');
+      localStorage.setItem('brandbox.oauth.onboarding', '1');
+      const redirectTo = `${window.location.origin}/auth?next=${encodeURIComponent('/projects')}&social=1`;
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo },
+      });
+      if (oauthError) throw oauthError;
+    } catch (err) {
+      setError(err?.message || `تعذر تسجيل الدخول عبر ${provider}.`);
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
   }
@@ -216,6 +233,19 @@ function AuthShell({ children }) {
                   {message && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">{message}</div>}
                   <button disabled={submitting} className="w-full rounded-2xl bg-[#c20f1d] py-4 text-base font-extrabold text-white shadow-[0_18px_45px_rgba(243,19,37,.32)] transition hover:bg-[#e31627] disabled:opacity-50">{submitting ? 'جاري التنفيذ...' : mode === 'login' ? 'تسجيل الدخول' : 'إنشاء الحساب'}</button>
                 </form>
+
+                <div className="my-6 flex items-center gap-3 text-xs text-gray-600"><span className="h-px flex-1 bg-white/10" /><span>أو</span><span className="h-px flex-1 bg-white/10" /></div>
+                <div className="space-y-3">
+                  <button type="button" onClick={() => social('google')} className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/15 bg-[#111318] py-4 text-sm font-extrabold text-white transition hover:border-[#4285F4]/60 hover:bg-white/[0.03]">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-base font-black text-[#4285F4]">G</span>
+                    المتابعة باستخدام Google
+                  </button>
+                  <button type="button" onClick={() => social('apple')} className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/15 bg-[#111318] py-4 text-sm font-extrabold text-white transition hover:border-white/35 hover:bg-white/[0.03]">
+                    <span className="text-2xl leading-none"></span>
+                    المتابعة باستخدام Apple
+                  </button>
+                </div>
+
                 <p className="mt-7 text-center text-sm text-gray-500">{mode === 'login' ? 'ليس لديك حساب؟' : 'لديك حساب بالفعل؟'} <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage(''); }} className="font-extrabold text-[#f31325]">{mode === 'login' ? 'أنشئ حسابًا' : 'سجّل الدخول'}</button></p>
               </div>
             </section>
