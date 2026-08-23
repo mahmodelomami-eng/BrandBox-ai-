@@ -1,4 +1,5 @@
 import './globals.css';
+import './dropdown-opaque.css';
 import React from 'react';
 import GlobalNavigation from '../components/GlobalNavigation';
 

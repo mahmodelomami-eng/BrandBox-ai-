@@ -1,0 +1,13 @@
+.brandbox-global-nav [class*="bg-[#0d1016]/98"] {
+  background-color: #0d1016 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.brandbox-global-nav nav.xl\:hidden {
+  background-color: #090a0d !important;
+}
+
+.brandbox-global-nav nav.xl\:hidden > div > div[class*="bg-white/[.02]"] {
+  background-color: #0d1016 !important;
+}
