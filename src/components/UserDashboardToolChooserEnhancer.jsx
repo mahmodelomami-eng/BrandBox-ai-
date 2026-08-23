@@ -74,10 +74,23 @@ export default function UserDashboardToolChooserEnhancer() {
     };
 
     const handleClick = (event) => {
+      const control = event.target?.closest?.('button, [role="button"], a');
+      if (!control) return;
+      const label = (control.textContent || '').replace(/\s+/g, ' ').trim();
+
+      if (label === 'لوحة التحكم') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+        router.push('/?view=dashboard');
+        return;
+      }
+
       const button = event.target?.closest?.('button[data-brandbox-tool-chooser="1"]');
       if (!button) return;
       event.preventDefault();
       event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
       router.push('/projects');
     };
 
