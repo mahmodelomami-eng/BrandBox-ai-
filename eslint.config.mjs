@@ -23,7 +23,7 @@ const eslintConfig = [
     },
   },
   {
-    files: ["src/components/HomeExperience.jsx", "src/components/GlobalNavigation.jsx", "src/app/admin/home-content/page.jsx"],
+    files: ["src/components/HomeExperience.jsx", "src/components/GlobalNavigation.jsx", "src/components/ImageStudioWorkspace.jsx", "src/app/admin/home-content/page.jsx"],
     rules: {
       "react-hooks/immutability": "off",
       "react-hooks/set-state-in-effect": "off",
