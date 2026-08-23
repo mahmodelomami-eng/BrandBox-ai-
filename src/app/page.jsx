@@ -12,17 +12,15 @@ import AdminNavigationStabilizer from '../components/AdminNavigationStabilizer';
 import UserExperienceEnhancer from '../components/UserExperienceEnhancer';
 import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
 import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
-import ImageStudioWorkspace from '../components/ImageStudioWorkspace';
-import ProjectsToolHub from '../components/ProjectsToolHub';
 import UserDashboardToolChooserEnhancer from '../components/UserDashboardToolChooserEnhancer';
 import AdminWorkspaceReturnFix from '../components/AdminWorkspaceReturnFix';
 
-function LegacyDashboardRedirect() {
+function CanonicalRedirect({ target }) {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/dashboard');
-  }, [router]);
+    router.replace(target);
+  }, [router, target]);
 
   return <div className="min-h-screen bg-[#050506]" />;
 }
@@ -30,27 +28,21 @@ function LegacyDashboardRedirect() {
 function RootExperience() {
   const searchParams = useSearchParams();
   const legacyView = searchParams.get('view');
+  const projectId = searchParams.get('project');
 
   if (!legacyView) return <HomeExperience />;
 
-  if (legacyView === 'dashboard') {
-    return <LegacyDashboardRedirect />;
-  }
+  const canonicalTargets = {
+    dashboard: '/dashboard',
+    projects: '/projects',
+    images: projectId ? `/projects/images/workspace?project=${encodeURIComponent(projectId)}` : '/projects/images',
+    video: '/projects/video',
+    chat: '/projects/chat',
+    audio: '/projects/audio',
+  };
 
-  if (legacyView === 'projects') {
-    return (
-      <AuthGate>
-        <ProjectsToolHub />
-      </AuthGate>
-    );
-  }
-
-  if (legacyView === 'images') {
-    return (
-      <AuthGate>
-        <ImageStudioWorkspace />
-      </AuthGate>
-    );
+  if (canonicalTargets[legacyView]) {
+    return <CanonicalRedirect target={canonicalTargets[legacyView]} />;
   }
 
   return (
@@ -72,5 +64,9 @@ function RootExperience() {
 }
 
 export default function HomePage() {
-  return <Suspense fallback={<div className="min-h-screen bg-[#050506]" />}><RootExperience /></Suspense>;
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#050506]" />}>
+      <RootExperience />
+    </Suspense>
+  );
 }
