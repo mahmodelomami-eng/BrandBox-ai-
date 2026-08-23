@@ -1,28 +1,42 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function UserDashboardNavigationFix() {
-  const router = useRouter();
-
   useEffect(() => {
-    const handleClick = (event) => {
-      const link = event.target?.closest?.('a[href="/?view=dashboard"]');
-      if (!link) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      if (typeof event.stopImmediatePropagation === 'function') {
-        event.stopImmediatePropagation();
-      }
-
-      router.push('/dashboard');
+    const fixLinks = () => {
+      document.querySelectorAll('a').forEach((link) => {
+        const href = link.getAttribute('href') || '';
+        const text = (link.textContent || '').replace(/\s+/g, ' ').trim();
+        if (href.includes('view=dashboard') || text === 'لوحة تحكم المستخدم') {
+          link.setAttribute('href', '/dashboard');
+        }
+      });
     };
 
+    const handleClick = (event) => {
+      const control = event.target?.closest?.('a,button,[role="button"]');
+      if (!control) return;
+      const href = control.getAttribute?.('href') || '';
+      const text = (control.textContent || '').replace(/\s+/g, ' ').trim();
+      if (href.includes('view=dashboard') || text === 'لوحة تحكم المستخدم') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+        window.location.assign('/dashboard');
+      }
+    };
+
+    fixLinks();
+    const observer = new MutationObserver(fixLinks);
+    observer.observe(document.body, { childList: true, subtree: true });
     document.addEventListener('click', handleClick, true);
-    return () => document.removeEventListener('click', handleClick, true);
-  }, [router]);
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('click', handleClick, true);
+    };
+  }, []);
 
   return null;
 }
