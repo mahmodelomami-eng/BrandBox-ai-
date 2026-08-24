@@ -7,9 +7,6 @@ import HomeExperience from '../components/HomeExperience';
 import AuthGate from '../components/AuthGate';
 import ProjectDeleteEnhancer from '../components/ProjectDeleteEnhancer';
 import LegacyWorkspaceStateBridge from '../components/LegacyWorkspaceStateBridge';
-import LegacyAdminStateBridge from '../components/LegacyAdminStateBridge';
-import AdminUserManagementEnhancer from '../components/AdminUserManagementEnhancer';
-import AdminNavigationStabilizer from '../components/AdminNavigationStabilizer';
 import UserExperienceEnhancer from '../components/UserExperienceEnhancer';
 import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
 import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
@@ -23,19 +20,6 @@ function CanonicalRedirect({ target }) {
   }, [router, target]);
 
   return <div className="min-h-screen bg-[#050506]" />;
-}
-
-function LegacyAdminExperience() {
-  return (
-    <AuthGate>
-      <LegacyAdminStateBridge>
-        <AdminNavigationStabilizer>
-          <AdminUserManagementEnhancer />
-        </AdminNavigationStabilizer>
-        <App />
-      </LegacyAdminStateBridge>
-    </AuthGate>
-  );
 }
 
 function LegacyUserExperience({ view }) {
@@ -67,14 +51,11 @@ function RootExperience() {
     video: '/projects/video',
     chat: '/projects/chat',
     audio: '/projects/audio',
+    admin: '/admin',
   };
 
   if (canonicalTargets[legacyView]) {
     return <CanonicalRedirect target={canonicalTargets[legacyView]} />;
-  }
-
-  if (legacyView === 'admin') {
-    return <LegacyAdminExperience />;
   }
 
   return <LegacyUserExperience view={legacyView} />;

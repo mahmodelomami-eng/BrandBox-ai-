@@ -1,4 +1,12 @@
 'use client';
-import WorkspaceDashboardShell from '../../components/WorkspaceDashboardShell';
-import AdminDepartmentDashboard from '../../components/AdminDepartmentDashboard';
-export default function Page(){return <WorkspaceDashboardShell admin title="مركز إدارة المنصة" subtitle="الإدارات والصلاحيات والتشغيل"><AdminDepartmentDashboard type="overview"/></WorkspaceDashboardShell>;}
+
+import { Suspense } from 'react';
+import AdminControlCenter from '../../components/AdminControlCenter';
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={<div className="min-h-[calc(100vh-5rem)] bg-[#07090d]" />}>
+      <AdminControlCenter />
+    </Suspense>
+  );
+}
