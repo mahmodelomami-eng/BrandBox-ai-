@@ -1,4 +1,4 @@
-import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
+import { createPrivilegedSupabaseClient } from '../supabase/server';
 
 type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
 

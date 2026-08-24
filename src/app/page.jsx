@@ -1,70 +1,45 @@
 'use client';
 
-import React, { Suspense, useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import App from '../../App';
 import HomeExperience from '../components/HomeExperience';
-import AuthGate from '../components/AuthGate';
-import ProjectDeleteEnhancer from '../components/ProjectDeleteEnhancer';
-import LegacyWorkspaceStateBridge from '../components/LegacyWorkspaceStateBridge';
-import UserExperienceEnhancer from '../components/UserExperienceEnhancer';
-import SidebarPricingEnhancer from '../components/SidebarPricingEnhancer';
-import PricingRouteIntentEnhancer from '../components/PricingRouteIntentEnhancer';
-import UserDashboardToolChooserEnhancer from '../components/UserDashboardToolChooserEnhancer';
 
-function CanonicalRedirect({ target }) {
+const LEGACY_VIEW_MAP = {
+  dashboard: '/dashboard',
+  projects: '/projects',
+  'project-workspace': '/projects',
+  chat: '/chat-ai',
+  images: '/images-ai',
+  video: '/video-ai',
+  audio: '/audio-ai',
+  'brand-kit': '/brand-kit',
+  templates: '/templates',
+  billing: '/pricing',
+  pricing: '/pricing',
+  settings: '/dashboard/account',
+  account: '/dashboard/account',
+  admin: '/admin',
+  'admin-shell': '/admin',
+};
+
+function RootPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    router.replace(target);
-  }, [router, target]);
+    const viewParam = searchParams.get('view');
+    if (viewParam && LEGACY_VIEW_MAP[viewParam]) {
+      router.replace(LEGACY_VIEW_MAP[viewParam]);
+    }
+  }, [searchParams, router]);
 
-  return <div className="min-h-screen bg-[#050506]" />;
+  return <HomeExperience />;
 }
 
-function LegacyUserExperience({ view }) {
-  return (
-    <AuthGate>
-      <LegacyWorkspaceStateBridge view={view}>
-        <ProjectDeleteEnhancer />
-        <UserExperienceEnhancer />
-        <SidebarPricingEnhancer />
-        <PricingRouteIntentEnhancer />
-        <UserDashboardToolChooserEnhancer />
-        <App />
-      </LegacyWorkspaceStateBridge>
-    </AuthGate>
-  );
-}
-
-function RootExperience() {
-  const searchParams = useSearchParams();
-  const legacyView = searchParams.get('view');
-  const projectId = searchParams.get('project');
-
-  if (!legacyView) return <HomeExperience />;
-
-  const canonicalTargets = {
-    dashboard: '/dashboard',
-    projects: '/projects',
-    images: projectId ? `/projects/images/workspace?project=${encodeURIComponent(projectId)}` : '/projects/images',
-    video: '/projects/video',
-    chat: '/projects/chat',
-    audio: '/projects/audio',
-    admin: '/admin',
-  };
-
-  if (canonicalTargets[legacyView]) {
-    return <CanonicalRedirect target={canonicalTargets[legacyView]} />;
-  }
-
-  return <LegacyUserExperience view={legacyView} />;
-}
-
-export default function HomePage() {
+export default function RootPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[#050506]" />}>
-      <RootExperience />
+      <RootPageContent />
     </Suspense>
   );
 }
