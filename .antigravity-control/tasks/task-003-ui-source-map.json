@@ -1,0 +1,6 @@
+{
+  "id": "task-003-ui-source-map",
+  "mode": "plan",
+  "effort": "high",
+  "prompt": "Use file-reading tools only inside the BrandBox AI workspace. Do NOT run terminal, shell, PowerShell, bash, git, npm, or any command tool. Do NOT modify any file. Inspect the current source tree and identify the exact files/components responsible for: (1) the currently deployed dashboard UI, (2) WorkspaceLayout/sidebar/header, (3) GlobalNavigation, (4) the AI Images entry screen, (5) any image projects gallery/project workspace components or routes that already exist in the current source tree, and (6) any legacy bridge/components that appear to preserve the previously approved UI. Return a concise source map with exact file paths, component names, and how they are wired together. Also state which current files would need to change to restore the approved top navigation on all screens and remove the permanent workspace sidebar while preserving real Next.js routing, AuthContext, notifications, RBAC, Supabase, and current APIs. If a requested historical UI implementation is not present in the current source tree, say that clearly instead of guessing."
+}
