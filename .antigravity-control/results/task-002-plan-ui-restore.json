@@ -1,6 +1,12 @@
 ﻿{
     "id":  "task-002-plan-ui-restore",
     "ok":  false,
+    "mode":  "plan",
     "error":  "The remote server returned an error: (500) Internal Server Error.",
-    "completed_at":  "2026-08-24T20:59:20.6426883+02:00"
+    "worktree":  {
+                     "status":  "",
+                     "diff":  "",
+                     "diff_stat":  ""
+                 },
+    "completed_at":  "2026-08-25T00:56:28.9217857+02:00"
 }
