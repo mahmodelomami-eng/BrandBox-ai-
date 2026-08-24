@@ -1,0 +1,21 @@
+﻿{
+    "id":  "task-001-plan-ui-restore",
+    "ok":  true,
+    "bridge_request_id":  "9dc04f94-b6ee-43e0-8690-f01966412f0b",
+    "antigravity":  {
+                        "conversation_id":  "a032800c-6dc2-4dd6-afeb-18f6464cb629",
+                        "status":  "CANCELED",
+                        "response":  "",
+                        "duration_seconds":  6.2880642,
+                        "num_turns":  1,
+                        "usage":  {
+                                      "input_tokens":  15583,
+                                      "output_tokens":  476,
+                                      "thinking_tokens":  396,
+                                      "cache_read_tokens":  0,
+                                      "total_tokens":  16059
+                                  }
+                    },
+    "stderr":  "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(\u003ctarget\u003e)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.\n",
+    "completed_at":  "2026-08-24T20:45:30.0232300+02:00"
+}
