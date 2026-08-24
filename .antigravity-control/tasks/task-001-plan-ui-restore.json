@@ -1,0 +1,6 @@
+{
+  "id": "task-001-plan-ui-restore",
+  "mode": "plan",
+  "effort": "high",
+  "prompt": "Inspect the current BrandBox-ai- repository state and prepare a PLAN ONLY for restoring the previously approved Brand Box UI without editing any files. Focus on: (1) restoring GlobalNavigation on all main screens, (2) removing the permanent WorkspaceLayout sidebar from normal tool screens, (3) restoring the previously approved dashboard visual design from repository history while keeping real AuthContext/Supabase data, (4) restoring the approved AI Images flow: image projects gallery -> select/create project -> image project workspace, (5) preserving real Next.js routes, AuthContext, RBAC, notifications, Supabase, Ezone Pay, OpenRouter, WhatsApp, store, migrations, and legacy redirects. Do not modify files. Report the exact historical components/files/commits you recommend reusing, the current files that would need changes, route mapping before/after, and any risks or blockers."
+}
