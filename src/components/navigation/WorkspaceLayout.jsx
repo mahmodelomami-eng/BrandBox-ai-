@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
+import { createBrowserSupabaseClient } from '../../lib/supabase/client';
 import {
   LayoutDashboard,
   FolderOpen,
@@ -24,10 +25,7 @@ import {
   ChevronDown,
   LogOut,
   User,
-  Sparkles,
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
+  CheckCheck,
 } from 'lucide-react';
 
 export default function WorkspaceLayout({ children }) {
@@ -37,6 +35,8 @@ export default function WorkspaceLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [markingRead, setMarkingRead] = useState(false);
   const profileDropdownRef = useRef(null);
   const notificationsRef = useRef(null);
 
@@ -66,6 +66,75 @@ export default function WorkspaceLayout({ children }) {
     }
   }, [loading, user, router]);
 
+  // Real Notifications Loader
+  const loadNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) return;
+
+      const response = await fetch('/api/v1/notifications', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      });
+      if (!response.ok) return;
+      const result = await response.json();
+      setNotifications(Array.isArray(result.notifications) ? result.notifications : []);
+    } catch (err) {
+      console.error('[WorkspaceLayout] Error loading notifications:', err);
+    }
+  }, [user]);
+
+  // Fetch notifications and poll every 60s
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+
+    loadNotifications();
+
+    const interval = setInterval(() => {
+      if (mounted) loadNotifications();
+    }, 60000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [user, loadNotifications]);
+
+  // Mark all notifications as read
+  const markAllRead = async () => {
+    const unreadCount = notifications.filter((n) => !n.is_read).length;
+    if (unreadCount === 0 || markingRead) return;
+
+    setMarkingRead(true);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+      if (!accessToken) return;
+
+      const response = await fetch('/api/v1/notifications', {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+
+      if (response.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      }
+    } catch (err) {
+      console.error('[WorkspaceLayout] Error marking all read:', err);
+    } finally {
+      setMarkingRead(false);
+    }
+  };
+
   if (loading) {
     return (
       <div dir="rtl" className="min-h-screen bg-[#090A0F] text-white flex flex-col items-center justify-center space-y-4">
@@ -87,6 +156,7 @@ export default function WorkspaceLayout({ children }) {
   const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() || user.email?.split('@')[0] || 'المستخدم';
   const avatarUrl = profile?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fullName)}&backgroundColor=1f2438&textColor=ffffff`;
   const isSuperAdminOrAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN' || role === 'SUPPORT';
+  const unreadCount = notifications.filter((item) => !item.is_read).length;
 
   const navGroups = [
     {
@@ -169,31 +239,90 @@ export default function WorkspaceLayout({ children }) {
             <span className="text-xs font-extrabold text-[#FF2E4C]">{creditBalance.toLocaleString('ar-LY')}</span>
           </Link>
 
-          {/* Notifications dropdown toggle */}
+          {/* Real Notifications dropdown toggle */}
           <div className="relative" ref={notificationsRef}>
             <button
-              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              onClick={() => {
+                setNotificationsOpen(!notificationsOpen);
+                setProfileDropdownOpen(false);
+                if (!notificationsOpen) loadNotifications();
+              }}
               className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition relative"
               aria-label="الإشعارات"
+              aria-expanded={notificationsOpen}
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 flex h-2 w-2 rounded-full bg-[#FF2E4C]" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#FF2E4C] px-1 text-[9px] font-black text-white ring-2 ring-[#0D0F17]">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {notificationsOpen && (
-              <div className="absolute left-0 mt-2 w-80 rounded-2xl border border-[#1F2438] bg-[#121520] p-4 shadow-2xl z-50 animate-fade-in">
-                <div className="flex items-center justify-between border-b border-[#1F2438] pb-3">
-                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Bell className="w-3.5 h-3.5 text-[#FF2E4C]" />
-                    <span>الإشعارات</span>
-                  </h4>
-                  <span className="text-[10px] text-gray-400">لا توجد إشعارات غير مقروءة</span>
-                </div>
-                <div className="mt-3 space-y-2 text-xs">
-                  <div className="p-2.5 rounded-xl bg-[#0D0F17] border border-[#1F2438]/50">
-                    <p className="text-gray-300 text-[11px]">مرحباً بك في BrandBox AI! رصيدك المتاح جاهز للاستخدام.</p>
-                    <span className="text-[9px] text-gray-500 mt-1 block">الآن</span>
+              <div className="absolute left-0 mt-2 w-[min(90vw,380px)] rounded-2xl border border-[#1F2438] bg-[#121520] shadow-2xl z-50 animate-fade-in overflow-hidden">
+                <div className="flex items-center justify-between border-b border-[#1F2438] px-4 py-3 bg-[#0D0F17]">
+                  <div>
+                    <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <Bell className="w-3.5 h-3.5 text-[#FF2E4C]" />
+                      <span>الإشعارات</span>
+                    </h4>
+                    <span className="text-[10px] text-gray-400">
+                      {unreadCount > 0 ? `${unreadCount} إشعار غير مقروء` : 'لا توجد إشعارات غير مقروءة'}
+                    </span>
                   </div>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllRead}
+                      disabled={markingRead}
+                      className="flex items-center gap-1 text-[11px] text-[#FF2E4C] hover:underline font-bold disabled:opacity-50"
+                      title="تحديد الكل كمقروء"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>تحديد الكل كمقروء</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="max-h-80 overflow-y-auto p-3 space-y-2 text-xs">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-gray-500">
+                      لا توجد إشعارات حالياً.
+                    </div>
+                  ) : (
+                    notifications.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`p-3 rounded-xl border transition ${
+                          item.is_read
+                            ? 'bg-[#0D0F17]/50 border-[#1F2438]/50 text-gray-400'
+                            : 'bg-[#FF2E4C]/5 border-[#FF2E4C]/25 text-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <span
+                            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                              item.is_read ? 'bg-gray-600' : 'bg-[#FF2E4C]'
+                            }`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-xs text-white truncate">
+                              {item.title || 'إشعار'}
+                            </div>
+                            {item.body && (
+                              <p className="mt-1 text-[11px] leading-5 text-gray-300">
+                                {item.body}
+                              </p>
+                            )}
+                            <span className="mt-1.5 block text-[9px] text-gray-500 font-mono">
+                              {item.created_at ? new Date(item.created_at).toLocaleString('ar-LY') : ''}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -202,7 +331,10 @@ export default function WorkspaceLayout({ children }) {
           {/* User Profile & Dropdown */}
           <div className="relative" ref={profileDropdownRef}>
             <button
-              onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+              onClick={() => {
+                setProfileDropdownOpen(!profileDropdownOpen);
+                setNotificationsOpen(false);
+              }}
               className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/5 transition"
               aria-label="قائمة الملف الشخصي"
             >
