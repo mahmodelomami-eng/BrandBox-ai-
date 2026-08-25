@@ -1,0 +1,6 @@
+{
+  "id": "task-010-dashboard-globalnav-fix",
+  "mode": "accept-edits",
+  "effort": "medium",
+  "prompt": "Work only in the isolated BrandBox-UI-Restore workspace. Fix only the dashboard shell regression seen in Vercel Preview. /dashboard currently shows the wrong legacy dashboard with a right sidebar and compact workspace header. Required: /dashboard must render the existing approved StableUserDashboard and the existing GlobalNavigation must be the single persistent top navigation. Remove or bypass WorkspaceLayout/WorkspaceDashboardShell chrome that causes the sidebar or compact header on /dashboard. Inspect app layout nesting, AppNavigationWrapper, dashboard/page, WorkspaceLayout, WorkspaceDashboardShell, StableUserDashboard, and GlobalNavigation before editing. Preserve AuthContext, real user/profile/credits, notifications, RBAC/admin access and Supabase business data. Do not redesign StableUserDashboard. Do not change Images AI routing in this task. Do not touch payments, database, migrations, Ezone Pay, WhatsApp, Store, generation engines, secrets, deployment or production. Do not run git commit, push, pull, merge, rebase, reset, checkout or switch. Return root cause and exact files changed."
+}
