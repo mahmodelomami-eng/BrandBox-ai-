@@ -158,7 +158,8 @@ function verifyPublicServicesContract() {
 
   const supportWorkflowIsReal =
     contactSource.includes("from('support_requests')") &&
-    contactSource.includes('user_id: user.id') &&
+    contactSource.includes('const userId = user?.id || null') &&
+    contactSource.includes('user_id: userId') &&
     adminSupportApiSource.includes("from('support_requests')") &&
     adminSupportApiSource.includes('ADMIN_UPDATED_SUPPORT_REQUEST') &&
     adminSupportComponentSource.includes('/api/v1/admin/support-requests');
