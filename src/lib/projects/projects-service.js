@@ -30,7 +30,7 @@ export async function createUserProject(input) {
   const payload = {
     owner_id: user.id,
     name: input.name?.trim() || 'مشروع جديد',
-    type: input.type || 'صورة + نص',
+    type: input.type || 'صورة',
     description: input.description || null,
     industry: input.industry || null,
     target_audience: input.targetAudience || null,
