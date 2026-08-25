@@ -14,11 +14,11 @@ const MODELS = [
   { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', cost: 4 },
 ];
 
-export default function ChatProjectWorkspace({ projectId }) {
+export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [project, setProject] = useState(null);
   const [history, setHistory] = useState([]);
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(initialPrompt);
   const [modelId, setModelId] = useState(MODELS[0].id);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -135,7 +135,7 @@ export default function ChatProjectWorkspace({ projectId }) {
             {error && <div className="mb-3 rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-300">{error}</div>}
             <div className="flex gap-2">
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="اكتب رسالتك أو المهمة التي تريد تنفيذها داخل هذا المشروع..." className="min-h-24 flex-1 resize-none rounded-2xl border border-white/10 bg-[#171a21] p-4 text-sm leading-7 outline-none focus:border-[#f31325]/60" />
-              <button onClick={sendMessage} disabled={sending || !prompt.trim()} className="flex w-28 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#f31325] text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">
+              <button type="button" onClick={sendMessage} disabled={sending || !prompt.trim()} className="flex w-28 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#f31325] text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">
                 {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} إرسال
               </button>
             </div>
@@ -144,6 +144,7 @@ export default function ChatProjectWorkspace({ projectId }) {
 
         <aside className="order-1 h-fit rounded-3xl border border-white/10 bg-[#0d1016] p-5 xl:order-2 xl:sticky xl:top-[150px]">
           <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#f31325]/12 text-[#ff3344]"><MessageSquare size={22} /></span><div><div className="text-sm font-black">إعدادات الشات</div><div className="text-[11px] text-gray-500">محفوظ داخل المشروع</div></div></div>
+          {project?.description && <div className="mt-5 rounded-2xl border border-white/10 bg-[#11141a] p-4 text-xs leading-6 text-gray-500"><div className="mb-2 font-black text-gray-300">سياق المشروع</div>{project.description}</div>}
           <label className="mt-6 block text-xs font-black text-gray-400">النموذج</label>
           <div className="relative mt-2">
             <select value={modelId} onChange={(e) => setModelId(e.target.value)} className="w-full appearance-none rounded-xl border border-white/10 bg-[#171a21] px-4 py-3 text-sm font-black outline-none focus:border-[#f31325]/55">

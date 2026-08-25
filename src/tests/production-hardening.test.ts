@@ -90,6 +90,97 @@ function verifyNavigationCommerceContract() {
   );
 }
 
+function verifyPublicServicesContract() {
+  const repoRoot = process.cwd();
+  const templatesPath = join(repoRoot, 'src/app/templates/page.jsx');
+  const marketingPath = join(repoRoot, 'src/app/marketing-plans/page.jsx');
+  const printPath = join(repoRoot, 'src/app/print/page.jsx');
+  const aboutPath = join(repoRoot, 'src/app/about/page.jsx');
+  const contactPath = join(repoRoot, 'src/app/contact/page.jsx');
+  const projectServicePath = join(repoRoot, 'src/lib/projects/projects-service.js');
+  const adminSupportApiPath = join(repoRoot, 'src/app/api/v1/admin/support-requests/route.ts');
+  const adminSupportPagePath = join(repoRoot, 'src/app/admin/support/page.jsx');
+  const adminSupportComponentPath = join(repoRoot, 'src/components/AdminSupportRequests.jsx');
+  const obsoleteSectionLandingPath = join(repoRoot, 'src/components/SectionLanding.jsx');
+  const supportMigrationPath = join(repoRoot, 'supabase/migrations/20260825211000_support_requests.sql');
+  const supportSecurityMigrationPath = join(repoRoot, 'supabase/migrations/20260825212000_support_requests_column_security.sql');
+
+  const requiredPaths = [
+    templatesPath,
+    marketingPath,
+    printPath,
+    aboutPath,
+    contactPath,
+    projectServicePath,
+    adminSupportApiPath,
+    adminSupportPagePath,
+    adminSupportComponentPath,
+    supportMigrationPath,
+    supportSecurityMigrationPath,
+  ];
+  if (!requiredPaths.every((path) => existsSync(path))) return false;
+
+  const templatesSource = readFileSync(templatesPath, 'utf8');
+  const marketingSource = readFileSync(marketingPath, 'utf8');
+  const printSource = readFileSync(printPath, 'utf8');
+  const aboutSource = readFileSync(aboutPath, 'utf8');
+  const contactSource = readFileSync(contactPath, 'utf8');
+  const projectServiceSource = readFileSync(projectServicePath, 'utf8');
+  const adminSupportApiSource = readFileSync(adminSupportApiPath, 'utf8');
+  const adminSupportComponentSource = readFileSync(adminSupportComponentPath, 'utf8');
+  const supportSecuritySource = readFileSync(supportSecurityMigrationPath, 'utf8');
+
+  const placeholdersRemoved =
+    !existsSync(obsoleteSectionLandingPath) &&
+    ![templatesSource, marketingSource, printSource, aboutSource, contactSource].some((source) => source.includes('SectionLanding'));
+
+  const templatesUseImageProjects =
+    templatesSource.includes("type: 'صورة'") &&
+    templatesSource.includes('/projects/images/workspace?project=') &&
+    !templatesSource.includes("type: 'صورة + نص'");
+
+  const defaultProjectTypeIsCanonical =
+    projectServiceSource.includes("type: input.type || 'صورة'") &&
+    !projectServiceSource.includes("input.type || 'صورة + نص'");
+
+  const marketingCreatesChatProject =
+    marketingSource.includes("type: 'محادثة'") &&
+    marketingSource.includes('/projects/chat/workspace?project=');
+
+  const printRoutesToRealWorkflows =
+    printSource.includes('/contact?category=print') &&
+    printSource.includes('/projects/images');
+
+  const aboutHasProductNavigation =
+    aboutSource.includes('href="/projects"') &&
+    aboutSource.includes('href="/pricing"') &&
+    aboutSource.includes('href="/contact"');
+
+  const supportWorkflowIsReal =
+    contactSource.includes("from('support_requests')") &&
+    contactSource.includes('const userId = user?.id || null') &&
+    contactSource.includes('user_id: userId') &&
+    adminSupportApiSource.includes("from('support_requests')") &&
+    adminSupportApiSource.includes('ADMIN_UPDATED_SUPPORT_REQUEST') &&
+    adminSupportComponentSource.includes('/api/v1/admin/support-requests');
+
+  const internalNotesAreColumnRestricted =
+    supportSecuritySource.includes('grant select (') &&
+    !supportSecuritySource.match(/grant select \([^)]*admin_note/s) &&
+    supportSecuritySource.includes('grant insert (');
+
+  return (
+    placeholdersRemoved &&
+    templatesUseImageProjects &&
+    defaultProjectTypeIsCanonical &&
+    marketingCreatesChatProject &&
+    printRoutesToRealWorkflows &&
+    aboutHasProductNavigation &&
+    supportWorkflowIsReal &&
+    internalNotesAreColumnRestricted
+  );
+}
+
 export async function runProductionHardeningTests() {
   const health = await HealthCheckEngine.runFullHealthCheck();
   const databaseConfigured = Boolean(
@@ -97,16 +188,13 @@ export async function runProductionHardeningTests() {
       (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
   );
 
-  // CI must be deterministic even when deployment secrets are intentionally not
-  // exposed to pull-request jobs. When database credentials are present we still
-  // require full readiness; otherwise we require application liveness and no
-  // unhealthy non-database components.
   const nonDatabaseHealthy = health.components
     .filter((component) => component.name !== 'Database (PostgreSQL)')
     .every((component) => component.status !== 'unhealthy');
 
   const adminControlCenterContract = verifyAdminControlCenterContract();
   const navigationCommerceContract = verifyNavigationCommerceContract();
+  const publicServicesContract = verifyPublicServicesContract();
 
   return {
     allPassed:
@@ -114,10 +202,12 @@ export async function runProductionHardeningTests() {
       nonDatabaseHealthy &&
       (!databaseConfigured || health.readiness === true) &&
       adminControlCenterContract &&
-      navigationCommerceContract,
+      navigationCommerceContract &&
+      publicServicesContract,
     databaseConfigured,
     adminControlCenterContract,
     navigationCommerceContract,
+    publicServicesContract,
     health,
   };
 }
@@ -125,17 +215,15 @@ export async function runProductionHardeningTests() {
 runProductionHardeningTests()
   .then((result) => {
     if (!result.allPassed) {
-      if (!result.adminControlCenterContract) {
-        throw new Error('Admin control center regression guard failed.');
-      }
-      if (!result.navigationCommerceContract) {
-        throw new Error('Navigation and commerce regression guard failed.');
-      }
+      if (!result.adminControlCenterContract) throw new Error('Admin control center regression guard failed.');
+      if (!result.navigationCommerceContract) throw new Error('Navigation and commerce regression guard failed.');
+      if (!result.publicServicesContract) throw new Error('Public services regression guard failed.');
       throw new Error('Production hardening health check failed.');
     }
 
     console.log('Admin control center regression guard passed.');
     console.log('Navigation and commerce regression guard passed.');
+    console.log('Public services regression guard passed.');
     console.log(
       result.databaseConfigured
         ? 'Production hardening health check passed with database readiness.'
