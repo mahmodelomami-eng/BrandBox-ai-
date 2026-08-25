@@ -1,0 +1,6 @@
+{
+  "id": "task-014-entrypoints-trace-retry",
+  "mode": "plan",
+  "effort": "low",
+  "prompt": "Read files only. No edits and no terminal commands. Inspect GlobalNavigation.jsx, StableUserDashboard.jsx, LegacyWorkspaceStateBridge.jsx, and dashboard subroute page files. Report every user-facing link or router target for: dashboard/user profile control, Images AI, and dashboard quick actions. Identify which targets can open legacy sidebar/compact-header screens. State the canonical target that each Images AI entry should use so all Images AI entries open the same approved flow. Keep the report concise."
+}
