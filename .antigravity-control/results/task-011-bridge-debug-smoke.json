@@ -1,0 +1,27 @@
+﻿{
+    "id":  "task-011-bridge-debug-smoke",
+    "ok":  true,
+    "mode":  "plan",
+    "bridge_request_id":  "efc7449e-0be5-4a85-b1e3-1a22d25d4beb",
+    "antigravity":  {
+                        "conversation_id":  "4b83d1f4-0751-4c05-b5ec-716f1f179cbc",
+                        "status":  "SUCCESS",
+                        "response":  "Based on [`src/app/dashboard/page.jsx`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/page.jsx):\n\n- **Imported Component:** [`StableUserDashboard`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/page.jsx#L4) (from `../../components/StableUserDashboard`)\n- **Contains `WorkspaceLayout`:** No (the file does not import or contain `WorkspaceLayout`).\n",
+                        "duration_seconds":  8.289295599999999,
+                        "num_turns":  1,
+                        "usage":  {
+                                      "input_tokens":  32672,
+                                      "output_tokens":  176,
+                                      "thinking_tokens":  0,
+                                      "cache_read_tokens":  0,
+                                      "total_tokens":  32848
+                                  }
+                    },
+    "stderr":  null,
+    "worktree":  {
+                     "status":  "",
+                     "diff":  "",
+                     "diff_stat":  ""
+                 },
+    "completed_at":  "2026-08-25T03:12:13.9822152+02:00"
+}
