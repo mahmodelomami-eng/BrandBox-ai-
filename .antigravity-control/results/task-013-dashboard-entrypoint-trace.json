@@ -1,0 +1,12 @@
+﻿{
+    "id":  "task-013-dashboard-entrypoint-trace",
+    "ok":  false,
+    "mode":  "plan",
+    "error":  "The remote server returned an error: (400) Bad Request.",
+    "worktree":  {
+                     "status":  "",
+                     "diff":  "",
+                     "diff_stat":  ""
+                 },
+    "completed_at":  "2026-08-25T03:15:16.8619342+02:00"
+}
