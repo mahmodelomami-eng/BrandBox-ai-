@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronDown,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import { createUserProject, listUserProjects } from '../lib/projects/projects-service';
+import { useAuth } from '../context/AuthContext';
 
 const IMAGE_MODELS = [
   {
@@ -69,16 +71,18 @@ const RESOLUTIONS = [
 ];
 
 const TOOL_LINKS = [
-  { id: 'video', label: 'الفيديو AI', description: 'إنشاء فيديو احترافي', icon: Video, href: '/?view=video' },
-  { id: 'chat', label: 'شات AI', description: 'محادثة وكتابة ذكية', icon: MessageSquare, href: '/?view=chat' },
-  { id: 'audio', label: 'الصوت AI', description: 'الصوت والتعليق', icon: Mic2, href: '/audio-ai' },
-  { id: 'projects', label: 'المشاريع', description: 'العودة إلى مشاريعك', icon: FolderOpen, href: '/?view=projects' },
+  { id: 'images', label: 'الصور AI', description: 'مشاريع الصور', icon: ImageIcon, href: '/projects/images' },
+  { id: 'video', label: 'الفيديو AI', description: 'مشاريع الفيديو', icon: Video, href: '/projects/video' },
+  { id: 'chat', label: 'شات AI', description: 'مشاريع الشات', icon: MessageSquare, href: '/projects/chat' },
+  { id: 'audio', label: 'الصوت AI', description: 'مشاريع الصوت', icon: Mic2, href: '/projects/audio' },
+  { id: 'projects', label: 'المشاريع', description: 'العودة إلى مشاريعك', icon: FolderOpen, href: '/projects' },
 ];
 
 function normalizeProject(project) {
   return {
     id: project.id,
     name: project.name || 'مشروع بدون اسم',
+    type: project.type || '',
     description: project.description || '',
     industry: project.industry || '',
     updatedAt: project.updated_at || project.updatedAt || null,
@@ -99,6 +103,7 @@ function normalizeAsset(asset) {
 export default function ImageStudioWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { creditBalance, refreshProfile } = useAuth();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const projectFromUrl = searchParams.get('project') || '';
 
@@ -178,6 +183,12 @@ export default function ImageStudioWorkspace() {
       const initialProject = normalized.find((project) => project.id === projectFromUrl) || normalized[0] || null;
       if (initialProject) {
         setSelectedProjectId(initialProject.id);
+        if (projectFromUrl !== initialProject.id && typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.set('project', initialProject.id);
+          url.searchParams.delete('view');
+          window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+        }
         await loadHistory(initialProject.id);
       } else {
         setGallery([]);
@@ -193,13 +204,25 @@ export default function ImageStudioWorkspace() {
     void loadWorkspace();
   }, [loadWorkspace]);
 
+  useEffect(() => {
+    if (projectFromUrl && projectFromUrl !== selectedProjectId && projects.length > 0) {
+      const found = projects.find((p) => p.id === projectFromUrl);
+      if (found) {
+        setSelectedProjectId(found.id);
+        void loadHistory(found.id);
+      }
+    }
+  }, [projectFromUrl, projects, selectedProjectId, loadHistory]);
+
   const selectProject = async (projectId) => {
     setSelectedProjectId(projectId);
     setProjectOpen(false);
-    const url = new URL(window.location.href);
-    url.searchParams.set('view', 'images');
-    url.searchParams.set('project', projectId);
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('project', projectId);
+      url.searchParams.delete('view');
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
     await loadHistory(projectId);
   };
 
@@ -286,12 +309,15 @@ export default function ImageStudioWorkspace() {
         createdAt: now,
       }));
       if (optimistic.length) setGallery((current) => [...optimistic, ...current]);
-      setBalance(result.remainingBalance ?? balance);
+      if (typeof result.remainingBalance === 'number') {
+        setBalance(result.remainingBalance);
+      }
       setPrompt('');
       setMessage({
         type: 'success',
         text: `تم توليد ${urls.length || count} ${urls.length === 1 || count === 1 ? 'صورة' : 'صور'} بنجاح.`,
       });
+      if (refreshProfile) void refreshProfile();
       window.setTimeout(() => void loadHistory(activeProject.id), 800);
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'تعذر إكمال التوليد.' });
@@ -308,6 +334,8 @@ export default function ImageStudioWorkspace() {
       setMessage({ type: 'error', text: 'تعذر نسخ الرابط.' });
     }
   };
+
+  const currentBalance = balance !== null ? balance : (creditBalance ?? null);
 
   if (loading) {
     return (
@@ -330,15 +358,14 @@ export default function ImageStudioWorkspace() {
             {TOOL_LINKS.map((tool) => {
               const Icon = tool.icon;
               return (
-                <button
+                <Link
                   key={tool.id}
-                  type="button"
-                  onClick={() => router.push(tool.href)}
+                  href={tool.href}
                   className="group flex min-w-[130px] items-center gap-2 rounded-xl border border-white/[.08] bg-[#0d1016] px-3 py-2.5 text-right transition hover:border-[#f31325]/55 hover:bg-[#f31325]/8"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#171a21] text-[#ff3344] transition group-hover:border-[#ff3344]/40"><Icon size={18} /></span>
                   <span><span className="block text-xs font-black text-white">{tool.label}</span><span className="mt-0.5 hidden text-[9px] text-gray-500 xl:block">{tool.description}</span></span>
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -414,7 +441,7 @@ export default function ImageStudioWorkspace() {
             <button type="button" onClick={() => setUseBrandKit((value) => !value)} className="flex w-full items-center justify-between rounded-xl border border-white/[.08] bg-[#11141b] p-3 text-xs font-bold text-gray-300"><span className="flex items-center gap-2"><Palette className="h-4 w-4 text-[#ff3344]" />تطبيق هوية المشروع</span><span className={`relative h-5 w-9 rounded-full transition ${useBrandKit ? 'bg-[#f31325]' : 'bg-[#343847]'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${useBrandKit ? 'right-0.5' : 'right-[18px]'}`} /></span></button>
 
             <button type="button" onClick={generateImages} disabled={generating || !activeProject} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-[#c50f1d] to-[#f31325] py-3.5 text-sm font-black text-white shadow-[0_12px_35px_rgba(243,19,37,.18)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"><Sparkles className="h-4 w-4" />{generating ? 'جاري توليد الصور...' : `توليد ${count === 1 ? 'الصورة' : `${count} صور`}`}</button>
-            <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-600"><span>سيستهلك تقريباً</span><strong className="text-gray-400">{selectedModel.cost * count}</strong><span>نقطة</span>{balance !== null && <><span>· رصيدك</span><strong className="text-[#ff6573]">{balance}</strong></>}</div>
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-600"><span>سيستهلك تقريباً</span><strong className="text-gray-400">{selectedModel.cost * count}</strong><span>نقطة</span>{currentBalance !== null && <><span>· رصيدك</span><strong className="text-[#ff6573]">{currentBalance}</strong></>}</div>
 
             {message && <div className={`rounded-xl border px-3 py-2.5 text-xs leading-5 ${message.type === 'error' ? 'border-red-500/25 bg-red-500/8 text-red-200' : 'border-emerald-500/20 bg-emerald-500/8 text-emerald-200'}`}>{message.text}</div>}
           </div>
@@ -428,9 +455,9 @@ export default function ImageStudioWorkspace() {
 
           <div className="p-4 sm:p-6">
             {!activeProject ? (
-              <div className="flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-[#0b0d12] text-center"><FolderOpen className="h-12 w-12 text-gray-700" /><h3 className="mt-5 text-lg font-black">أنشئ مشروع صور للبدء</h3><p className="mt-2 max-w-md text-xs leading-6 text-gray-500">لوحة التوليد على اليسار مرتبطة بالمشروع، وستظهر الصور الناتجة هنا فقط.</p><button type="button" onClick={createImageProject} className="mt-5 rounded-xl bg-[#f31325] px-5 py-3 text-xs font-black">إنشاء مشروع صور</button></div>
+              <div className="flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-[#0b0d12] text-center"><FolderOpen className="h-12 w-12 text-gray-700" /><h3 className="mt-5 text-lg font-black">أنشئ مشروع صور للبدء</h3><p className="mt-2 max-w-md text-xs leading-6 text-gray-500">لوحة التوليد على اليمين مرتبطة بالمشروع، وستظهر الصور الناتجة هنا فقط.</p><button type="button" onClick={createImageProject} className="mt-5 rounded-xl bg-[#f31325] px-5 py-3 text-xs font-black">إنشاء مشروع صور</button></div>
             ) : gallery.length === 0 ? (
-              <div className="flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#f31325]/20 bg-[radial-gradient(circle_at_center,rgba(243,19,37,.05),transparent_45%),#0b0d12] text-center"><span className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[#11141b]"><ImageIcon className="h-9 w-9 text-gray-600" /></span><h3 className="mt-6 text-lg font-black text-white">لم يتم توليد أي صورة بعد</h3><p className="mt-2 max-w-md text-xs leading-6 text-gray-500">اكتب وصفك وحدد الإعدادات من لوحة الأدوات على اليسار. كل الصور التي يتم توليدها ستظهر هنا فقط.</p></div>
+              <div className="flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#f31325]/20 bg-[radial-gradient(circle_at_center,rgba(243,19,37,.05),transparent_45%),#0b0d12] text-center"><span className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[#11141b]"><ImageIcon className="h-9 w-9 text-gray-600" /></span><h3 className="mt-6 text-lg font-black text-white">لم يتم توليد أي صورة بعد</h3><p className="mt-2 max-w-md text-xs leading-6 text-gray-500">اكتب وصفك وحدد الإعدادات من لوحة الأدوات على اليمين. كل الصور التي يتم توليدها ستظهر هنا فقط.</p></div>
             ) : (
               <div className="columns-1 gap-4 sm:columns-2 xl:columns-3 2xl:columns-4">
                 {gallery.map((image) => (

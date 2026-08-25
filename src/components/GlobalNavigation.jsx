@@ -7,6 +7,7 @@ import {
   Bell,
   CheckCheck,
   ChevronDown,
+  Coins,
   ImageIcon,
   LayoutDashboard,
   LogIn,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
+import { useAuth } from '../context/AuthContext';
 
 const NAV_ITEMS = [
   ['القوالب', '/templates'],
@@ -57,6 +59,7 @@ function navClass(active) {
 export default function GlobalNavigation() {
   const pathname = usePathname();
   const router = useRouter();
+  const { user: authUser, profile: authProfile, roleLabel: authRoleLabel, creditBalance: authCredits, signOut: authSignOut } = useAuth();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const accountRef = useRef(null);
   const notificationsRef = useRef(null);
@@ -66,15 +69,16 @@ export default function GlobalNavigation() {
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
 
-  async function loadNotifications(accessToken) {
-    if (!accessToken) return;
+  async function loadNotifications() {
+    if (!authUser?.id) return;
     try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
       const response = await fetch('/api/v1/notifications', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       });
       if (!response.ok) return;
@@ -83,53 +87,15 @@ export default function GlobalNavigation() {
     } catch {}
   }
 
-  async function syncSession() {
-    const { data } = await supabase.auth.getSession();
-    const next = data.session || null;
-    setSession(next);
-
-    if (!next?.user) {
-      setProfile(null);
+  useEffect(() => {
+    if (!authUser?.id) {
       setNotifications([]);
-      return;
+      return undefined;
     }
-
-    const { data: nextProfile } = await supabase
-      .from('profiles')
-      .select('first_name,last_name,avatar_url,role')
-      .eq('id', next.user.id)
-      .maybeSingle();
-
-    setProfile(nextProfile || null);
-    await loadNotifications(next.access_token);
-  }
-
-  useEffect(() => {
-    let mounted = true;
-    void syncSession();
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
-      if (!mounted) return;
-      setSession(next || null);
-      if (!next?.user) {
-        setProfile(null);
-        setNotifications([]);
-      } else {
-        window.setTimeout(() => { if (mounted) void syncSession(); }, 0);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
-    };
-  }, [supabase]);
-
-  useEffect(() => {
-    if (!session?.user || !session.access_token) return undefined;
-    const timer = window.setInterval(() => void loadNotifications(session.access_token), 60000);
+    void loadNotifications();
+    const timer = window.setInterval(() => void loadNotifications(), 60000);
     return () => window.clearInterval(timer);
-  }, [session?.user?.id, session?.access_token]);
+  }, [authUser?.id]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -148,22 +114,28 @@ export default function GlobalNavigation() {
     return () => document.removeEventListener('pointerdown', closeMenus);
   }, []);
 
-  const displayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
-    || session?.user?.email?.split('@')[0]
+  const currentUser = authUser;
+  const currentProfile = authProfile;
+  const currentCredits = authCredits ?? 0;
+  const displayName = [currentProfile?.first_name, currentProfile?.last_name].filter(Boolean).join(' ')
+    || currentUser?.email?.split('@')[0]
     || 'حسابي';
-  const roleLabel = ROLE_LABELS[profile?.role] || 'مستخدم';
+  const roleLabel = authRoleLabel || (currentProfile?.role ? (ROLE_LABELS[currentProfile.role] || 'مستخدم') : 'مستخدم');
   const unreadCount = notifications.filter((item) => !item.is_read).length;
-  const dashboardHref = session?.user ? '/dashboard' : '/auth?next=%2Fdashboard';
-  const canOpenAdmin = ['SUPPORT', 'ADMIN', 'SUPER_ADMIN'].includes(profile?.role);
+  const dashboardHref = currentUser ? '/dashboard' : '/auth?next=%2Fdashboard';
+  const canOpenAdmin = ['SUPPORT', 'ADMIN', 'SUPER_ADMIN'].includes(currentProfile?.role);
   const projectsActive = pathname === '/projects' || pathname.startsWith('/projects/');
 
   async function markAllRead() {
-    if (!session?.access_token || unreadCount === 0) return;
+    if (!authUser?.id || unreadCount === 0) return;
     try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
       const response = await fetch('/api/v1/notifications', {
         method: 'PATCH',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ markAllRead: true }),
@@ -177,9 +149,13 @@ export default function GlobalNavigation() {
   async function signOut() {
     setAccountOpen(false);
     setNotificationsOpen(false);
-    await supabase.auth.signOut();
-    router.replace('/');
-    router.refresh();
+    if (authSignOut) {
+      await authSignOut();
+    } else {
+      await supabase.auth.signOut();
+      router.replace('/');
+      router.refresh();
+    }
   }
 
   return (
@@ -223,13 +199,24 @@ export default function GlobalNavigation() {
         </nav>
 
         <div className="mr-auto hidden shrink-0 items-center gap-3 md:flex">
-          {!session?.user ? (
+          {!currentUser ? (
             <>
               <Link href="/auth?next=%2Fdashboard" className="flex items-center gap-2 rounded-xl border border-white/15 px-3.5 py-2.5 text-xs font-black transition hover:border-[#f31325]/45"><LogIn size={16} /> تسجيل الدخول</Link>
               <Link href="/auth?next=%2Fdashboard" className="flex items-center gap-2 rounded-xl bg-[#f31325] px-3.5 py-2.5 text-xs font-black transition hover:bg-[#ff2637]"><UserPlus size={16} /> اشتراك</Link>
             </>
           ) : (
             <>
+              {/* Real Credits Badge */}
+              <Link
+                href="/pricing"
+                className="flex items-center gap-1.5 rounded-xl border border-[#f31325]/30 bg-[#f31325]/10 px-3 py-1.5 text-xs font-extrabold text-[#ff3344] transition hover:bg-[#f31325]/20"
+                title="الرصيد المتاح - اضغط لشحن الرصيد"
+              >
+                <Coins size={15} className="text-[#ff3344]" />
+                <span className="hidden sm:inline text-[11px] text-gray-400">الرصيد:</span>
+                <span>{currentCredits.toLocaleString('ar-LY')}</span>
+              </Link>
+
               <div ref={accountRef} className="relative flex items-center gap-1">
                 <Link href="/dashboard" className="flex items-center gap-2 rounded-xl px-1 py-1 text-right transition hover:bg-white/[.03]" title="فتح لوحة تحكم المستخدم">
                   <div className="min-w-0">
@@ -237,7 +224,7 @@ export default function GlobalNavigation() {
                     <div className="mt-0.5 text-[10px] font-bold text-gray-500">{roleLabel}</div>
                   </div>
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#f31325] text-xs font-black ring-2 ring-[#f31325]/65 ring-offset-2 ring-offset-[#050506]">
-                    {profile?.avatar_url ? <img src={profile.avatar_url} alt="صورة المستخدم" className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
+                    {currentProfile?.avatar_url ? <img src={currentProfile.avatar_url} alt="صورة المستخدم" className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
                   </span>
                 </Link>
                 <button
@@ -254,7 +241,7 @@ export default function GlobalNavigation() {
                   <div className="absolute left-0 top-full z-[135] mt-3 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1016] p-2 shadow-[0_24px_70px_rgba(0,0,0,.72)]">
                     <Link href="/dashboard" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-gray-200 hover:bg-white/5 hover:text-white"><LayoutDashboard size={18} className="text-[#ff3344]" /> لوحة تحكم المستخدم</Link>
                     <Link href="/dashboard/account" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-gray-200 hover:bg-white/5 hover:text-white"><Settings size={18} className="text-gray-400" /> إعدادات الحساب</Link>
-                    {canOpenAdmin && <Link href="/?view=admin" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-amber-200 hover:bg-amber-500/10"><ShieldCheck size={18} /> لوحة الإدارة</Link>}
+                    {canOpenAdmin && <Link href="/admin" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-amber-200 hover:bg-amber-500/10"><ShieldCheck size={18} /> لوحة الإدارة</Link>}
                     <div className="my-1 border-t border-white/10" />
                     <button type="button" onClick={signOut} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-[#ff5b67] hover:bg-red-500/10"><LogOut size={18} /> تسجيل الخروج</button>
                   </div>
@@ -264,7 +251,7 @@ export default function GlobalNavigation() {
               <div ref={notificationsRef} className="relative">
                 <button
                   type="button"
-                  onClick={() => { setNotificationsOpen((value) => !value); setAccountOpen(false); if (!notificationsOpen) void loadNotifications(session.access_token); }}
+                  onClick={() => { setNotificationsOpen((value) => !value); setAccountOpen(false); if (!notificationsOpen) void loadNotifications(); }}
                   className="relative grid h-10 w-10 place-items-center rounded-xl text-gray-300 transition hover:bg-white/5 hover:text-white"
                   aria-label="الإشعارات"
                   aria-expanded={notificationsOpen}
@@ -321,15 +308,26 @@ export default function GlobalNavigation() {
             {NAV_ITEMS.map(([label, href]) => <Link key={href} href={href} onClick={() => setMobileOpen(false)} className="block rounded-xl px-4 py-3 text-sm font-bold text-gray-300 hover:bg-white/5">{label}</Link>)}
 
             <div className="mt-4 border-t border-white/10 pt-4 md:hidden">
-              {!session?.user ? (
+              {!currentUser ? (
                 <div className="grid grid-cols-2 gap-3">
                   <Link href="/auth?next=%2Fdashboard" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 rounded-xl border border-white/15 px-3 py-3 text-xs font-black"><LogIn size={16} /> تسجيل الدخول</Link>
                   <Link href="/auth?next=%2Fdashboard" onClick={() => setMobileOpen(false)} className="flex items-center justify-center gap-2 rounded-xl bg-[#f31325] px-3 py-3 text-xs font-black"><UserPlus size={16} /> اشتراك</Link>
                 </div>
               ) : (
                 <div className="space-y-2">
+                  <Link
+                    href="/pricing"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center justify-between rounded-xl border border-[#f31325]/30 bg-[#f31325]/10 px-4 py-3 text-xs font-extrabold text-[#ff3344]"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Coins size={16} />
+                      <span>الرصيد المتاح</span>
+                    </span>
+                    <span>{currentCredits.toLocaleString('ar-LY')} نقطة</span>
+                  </Link>
                   <Link href="/dashboard/account" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm font-black text-gray-300"><Settings size={17} /> إعدادات الحساب</Link>
-                  {canOpenAdmin && <Link href="/?view=admin" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm font-black text-amber-200"><ShieldCheck size={17} /> لوحة الإدارة</Link>}
+                  {canOpenAdmin && <Link href="/admin" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm font-black text-amber-200"><ShieldCheck size={17} /> لوحة الإدارة</Link>}
                   <button type="button" onClick={signOut} className="flex w-full items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm font-black text-[#ff5b67]"><LogOut size={17} /> تسجيل الخروج</button>
                 </div>
               )}

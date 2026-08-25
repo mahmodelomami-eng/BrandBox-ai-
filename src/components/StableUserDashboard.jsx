@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import { setUserProjectFavorite } from '../lib/projects/projects-service';
+import { useAuth } from '../context/AuthContext';
 
 const TOOL_CARDS = [
   { href: '/projects/images', label: 'الصور AI', text: 'مشاريع توليد وتحرير الصور', icon: ImageIcon },
@@ -78,10 +79,8 @@ function MetricCard({ label, value, helper, action, href, icon: Icon, accent = f
 }
 
 export default function StableUserDashboard() {
+  const { user: authUser, profile: authProfile, roleLabel, creditBalance: authCredits, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const [resolved, setResolved] = useState(false);
-  const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null);
   const [projects, setProjects] = useState([]);
   const [generations, setGenerations] = useState([]);
   const [subscription, setSubscription] = useState(null);
@@ -91,28 +90,28 @@ export default function StableUserDashboard() {
 
   useEffect(() => {
     let mounted = true;
-    const fallback = window.setTimeout(() => mounted && setResolved(true), 1800);
+    if (authLoading) return;
+    if (!authUser?.id) {
+      setProjects([]);
+      setGenerations([]);
+      setSubscription(null);
+      setStats({ projects: 0, generations: 0 });
+      return;
+    }
 
-    (async () => {
+    const loadBusinessData = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
-        const current = data.session || null;
-        setSession(current);
-        setResolved(true);
-        if (!current?.user) return;
-
-        const [profileRes, projectsRes, generationsRes, projectCountRes, generationCountRes, subscriptionRes] = await Promise.allSettled([
-          supabase.from('profiles').select('first_name,last_name,avatar_url,role,credit_balance,status').eq('id', current.user.id).maybeSingle(),
-          supabase.from('projects').select('id,name,type,description,thumbnail_url,updated_at,is_favorite').eq('owner_id', current.user.id).order('is_favorite', { ascending: false }).order('updated_at', { ascending: false }).limit(4),
-          supabase.from('generations').select('id,project_id,generation_type,prompt,created_at,result_url').order('created_at', { ascending: false }).limit(4),
-          supabase.from('projects').select('id', { count: 'exact', head: true }).eq('owner_id', current.user.id),
-          supabase.from('generations').select('id', { count: 'exact', head: true }),
-          supabase.from('subscriptions').select('plan_id,status,created_at').eq('user_id', current.user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        setError('');
+        const targetUserId = authUser.id;
+        const [projectsRes, generationsRes, projectCountRes, generationCountRes, subscriptionRes] = await Promise.allSettled([
+          supabase.from('projects').select('id,name,type,description,thumbnail_url,updated_at,is_favorite').eq('owner_id', targetUserId).order('is_favorite', { ascending: false }).order('updated_at', { ascending: false }).limit(4),
+          supabase.from('generations').select('id,project_id,generation_type,prompt,created_at,result_url').eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(4),
+          supabase.from('projects').select('id', { count: 'exact', head: true }).eq('owner_id', targetUserId),
+          supabase.from('generations').select('id', { count: 'exact', head: true }).eq('user_id', targetUserId),
+          supabase.from('subscriptions').select('plan_id,status,created_at').eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         ]);
 
         if (!mounted) return;
-        if (profileRes.status === 'fulfilled') setProfile(profileRes.value.data || null);
         if (projectsRes.status === 'fulfilled' && !projectsRes.value.error) setProjects(projectsRes.value.data || []);
         if (generationsRes.status === 'fulfilled' && !generationsRes.value.error) setGenerations(generationsRes.value.data || []);
         if (subscriptionRes.status === 'fulfilled' && !subscriptionRes.value.error) setSubscription(subscriptionRes.value.data || null);
@@ -123,20 +122,21 @@ export default function StableUserDashboard() {
       } catch (loadError) {
         if (mounted) setError(loadError instanceof Error ? loadError.message : 'تعذر تحميل لوحة التحكم.');
       }
-    })();
+    };
+
+    void loadBusinessData();
 
     return () => {
       mounted = false;
-      window.clearTimeout(fallback);
     };
-  }, [supabase]);
+  }, [supabase, authUser?.id, authLoading]);
 
-  const displayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
-    || session?.user?.email?.split('@')[0]
+  const displayName = [authProfile?.first_name, authProfile?.last_name].filter(Boolean).join(' ')
+    || authUser?.email?.split('@')[0]
     || 'المستخدم';
-  const firstName = profile?.first_name || displayName.split(' ')[0] || 'المستخدم';
-  const credits = Number(profile?.credit_balance || 0);
-  const roleLabel = ROLE_LABELS[profile?.role] || 'مستخدم';
+  const firstName = authProfile?.first_name || displayName.split(' ')[0] || 'المستخدم';
+  const credits = authCredits ?? 0;
+  const currentRoleLabel = roleLabel || (authProfile?.role ? (ROLE_LABELS[authProfile.role] || 'مستخدم') : 'مستخدم');
   const planLabel = String(subscription?.plan_id || 'FREE').toUpperCase();
 
   async function toggleFavorite(project) {
@@ -159,7 +159,7 @@ export default function StableUserDashboard() {
     }
   }
 
-  if (!resolved) {
+  if (authLoading) {
     return (
       <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050608] text-white">
         <div className="flex min-h-[65vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#f31325]" /></div>
@@ -167,7 +167,7 @@ export default function StableUserDashboard() {
     );
   }
 
-  if (!session?.user) {
+  if (!authUser) {
     return (
       <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050608] px-5 py-12 text-white">
         <div className="mx-auto max-w-lg rounded-3xl border border-white/10 bg-[#0d0f13] p-8 text-center">
@@ -188,7 +188,7 @@ export default function StableUserDashboard() {
           <div className="absolute left-12 top-1/2 hidden h-28 w-28 -translate-y-1/2 rotate-45 rounded-[22px] border border-red-600/20 bg-[linear-gradient(145deg,#111,#020202)] shadow-[0_0_45px_rgba(243,19,37,.14)] lg:block" />
           <div className="absolute left-28 top-1/2 hidden -translate-y-1/2 rounded-xl border border-red-500/20 bg-black/75 px-3 py-2 text-xl font-black text-[#ff2637] lg:block">AI</div>
           <div className="relative z-10 max-w-3xl">
-            <div className="mb-3 text-xs font-black text-[#ff3344]">{roleLabel} · {planLabel}</div>
+            <div className="mb-3 text-xs font-black text-[#ff3344]">{currentRoleLabel} · {planLabel}</div>
             <h1 className="text-3xl font-black sm:text-4xl lg:text-5xl">مرحبًا بك، {firstName}</h1>
             <p className="mt-4 text-sm leading-7 text-gray-400 sm:text-base">اختر أداة، افتح مشروعك، وواصل العمل من النقطة التي توقفت عندها.</p>
           </div>
