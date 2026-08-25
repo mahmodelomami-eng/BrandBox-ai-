@@ -6,7 +6,8 @@ import {
   ROLE_DEFINITIONS,
   ROLE_PERMISSIONS,
 } from '@/lib/auth/rbac-engine';
-import { canReadUsers, isKnownRole } from '@/lib/admin/admin-user-policy';
+import { canAssignRoles, canReadUsers, isKnownRole } from '@/lib/admin/admin-user-policy';
+import { getRoleGuidance } from '@/lib/admin/role-guidance';
 
 async function actorRoleFromRequest(request: NextRequest): Promise<AdminRole | null> {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -30,14 +31,20 @@ export async function GET(request: NextRequest) {
   const actorRole = await actorRoleFromRequest(request);
   if (!actorRole) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
+  const actorCanAssignRoles = canAssignRoles(actorRole);
   const roles = Object.values(ROLE_DEFINITIONS).map((definition) => ({
     ...definition,
+    ...getRoleGuidance(definition.role),
     permissions: Array.from(ROLE_PERMISSIONS[definition.role]).sort(),
+    assignableByActor: actorCanAssignRoles && definition.assignable,
   }));
 
   return NextResponse.json({
     owner: OWNER_CONCEPT,
     roles,
     actorRole,
+    capabilities: {
+      canAssignRoles: actorCanAssignRoles,
+    },
   });
 }
