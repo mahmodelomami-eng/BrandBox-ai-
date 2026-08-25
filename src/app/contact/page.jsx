@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, Clock3, Headphones, Loader2, MessageSquareText, Send, ShieldCheck } from 'lucide-react';
@@ -47,9 +47,11 @@ function ContactContent() {
     setRequestsLoaded(true);
   }, [supabase, user?.id]);
 
-  if (user?.id && !requestsLoaded) {
-    void loadRequests();
-  }
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const timer = window.setTimeout(() => { void loadRequests(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadRequests, user?.id]);
 
   async function submitRequest(event) {
     event.preventDefault();
