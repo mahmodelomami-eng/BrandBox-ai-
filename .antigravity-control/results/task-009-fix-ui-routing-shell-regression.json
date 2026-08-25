@@ -1,0 +1,12 @@
+﻿{
+    "id":  "task-009-fix-ui-routing-shell-regression",
+    "ok":  false,
+    "mode":  "accept-edits",
+    "error":  "The remote server returned an error: (400) Bad Request.",
+    "worktree":  {
+                     "status":  "",
+                     "diff":  "",
+                     "diff_stat":  ""
+                 },
+    "completed_at":  "2026-08-25T02:30:26.4370133+02:00"
+}
