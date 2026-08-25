@@ -28,6 +28,7 @@ export async function listStoreCatalog(): Promise<StoreCatalogProduct[]> {
       image_url,
       fulfillment_mode,
       sale_status,
+      requires_customer_identifier,
       store_categories (slug, name_ar, name_en),
       store_skus (
         id,
@@ -49,6 +50,7 @@ export async function listStoreCatalog(): Promise<StoreCatalogProduct[]> {
 
   return ((data ?? []) as unknown as StoreCatalogProduct[]).map((product) => ({
     ...product,
+    requires_customer_identifier: Boolean(product.requires_customer_identifier),
     store_skus: (product.store_skus ?? []).filter((sku) => sku.is_active),
   }));
 }
