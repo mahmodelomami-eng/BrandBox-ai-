@@ -1,0 +1,27 @@
+﻿{
+    "id":  "task-017-phase1a-rbac-foundation",
+    "ok":  true,
+    "mode":  "accept-edits",
+    "bridge_request_id":  "52eca269-c578-4da3-8621-7aaaf8947e3f",
+    "antigravity":  {
+                        "conversation_id":  "a7160cf7-2743-4180-82f0-6eb41e3195f0",
+                        "status":  "CANCELED",
+                        "response":  "",
+                        "duration_seconds":  79.1952285,
+                        "num_turns":  1,
+                        "usage":  {
+                                      "input_tokens":  149202,
+                                      "output_tokens":  4805,
+                                      "thinking_tokens":  2887,
+                                      "cache_read_tokens":  751528,
+                                      "total_tokens":  154007
+                                  }
+                    },
+    "stderr":  "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json (e.g. command(\u003ctarget\u003e)). Alternatively, re-run with --dangerously-skip-permissions to auto-approve all tools.\n",
+    "worktree":  {
+                     "status":  "",
+                     "diff":  "",
+                     "diff_stat":  ""
+                 },
+    "completed_at":  "2026-08-25T12:31:44.7463932+02:00"
+}
