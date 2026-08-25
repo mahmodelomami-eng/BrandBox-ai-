@@ -1,0 +1,6 @@
+{
+  "id": "task-011-bridge-debug-smoke",
+  "mode": "plan",
+  "effort": "low",
+  "prompt": "Read only src/app/dashboard/page.jsx using file-reading tools. Do not run terminal, shell, git, npm, PowerShell, or any command tool. Report only the component imported by this route and whether the file contains WorkspaceLayout. Do not modify anything."
+}
