@@ -14,49 +14,25 @@ export type AdminRole =
   | 'USER';
 
 export type ResourcePermission =
-  | 'users.read'
-  | 'users.manage'
-  | 'users.suspend'
-  | 'users.delete'
-  | 'roles.read'
-  | 'roles.assign'
-  | 'projects.read'
-  | 'projects.manage'
-  | 'subscriptions.read'
-  | 'subscriptions.manage'
-  | 'payments.read'
-  | 'payments.manage'
-  | 'payments.refund'
-  | 'credits.read'
-  | 'credits.adjust'
-  | 'plans.read'
-  | 'plans.manage'
-  | 'packages.read'
-  | 'packages.manage'
-  | 'providers.read'
-  | 'providers.manage'
-  | 'providers.secrets_manage'
-  | 'models.read'
-  | 'models.manage'
-  | 'models.pricing_manage'
-  | 'generations.read'
-  | 'generations.manage'
-  | 'assets.read'
-  | 'assets.manage'
-  | 'content.read'
-  | 'content.manage'
-  | 'marketing.read'
-  | 'marketing.manage'
-  | 'support.read'
-  | 'support.manage'
-  | 'analytics.read'
-  | 'finance.analytics'
-  | 'audit.read'
-  | 'errors.read'
-  | 'settings.read'
-  | 'settings.manage'
-  | 'admins.read'
-  | 'admins.manage'
+  | 'users.read' | 'users.manage' | 'users.suspend' | 'users.delete'
+  | 'roles.read' | 'roles.assign'
+  | 'projects.read' | 'projects.manage'
+  | 'subscriptions.read' | 'subscriptions.manage'
+  | 'payments.read' | 'payments.manage' | 'payments.refund'
+  | 'credits.read' | 'credits.adjust'
+  | 'plans.read' | 'plans.manage'
+  | 'packages.read' | 'packages.manage'
+  | 'providers.read' | 'providers.manage' | 'providers.secrets_manage'
+  | 'models.read' | 'models.manage' | 'models.pricing_manage'
+  | 'generations.read' | 'generations.manage'
+  | 'assets.read' | 'assets.manage'
+  | 'content.read' | 'content.manage' | 'templates.manage'
+  | 'marketing.read' | 'marketing.manage'
+  | 'support.read' | 'support.manage'
+  | 'analytics.read' | 'finance.analytics'
+  | 'audit.read' | 'errors.read'
+  | 'settings.read' | 'settings.manage'
+  | 'admins.read' | 'admins.manage'
   | 'security.manage';
 
 export type LegacyAdminPermission =
@@ -76,7 +52,6 @@ export type LegacyAdminPermission =
   | 'ADMIN_MANAGE' | 'SECURITY_MANAGE';
 
 export type AdminPermission = ResourcePermission | LegacyAdminPermission;
-
 export type RoleRiskTier = 'ROOT' | 'HIGH' | 'ELEVATED' | 'LIMITED' | 'READ_ONLY' | 'STANDARD';
 
 export interface RoleDefinition {
@@ -168,10 +143,10 @@ export const ROLE_DEFINITIONS: Record<AdminRole, RoleDefinition> = {
 };
 
 export const ASSIGNABLE_ADMIN_ROLES = Object.freeze(
-  (Object.values(ROLE_DEFINITIONS)
+  Object.values(ROLE_DEFINITIONS)
     .filter((definition) => definition.assignable && definition.role !== 'USER')
-    .map((definition) => definition.role)) as AdminRole[],
-);
+    .map((definition) => definition.role),
+) as readonly AdminRole[];
 
 const ALL_RESOURCE_PERMISSIONS: ResourcePermission[] = [
   'users.read', 'users.manage', 'users.suspend', 'users.delete', 'roles.read', 'roles.assign',
@@ -180,8 +155,9 @@ const ALL_RESOURCE_PERMISSIONS: ResourcePermission[] = [
   'plans.read', 'plans.manage', 'packages.read', 'packages.manage', 'providers.read', 'providers.manage',
   'providers.secrets_manage', 'models.read', 'models.manage', 'models.pricing_manage',
   'generations.read', 'generations.manage', 'assets.read', 'assets.manage', 'content.read', 'content.manage',
-  'marketing.read', 'marketing.manage', 'support.read', 'support.manage', 'analytics.read', 'finance.analytics',
-  'audit.read', 'errors.read', 'settings.read', 'settings.manage', 'admins.read', 'admins.manage', 'security.manage',
+  'templates.manage', 'marketing.read', 'marketing.manage', 'support.read', 'support.manage',
+  'analytics.read', 'finance.analytics', 'audit.read', 'errors.read', 'settings.read', 'settings.manage',
+  'admins.read', 'admins.manage', 'security.manage',
 ];
 
 const permissionSet = (...permissions: ResourcePermission[]) => new Set<ResourcePermission>(permissions);
@@ -193,7 +169,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, ReadonlySet<ResourcePermission>
     'subscriptions.read', 'subscriptions.manage', 'payments.read', 'payments.manage', 'credits.read', 'credits.adjust',
     'plans.read', 'plans.manage', 'packages.read', 'packages.manage', 'providers.read', 'providers.manage',
     'models.read', 'models.manage', 'models.pricing_manage', 'generations.read', 'generations.manage',
-    'assets.read', 'assets.manage', 'content.read', 'content.manage', 'marketing.read', 'marketing.manage',
+    'assets.read', 'assets.manage', 'content.read', 'content.manage', 'templates.manage', 'marketing.read', 'marketing.manage',
     'support.read', 'support.manage', 'analytics.read', 'finance.analytics', 'audit.read', 'errors.read',
     'settings.read', 'settings.manage', 'admins.read'
   ),
@@ -202,8 +178,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, ReadonlySet<ResourcePermission>
     'errors.read', 'analytics.read', 'settings.read'
   ),
   CONTENT_MANAGER: permissionSet(
-    'content.read', 'content.manage', 'assets.read', 'assets.manage', 'projects.read', 'templates.manage' as ResourcePermission,
-    'analytics.read'
+    'content.read', 'content.manage', 'templates.manage', 'assets.read', 'assets.manage', 'projects.read', 'analytics.read'
   ),
   USER_MANAGER: permissionSet(
     'users.read', 'users.manage', 'users.suspend', 'projects.read', 'subscriptions.read', 'credits.read', 'analytics.read'
@@ -217,7 +192,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, ReadonlySet<ResourcePermission>
     'analytics.read', 'finance.analytics'
   ),
   MARKETING_MANAGER: permissionSet(
-    'content.read', 'content.manage', 'marketing.read', 'marketing.manage', 'analytics.read', 'plans.read', 'packages.read'
+    'content.read', 'content.manage', 'templates.manage', 'marketing.read', 'marketing.manage', 'analytics.read', 'plans.read', 'packages.read'
   ),
   SECURITY_AUDITOR: permissionSet('audit.read', 'errors.read', 'analytics.read', 'settings.read', 'admins.read'),
   ANALYST: permissionSet(
