@@ -11,6 +11,7 @@
     "test:focused": "node src/tests/run-focused.cjs",
     "test:rbac": "tsx src/tests/rbac-foundation.test.ts",
     "test:admin-policy": "tsx src/tests/admin-user-policy.test.ts",
+    "test:admin-roles": "tsx src/tests/admin-roles-management.test.ts",
     "test:openrouter": "tsx src/tests/openrouter-client.test.ts",
     "test:integration": "cross-env NODE_ENV=test TEST_DATABASE_MODE=staging node src/tests/run-staging.cjs",
     "db:test-reset": "cross-env TEST_DATABASE_MODE=staging tsx -e \"import('./src/lib/supabase/test-db-reset').then(m => m.resetStagingTestData())\""
