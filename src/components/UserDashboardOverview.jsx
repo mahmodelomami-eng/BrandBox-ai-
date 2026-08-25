@@ -6,7 +6,7 @@ import { ArrowLeft, FolderOpen, ImageIcon, MessageSquare, Palette, Printer, Shop
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 
 const quick = [
-  { href: '/images-ai', label: 'توليد الصور', text: 'إنشاء صور وتصاميم بالذكاء الاصطناعي', icon: ImageIcon },
+  { href: '/projects/images', label: 'توليد الصور', text: 'إنشاء صور وتصاميم بالذكاء الاصطناعي', icon: ImageIcon },
   { href: '/video-ai', label: 'توليد الفيديو', text: 'حوّل الأفكار والمشاهد إلى فيديو', icon: Video },
   { href: '/chat-ai', label: 'شات AI', text: 'كتابة محتوى وأفكار ومساعدة ذكية', icon: MessageSquare },
   { href: '/projects', label: 'المشاريع', text: 'إدارة كل أعمالك من مكان واحد', icon: FolderOpen },

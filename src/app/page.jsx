@@ -9,7 +9,7 @@ const LEGACY_VIEW_MAP = {
   projects: '/projects',
   'project-workspace': '/projects',
   chat: '/chat-ai',
-  images: '/images-ai',
+  images: '/projects/images',
   video: '/video-ai',
   audio: '/audio-ai',
   'brand-kit': '/brand-kit',

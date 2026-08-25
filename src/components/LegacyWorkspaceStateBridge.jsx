@@ -193,6 +193,10 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
     };
 
     const applyTarget = () => {
+      if (targetView === 'images') {
+        router.replace('/projects/images');
+        return;
+      }
       if (targetApplied) {
         maybeReveal();
         return;
@@ -211,6 +215,10 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
       const nextView = inferView(control.textContent);
       if (nextView) {
         setSidebarOpen(false);
+        if (nextView === 'images') {
+          router.push('/projects/images');
+          return;
+        }
         setUrlView(nextView);
       }
     };
@@ -270,10 +278,14 @@ export default function LegacyWorkspaceStateBridge({ view = 'dashboard', childre
       observer?.disconnect();
       root.removeEventListener('click', handleClick, true);
     };
-  }, [supabase, targetView]);
+  }, [router, supabase, targetView]);
 
   const navigateWorkspace = (nextView) => {
     setSidebarOpen(false);
+    if (nextView === 'images') {
+      router.push('/projects/images');
+      return;
+    }
     router.push(`/?view=${encodeURIComponent(nextView)}`);
   };
 
