@@ -33,11 +33,15 @@ export default function AccountSettingsPage() {
   }, [loading, user, router]);
 
   useEffect(() => {
-    if (profile) {
+    if (!profile) return undefined;
+
+    const timer = window.setTimeout(() => {
       setFirstName(profile.first_name || '');
       setLastName(profile.last_name || '');
       setPhone(profile.phone || '');
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [profile]);
 
   useEffect(() => {
@@ -62,7 +66,7 @@ export default function AccountSettingsPage() {
       }
     }
 
-    loadTransactions();
+    void loadTransactions();
     return () => { mounted = false; };
   }, [user?.id]);
 
@@ -128,7 +132,6 @@ export default function AccountSettingsPage() {
             </p>
           </div>
 
-          {/* Profile Card Form */}
           <form onSubmit={handleSaveProfile} className="p-6 bg-[#11131a] border border-[#2a2e38] rounded-2xl space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-[#1F2438] pb-4">
               <div>
@@ -203,7 +206,6 @@ export default function AccountSettingsPage() {
             </div>
           </form>
 
-          {/* Credit Transactions History */}
           <div className="p-6 bg-[#11131a] border border-[#2a2e38] rounded-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#1F2438] pb-4">
               <div className="flex items-center gap-2">

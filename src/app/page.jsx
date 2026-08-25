@@ -8,10 +8,10 @@ const LEGACY_VIEW_MAP = {
   dashboard: '/dashboard',
   projects: '/projects',
   'project-workspace': '/projects',
-  chat: '/chat-ai',
+  chat: '/projects/chat',
   images: '/projects/images',
-  video: '/video-ai',
-  audio: '/audio-ai',
+  video: '/projects/video',
+  audio: '/projects/audio',
   'brand-kit': '/brand-kit',
   templates: '/templates',
   billing: '/pricing',
@@ -25,13 +25,16 @@ const LEGACY_VIEW_MAP = {
 function RootPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const viewParam = searchParams.get('view');
+  const legacyTarget = viewParam ? LEGACY_VIEW_MAP[viewParam] : null;
 
   useEffect(() => {
-    const viewParam = searchParams.get('view');
-    if (viewParam && LEGACY_VIEW_MAP[viewParam]) {
-      router.replace(LEGACY_VIEW_MAP[viewParam]);
-    }
-  }, [searchParams, router]);
+    if (legacyTarget) router.replace(legacyTarget);
+  }, [legacyTarget, router]);
+
+  if (legacyTarget) {
+    return <div className="min-h-screen bg-[#050506]" aria-hidden="true" />;
+  }
 
   return <HomeExperience />;
 }

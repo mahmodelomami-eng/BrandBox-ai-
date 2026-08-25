@@ -1,6 +1,5 @@
 import './globals.css';
 import './dropdown-opaque.css';
-import './auth-cleanup.css';
 import React from 'react';
 import { AuthProvider } from '../context/AuthContext';
 import AppNavigationWrapper from '../components/layout/AppNavigationWrapper';

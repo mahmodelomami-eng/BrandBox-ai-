@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import WorkspaceLayout from '../../components/navigation/WorkspaceLayout';
-import { Palette, Check, Sparkles, Save } from 'lucide-react';
+import { Palette, Save } from 'lucide-react';
 
 const DEFAULT_BRAND = {
   brandName: 'القهوة الإثيوبية الفاخرة',
@@ -26,14 +26,16 @@ export default function BrandKitPage() {
   };
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('brandbox_brand_kit');
-      if (saved) {
-        setBrand(JSON.parse(saved));
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = localStorage.getItem('brandbox_brand_kit');
+        if (saved) setBrand(JSON.parse(saved));
+      } catch {
+        // Keep the default brand kit when local storage is unavailable or invalid.
       }
-    } catch {
-      // fallback
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleSave = () => {
@@ -79,7 +81,6 @@ export default function BrandKitPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-          {/* Brand Details */}
           <div className="p-6 bg-[#11131a] border border-[#2a2e38] rounded-2xl space-y-4">
             <h3 className="font-bold text-sm text-white">معلومات العلامة</h3>
             <div>
@@ -111,7 +112,6 @@ export default function BrandKitPage() {
             </div>
           </div>
 
-          {/* Brand Style & Voice */}
           <div className="p-6 bg-[#11131a] border border-[#2a2e38] rounded-2xl space-y-4">
             <h3 className="font-bold text-sm text-white">الألوان ونبرة الصوت</h3>
             <div className="grid grid-cols-3 gap-3">

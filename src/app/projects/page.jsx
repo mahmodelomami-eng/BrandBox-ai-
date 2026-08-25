@@ -31,21 +31,27 @@ export default function ProjectsPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const loadProjects = async () => {
-    try {
-      setLoading(true);
-      const data = await listUserProjects();
-      setProjects(data || []);
-    } catch (err) {
-      console.error('[ProjectsPage] Error loading projects:', err);
-      showToast('تعذر تحميل المشاريع', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadProjects();
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          setLoading(true);
+          const data = await listUserProjects();
+          if (active) setProjects(data || []);
+        } catch (err) {
+          console.error('[ProjectsPage] Error loading projects:', err);
+          if (active) setToast({ text: 'تعذر تحميل المشاريع', type: 'error' });
+        } finally {
+          if (active) setLoading(false);
+        }
+      })();
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const handleCreate = async (e) => {
@@ -125,7 +131,6 @@ export default function ProjectsPage() {
           </button>
         </div>
 
-        {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-gray-400 absolute top-3 right-3" />
@@ -151,7 +156,6 @@ export default function ProjectsPage() {
           </select>
         </div>
 
-        {/* Projects Grid */}
         {loading ? (
           <div className="p-12 text-center text-xs text-gray-400">جاري تحميل المشاريع...</div>
         ) : filteredProjects.length === 0 ? (
@@ -209,7 +213,6 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        {/* Create Modal */}
         {createModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-[#121520] border border-[#1F2438] rounded-2xl p-6 w-full max-w-md space-y-4 relative">

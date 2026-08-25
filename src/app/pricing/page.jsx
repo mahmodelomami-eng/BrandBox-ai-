@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { createBrowserSupabaseClient } from '../../lib/supabase/client';
 import { Wallet, ShieldCheck, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
 export default function PricingPage() {
+  const router = useRouter();
   const { user, creditBalance } = useAuth();
   const [packages, setPackages] = useState([]);
   const [loadingPackages, setLoadingPackages] = useState(true);
@@ -40,7 +42,7 @@ export default function PricingPage() {
       }
     }
 
-    loadPackages();
+    void loadPackages();
     return () => { mounted = false; };
   }, []);
 
@@ -51,7 +53,8 @@ export default function PricingPage() {
       const { data, error } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
       if (error || !accessToken) {
-        window.location.href = `/auth?next=${encodeURIComponent('/pricing')}`;
+        setLoadingPackageId(null);
+        router.push('/auth?next=%2Fpricing');
         return;
       }
 
@@ -108,7 +111,6 @@ export default function PricingPage() {
         )}
       </div>
 
-      {/* Current Balance Summary Box for logged in users */}
       {user && (
         <section className="overflow-hidden rounded-[26px] border border-[#353946] bg-[#141619] shadow-[0_24px_70px_rgba(0,0,0,.28)]">
           <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.15fr_.85fr] lg:p-10">
@@ -146,7 +148,6 @@ export default function PricingPage() {
         <p className="mt-1 text-xs text-gray-500">تُضاف النقاط إلى محفظتك فور تأكيد الدفع الإلكتروني عبر Ezone Pay.</p>
       </div>
 
-      {/* Packages Grid */}
       {loadingPackages ? (
         <div className="p-12 text-center text-xs text-gray-400">جاري تحميل الباقات المتاحة...</div>
       ) : (
