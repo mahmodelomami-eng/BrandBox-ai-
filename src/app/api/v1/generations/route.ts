@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { GenerationEngine, GenerationRequest } from '@/lib/generations/generation-engine';
-import { OPENROUTER_IMAGE_MODELS } from '@/lib/ai/openrouter-client';
+import { OPENROUTER_CHAT_MODELS, OPENROUTER_IMAGE_MODELS } from '@/lib/ai/openrouter-client';
 
 async function authenticate(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
 
   if (!['chat', 'image'].includes(body.generationType) || !body.modelId || !body.prompt?.trim() || body.prompt.trim().length > 4000) {
     return NextResponse.json({ error: 'INVALID_GENERATION_REQUEST' }, { status: 400 });
+  }
+  if (body.generationType === 'chat' && !OPENROUTER_CHAT_MODELS.includes(body.modelId as typeof OPENROUTER_CHAT_MODELS[number])) {
+    return NextResponse.json({ error: 'CHAT_MODEL_NOT_ALLOWED' }, { status: 400 });
   }
   if (body.generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
     return NextResponse.json({ error: 'IMAGE_MODEL_NOT_ALLOWED' }, { status: 400 });
