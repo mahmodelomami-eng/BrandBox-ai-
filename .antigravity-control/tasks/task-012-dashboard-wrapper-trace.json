@@ -1,0 +1,6 @@
+{
+  "id": "task-012-dashboard-wrapper-trace",
+  "mode": "plan",
+  "effort": "low",
+  "prompt": "Read files only; do not edit and do not use terminal/command tools. Trace exactly what wraps /dashboard at runtime in Next.js. Inspect src/app/layout.* and src/components/layout/AppNavigationWrapper.jsx plus any directly imported wrapper/component needed to explain why Vercel Preview still shows a sidebar and compact header even though src/app/dashboard/page.jsx renders StableUserDashboard. Report the exact component chain from root layout to dashboard page, and identify the component that renders the visible sidebar/header. Also state the smallest file(s) that would need editing to make GlobalNavigation the only top navigation and remove the workspace sidebar for /dashboard. Do not inspect unrelated systems."
+}
