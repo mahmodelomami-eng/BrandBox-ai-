@@ -10,6 +10,22 @@ async function authenticate(request: NextRequest) {
   return error ? null : data.user;
 }
 
+function brandKitPrompt(kit: Record<string, string | null>) {
+  const parts = [
+    kit.brand_name ? `اسم العلامة: ${kit.brand_name}` : '',
+    kit.tagline ? `الشعار اللفظي: ${kit.tagline}` : '',
+    kit.description ? `وصف العلامة والنشاط: ${kit.description}` : '',
+    kit.primary_color ? `اللون الرئيسي: ${kit.primary_color}` : '',
+    kit.secondary_color ? `اللون الثانوي: ${kit.secondary_color}` : '',
+    kit.accent_color ? `لون التمييز: ${kit.accent_color}` : '',
+    kit.font_family ? `الطابع الطباعي المفضل: ${kit.font_family}` : '',
+    kit.tone_of_voice ? `نبرة العلامة: ${kit.tone_of_voice}` : '',
+  ].filter(Boolean);
+
+  if (!parts.length) return '';
+  return `\n\nتعليمات Brand Kit الخاصة بالمستخدم:\n${parts.join('\n')}\nحافظ على هوية العلامة ولوحة ألوانها ونبرتها في النتيجة البصرية قدر الإمكان، من دون إضافة نصوص أو شعارات غير مطلوبة صراحةً.`;
+}
+
 export async function GET(request: NextRequest) {
   const user = await authenticate(request);
   if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
@@ -43,14 +59,40 @@ export async function POST(request: NextRequest) {
   if (body.generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
     return NextResponse.json({ error: 'IMAGE_MODEL_NOT_ALLOWED' }, { status: 400 });
   }
+
+  const database = createPrivilegedSupabaseClient();
   if (body.projectId) {
-    const { data: project, error: projectError } = await createPrivilegedSupabaseClient().from('projects').select('id').eq('id', body.projectId).eq('owner_id', user.id).maybeSingle();
+    const { data: project, error: projectError } = await database.from('projects').select('id').eq('id', body.projectId).eq('owner_id', user.id).maybeSingle();
     if (projectError || !project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
+  }
+
+  let effectiveBody = body;
+  if (body.generationType === 'image' && body.settings?.useBrandKit === true) {
+    const { data: kit, error: kitError } = await database
+      .from('brand_kits')
+      .select('brand_name,tagline,description,primary_color,secondary_color,accent_color,font_family,tone_of_voice')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (kitError) return NextResponse.json({ error: 'BRAND_KIT_UNAVAILABLE' }, { status: 503 });
+    const instruction = kit ? brandKitPrompt(kit) : '';
+    if (instruction) {
+      effectiveBody = {
+        ...body,
+        prompt: `${body.prompt.trim()}${instruction}`,
+        settings: { ...body.settings, brandKitApplied: true },
+      };
+    } else {
+      effectiveBody = {
+        ...body,
+        settings: { ...body.settings, brandKitApplied: false },
+      };
+    }
   }
 
   const result = await GenerationEngine.executeGeneration(
     { userId: user.id, email: user.email || '', role: 'USER' },
-    body
+    effectiveBody
   );
   return NextResponse.json(result, { status: result.success ? 200 : 502 });
 }
