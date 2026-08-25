@@ -47,6 +47,7 @@ export interface StoreCatalogProduct {
   image_url: string | null;
   fulfillment_mode: StoreFulfillmentMode;
   sale_status: StoreSaleStatus;
+  requires_customer_identifier: boolean;
   store_categories: { slug: string; name_ar: string; name_en: string | null } | null;
   store_skus: StoreSku[];
 }
