@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, LockKeyhole, LogIn, Mail, UserPlus, X } from 'lucide-react';
+import { Check, Eye, EyeOff, LockKeyhole, LogIn, Mail, ShieldCheck, UserPlus } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../../lib/supabase/client';
 
 function safeNextPath() {
@@ -11,6 +12,19 @@ function safeNextPath() {
   const stored = localStorage.getItem('brandbox.oauth.next');
   const value = fromUrl || stored || '/dashboard';
   return value.startsWith('/') && !value.startsWith('//') ? value : '/dashboard';
+}
+
+function normalizePhone(value) {
+  return String(value || '').trim().replace(/[\s()-]/g, '');
+}
+
+function providerNameFallback(user) {
+  const metadata = user?.user_metadata || {};
+  const fullName = String(metadata.full_name || metadata.name || '').trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: String(metadata.given_name || metadata.first_name || fullName[0] || '').trim(),
+    lastName: String(metadata.family_name || metadata.last_name || fullName.slice(1).join(' ') || '').trim(),
+  };
 }
 
 export default function AuthPage() {
@@ -22,13 +36,19 @@ export default function AuthPage() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingFirstName, setOnboardingFirstName] = useState('');
+  const [onboardingLastName, setOnboardingLastName] = useState('');
   const [onboardingPhone, setOnboardingPhone] = useState('');
   const [onboardingWhatsapp, setOnboardingWhatsapp] = useState('');
+  const [onboardingEmail, setOnboardingEmail] = useState('');
+  const [onboardingLegalAccepted, setOnboardingLegalAccepted] = useState(false);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
 
   useEffect(() => {
@@ -37,24 +57,34 @@ export default function AuthPage() {
 
     const resolveSession = async (session) => {
       if (!active || !session?.user) return;
-      const params = new URLSearchParams(window.location.search);
-      const socialRequested = localStorage.getItem('brandbox.oauth.onboarding') === '1' || params.get('social') === '1';
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('phone,whatsapp_phone,onboarding_completed_at')
-        .eq('id', session.user.id)
-        .maybeSingle();
 
-      if (!active) return;
-      if (socialRequested && (!profile?.phone || !profile?.onboarding_completed_at)) {
-        setOnboardingPhone(profile?.phone || '');
-        setOnboardingWhatsapp(profile?.whatsapp_phone || '');
-        setOnboardingOpen(true);
-        return;
+      try {
+        const response = await fetch('/api/v1/profile/onboarding', {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('تعذر التحقق من اكتمال بيانات الحساب.');
+        const result = await response.json();
+        if (!active) return;
+
+        if (!result.complete) {
+          const fallback = providerNameFallback(session.user);
+          setOnboardingFirstName(result.profile?.firstName || fallback.firstName);
+          setOnboardingLastName(result.profile?.lastName || fallback.lastName);
+          setOnboardingPhone(result.profile?.phone || session.user.user_metadata?.phone || '');
+          setOnboardingWhatsapp(result.profile?.whatsappPhone || session.user.user_metadata?.whatsapp_phone || '');
+          setOnboardingEmail(result.profile?.email || session.user.email || '');
+          setOnboardingLegalAccepted(false);
+          setOnboardingOpen(true);
+          return;
+        }
+
+        localStorage.removeItem('brandbox.oauth.onboarding');
+        router.replace(safeNextPath());
+      } catch (statusError) {
+        if (active) setError(statusError instanceof Error ? statusError.message : 'تعذر التحقق من الحساب.');
       }
-
-      localStorage.removeItem('brandbox.oauth.onboarding');
-      router.replace(safeNextPath());
     };
 
     void supabase.auth.getSession().then(({ data }) => resolveSession(data.session));
@@ -67,6 +97,20 @@ export default function AuthPage() {
       listener.subscription.unsubscribe();
     };
   }, [router]);
+
+  async function saveOnboarding(session, values) {
+    const response = await fetch('/api/v1/profile/onboarding', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(values),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'تعذر حفظ بيانات الحساب.');
+    return result;
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -86,17 +130,22 @@ export default function AuthPage() {
           password,
         });
         if (signInError) throw signInError;
-        router.replace(safeNextPath());
         return;
       }
 
-      const normalizedPhone = phone.trim().replace(/[\s()-]/g, '');
-      const normalizedWhatsapp = whatsapp.trim().replace(/[\s()-]/g, '');
-      if (!firstName.trim() || !lastName.trim() || !/^\+?\d{8,15}$/.test(normalizedPhone)) {
-        throw new Error('أدخل الاسم الأول واسم العائلة ورقم هاتف صحيحًا.');
+      const normalizedPhone = normalizePhone(phone);
+      const normalizedWhatsapp = normalizePhone(whatsapp);
+      if (!firstName.trim() || !lastName.trim()) {
+        throw new Error('الاسم الأول واسم العائلة مطلوبان.');
       }
-      if (normalizedWhatsapp && !/^\+?\d{8,15}$/.test(normalizedWhatsapp)) {
-        throw new Error('رقم واتساب غير صحيح.');
+      if (!/^\+?\d{8,15}$/.test(normalizedPhone)) {
+        throw new Error('أدخل رقم هاتف صحيحًا.');
+      }
+      if (!/^\+?\d{8,15}$/.test(normalizedWhatsapp)) {
+        throw new Error('رقم واتساب مطلوب ويجب أن يكون صحيحًا.');
+      }
+      if (!legalAccepted) {
+        throw new Error('يجب الموافقة على شروط الاستخدام وسياسة الخصوصية لإنشاء الحساب.');
       }
 
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -107,25 +156,25 @@ export default function AuthPage() {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
             phone: normalizedPhone,
+            whatsapp_phone: normalizedWhatsapp,
           },
         },
       });
       if (signUpError) throw signUpError;
 
       if (data.session) {
-        const response = await fetch('/api/v1/profile/onboarding', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${data.session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ phone: normalizedPhone, whatsappPhone: normalizedWhatsapp }),
+        await saveOnboarding(data.session, {
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          phone: normalizedPhone,
+          whatsappPhone: normalizedWhatsapp,
+          legalAccepted: true,
         });
-        if (!response.ok) throw new Error('تم إنشاء الحساب لكن تعذر حفظ بيانات الاتصال.');
         router.replace(safeNextPath());
       } else {
-        setMessage('تم إنشاء الحساب. تحقق من بريدك الإلكتروني ثم سجّل الدخول للمتابعة.');
+        setMessage('تم إنشاء الحساب. تحقق من بريدك الإلكتروني؛ بعد التأكيد سنوثق الموافقة ونكمل بيانات الحساب قبل الدخول.');
         setMode('login');
+        setPassword('');
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'تعذر إتمام العملية.');
@@ -152,36 +201,45 @@ export default function AuthPage() {
     }
   }
 
-  async function saveSocialContact(event) {
+  async function completeOnboarding(event) {
     event.preventDefault();
     setOnboardingLoading(true);
     setError('');
-    const normalizedPhone = onboardingPhone.trim().replace(/[\s()-]/g, '');
-    const normalizedWhatsapp = onboardingWhatsapp.trim().replace(/[\s()-]/g, '');
+
+    const normalizedPhone = normalizePhone(onboardingPhone);
+    const normalizedWhatsapp = normalizePhone(onboardingWhatsapp);
 
     try {
-      if (!/^\+?\d{8,15}$/.test(normalizedPhone)) throw new Error('رقم الهاتف مطلوب ويجب أن يكون صحيحًا.');
-      if (normalizedWhatsapp && !/^\+?\d{8,15}$/.test(normalizedWhatsapp)) throw new Error('رقم واتساب غير صحيح.');
+      if (!onboardingFirstName.trim() || !onboardingLastName.trim()) {
+        throw new Error('الاسم الأول واسم العائلة مطلوبان.');
+      }
+      if (!/^\+?\d{8,15}$/.test(normalizedPhone)) {
+        throw new Error('رقم الهاتف مطلوب ويجب أن يكون صحيحًا.');
+      }
+      if (!/^\+?\d{8,15}$/.test(normalizedWhatsapp)) {
+        throw new Error('رقم واتساب مطلوب ويجب أن يكون صحيحًا.');
+      }
+      if (!onboardingLegalAccepted) {
+        throw new Error('يجب الموافقة على شروط الاستخدام وسياسة الخصوصية للمتابعة.');
+      }
 
       const supabase = createBrowserSupabaseClient();
       const { data } = await supabase.auth.getSession();
       if (!data.session) throw new Error('انتهت جلسة تسجيل الدخول.');
 
-      const response = await fetch('/api/v1/profile/onboarding', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${data.session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone: normalizedPhone, whatsappPhone: normalizedWhatsapp }),
+      await saveOnboarding(data.session, {
+        firstName: onboardingFirstName.trim(),
+        lastName: onboardingLastName.trim(),
+        phone: normalizedPhone,
+        whatsappPhone: normalizedWhatsapp,
+        legalAccepted: true,
       });
-      if (!response.ok) throw new Error('تعذر حفظ بيانات الاتصال.');
 
       localStorage.removeItem('brandbox.oauth.onboarding');
       setOnboardingOpen(false);
       router.replace(safeNextPath());
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'تعذر حفظ بيانات الاتصال.');
+      setError(saveError instanceof Error ? saveError.message : 'تعذر حفظ بيانات الحساب.');
     } finally {
       setOnboardingLoading(false);
     }
@@ -199,9 +257,9 @@ export default function AuthPage() {
               <div className="h-28 -translate-y-2 rounded-3xl border border-[#f31325]/15 bg-[radial-gradient(circle_at_center,rgba(243,19,37,.2),transparent_50%),#0b0d12]" />
               <div className="h-28 translate-y-5 rounded-3xl border border-white/[.06] bg-[linear-gradient(145deg,#12151c,#090a0e)]" />
             </div>
-            <p className="mt-12 max-w-md text-sm leading-8 text-gray-400">ادخل إلى مشاريعك وأدوات الذكاء الاصطناعي والباقات من حساب واحد.</p>
+            <p className="mt-12 max-w-md text-sm leading-8 text-gray-400">حساب واحد لمشاريعك وأدوات الذكاء الاصطناعي واشتراكك ومحفظة Credit.</p>
           </div>
-          <div className="text-xs text-gray-600">التسجيل متاح بالبريد الإلكتروني أو Google أو Apple.</div>
+          <div className="text-xs leading-6 text-gray-600">نطلب بيانات اتصال مكتملة ونوثق موافقتك على السياسات قبل دخول المنصة.</div>
         </section>
 
         <section className="p-6 sm:p-10">
@@ -217,24 +275,36 @@ export default function AuthPage() {
             {mode === 'signup' && (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="الاسم الأول" className="rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
-                  <input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="اسم العائلة" className="rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                  <input required value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="الاسم الأول" className="rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                  <input required value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="اسم العائلة" className="rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
                 </div>
-                <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="رقم الهاتف +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
-                <input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} placeholder="رقم واتساب للإشعارات - اختياري" dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                <input required value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="رقم الهاتف +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                <input required value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} placeholder="رقم واتساب +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
               </>
             )}
 
             <label className="flex items-center gap-3 rounded-2xl border border-[#303747] bg-[#151923] px-4 transition focus-within:border-[#f31325]">
               <Mail size={18} className="text-gray-500" />
-              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="البريد الإلكتروني / Gmail" className="w-full bg-transparent py-4 text-sm outline-none" />
+              <input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="البريد الإلكتروني / Gmail" className="w-full bg-transparent py-4 text-sm outline-none" />
             </label>
 
             <label className="flex items-center gap-3 rounded-2xl border border-[#303747] bg-[#151923] px-4 transition focus-within:border-[#f31325]">
               <LockKeyhole size={18} className="text-gray-500" />
-              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="كلمة المرور" className="w-full bg-transparent py-4 text-sm outline-none" />
+              <input required type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="كلمة المرور" className="w-full bg-transparent py-4 text-sm outline-none" />
               <button type="button" onClick={() => setShowPassword((value) => !value)} className="text-gray-500 transition hover:text-white" aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
             </label>
+
+            {mode === 'signup' && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#303747] bg-[#101319] p-4 text-xs leading-6 text-gray-400">
+                <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${legalAccepted ? 'border-amber-400 bg-amber-400 text-black' : 'border-gray-600'}`}>
+                  {legalAccepted && <Check size={14} strokeWidth={3} />}
+                </span>
+                <input className="sr-only" type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} />
+                <span>
+                  أوافق على <Link href="/terms" target="_blank" className="font-black text-white underline decoration-amber-400/60 underline-offset-4">شروط الاستخدام</Link> و<Link href="/privacy" target="_blank" className="font-black text-white underline decoration-amber-400/60 underline-offset-4">سياسة الخصوصية</Link> وأفهم طريقة استخدام Credit وسياسات الباقات.
+                </span>
+              </label>
+            )}
 
             {error && !onboardingOpen && <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-3 text-xs text-red-300">{error}</div>}
             {message && <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 text-xs text-emerald-300">{message}</div>}
@@ -254,20 +324,33 @@ export default function AuthPage() {
       </div>
 
       {onboardingOpen && (
-        <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/85 p-4">
-          <form onSubmit={saveSocialContact} className="relative w-full max-w-md rounded-[28px] border border-[#303747] bg-[#11151d] p-7 shadow-2xl">
-            <button type="button" onClick={() => setOnboardingOpen(false)} className="absolute left-5 top-5 text-gray-500 hover:text-white"><X size={19} /></button>
-            <div className="text-xs font-black text-[#ff3344]">إكمال الحساب</div>
-            <h2 className="mt-2 text-2xl font-black">بيانات الاتصال</h2>
-            <p className="mt-2 text-sm leading-7 text-gray-500">أضف رقم الهاتف. رقم واتساب اختياري لاستخدامه في الإشعارات.</p>
+        <div className="fixed inset-0 z-[230] flex items-center justify-center overflow-y-auto bg-black/90 p-4 py-8">
+          <form onSubmit={completeOnboarding} className="w-full max-w-lg rounded-[28px] border border-[#303747] bg-[#11151d] p-7 shadow-2xl">
+            <div className="flex items-center gap-2 text-xs font-black text-amber-300"><ShieldCheck size={16} /> إكمال الحساب مطلوب</div>
+            <h2 className="mt-2 text-2xl font-black">بيانات الحساب والموافقة</h2>
+            <p className="mt-2 text-sm leading-7 text-gray-500">لن يتم فتح لوحة التحكم قبل اكتمال بيانات الاتصال والموافقة على السياسات الحالية.</p>
 
             <div className="mt-6 space-y-3">
-              <input value={onboardingPhone} onChange={(event) => setOnboardingPhone(event.target.value)} placeholder="رقم الهاتف +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
-              <input value={onboardingWhatsapp} onChange={(event) => setOnboardingWhatsapp(event.target.value)} placeholder="رقم واتساب - اختياري" dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
+              <div className="grid grid-cols-2 gap-3">
+                <input required value={onboardingFirstName} onChange={(event) => setOnboardingFirstName(event.target.value)} placeholder="الاسم الأول" className="rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
+                <input required value={onboardingLastName} onChange={(event) => setOnboardingLastName(event.target.value)} placeholder="اسم العائلة" className="rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
+              </div>
+              <input readOnly value={onboardingEmail} placeholder="البريد الإلكتروني" dir="ltr" className="w-full cursor-not-allowed rounded-2xl border border-[#303747] bg-[#0d1016] p-4 text-sm text-gray-500 outline-none" />
+              <input required value={onboardingPhone} onChange={(event) => setOnboardingPhone(event.target.value)} placeholder="رقم الهاتف +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
+              <input required value={onboardingWhatsapp} onChange={(event) => setOnboardingWhatsapp(event.target.value)} placeholder="رقم واتساب +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
             </div>
 
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/[.04] p-4 text-xs leading-6 text-gray-300">
+              <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${onboardingLegalAccepted ? 'border-amber-400 bg-amber-400 text-black' : 'border-gray-600'}`}>
+                {onboardingLegalAccepted && <Check size={14} strokeWidth={3} />}
+              </span>
+              <input className="sr-only" type="checkbox" checked={onboardingLegalAccepted} onChange={(event) => setOnboardingLegalAccepted(event.target.checked)} />
+              <span>أوافق على <Link href="/terms" target="_blank" className="font-black text-white underline">شروط الاستخدام</Link> و<Link href="/privacy" target="_blank" className="font-black text-white underline">سياسة الخصوصية</Link>.</span>
+            </label>
+
             {error && <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/5 p-3 text-xs text-red-300">{error}</div>}
-            <button disabled={onboardingLoading} className="mt-5 w-full rounded-2xl bg-[#f31325] py-4 text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">{onboardingLoading ? 'جاري الحفظ...' : 'حفظ والمتابعة'}</button>
+
+            <button disabled={onboardingLoading} className="mt-5 w-full rounded-2xl bg-[#f31325] py-4 text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">{onboardingLoading ? 'جاري الحفظ...' : 'موافقة وحفظ والمتابعة'}</button>
           </form>
         </div>
       )}
