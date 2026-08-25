@@ -1,6 +1,7 @@
 import { CreditEngine } from '../credits/credit-engine';
 import { AuthContext } from '../auth/rbac-engine';
 import { createOpenRouterChatCompletion, createOpenRouterImageGeneration } from '../ai/openrouter-client';
+import { ChatCreditQuote, PricingEngine } from '../billing/pricing-engine';
 import { createPrivilegedSupabaseClient } from '../supabase/server';
 
 export interface GenerationRequest {
@@ -38,7 +39,29 @@ export class GenerationEngine {
     const requestedCount = request.generationType === 'image'
       ? Math.max(1, Math.min(4, Math.trunc(Number(request.settings?.count) || 1)))
       : 1;
-    const requiredCredits = CreditEngine.calculateRequiredCredits(request.modelId, request.generationType) * requestedCount;
+
+    let chatQuote: ChatCreditQuote | null = null;
+    let requiredCredits: number;
+    try {
+      if (request.generationType === 'chat' && request.modelId === 'google/gemini-3.7-flash') {
+        chatQuote = await PricingEngine.quoteChat({
+          modelId: request.modelId,
+          prompt: request.prompt,
+          maxTokens: typeof request.settings?.maxTokens === 'number' ? request.settings.maxTokens : 1200,
+        });
+        requiredCredits = chatQuote.credits;
+      } else {
+        requiredCredits = CreditEngine.calculateRequiredCredits(request.modelId, request.generationType) * requestedCount;
+      }
+    } catch (pricingError) {
+      return {
+        success: false,
+        generationId,
+        creditsConsumed: 0,
+        remainingBalance: await CreditEngine.getBalance(actor.userId),
+        errorMessage: `BILLING_PRICING_UNAVAILABLE: ${pricingError instanceof Error ? pricingError.message : 'Unable to calculate Credit price.'}`,
+      };
+    }
 
     const currentBalance = await CreditEngine.getBalance(actor.userId);
     if (currentBalance < requiredCredits) {
@@ -47,7 +70,7 @@ export class GenerationEngine {
         generationId,
         creditsConsumed: 0,
         remainingBalance: currentBalance,
-        errorMessage: `INSUFFICIENT_CREDITS: Required ${requiredCredits} credits, but current balance is ${currentBalance}.`
+        errorMessage: `INSUFFICIENT_CREDITS: Required ${requiredCredits} Credit, but current balance is ${currentBalance}.`
       };
     }
 
@@ -162,6 +185,38 @@ export class GenerationEngine {
         duration_ms: Date.now() - startedAt,
       }).eq('id', generationId).eq('user_id', actor.userId);
       if (completeError) throw new Error(`GENERATION_LOG_COMPLETE_FAILED: ${completeError.message}`);
+
+      if (chatQuote) {
+        const providerCostUsd = typeof providerUsage?.costUsd === 'number' ? providerUsage.costUsd : null;
+        const actualPricing = providerCostUsd == null
+          ? null
+          : PricingEngine.settleActualProviderCost(providerCostUsd, chatQuote, 1);
+        const billedReferenceValueLyd = requiredCredits * chatQuote.settings.referenceCreditValueLyd;
+        const realizedGrossMarginPct = actualPricing && billedReferenceValueLyd > 0
+          ? ((billedReferenceValueLyd - actualPricing.acquisitionCostLyd) / billedReferenceValueLyd) * 100
+          : null;
+
+        const { error: financialError } = await database.from('generation_financials').upsert({
+          generation_id: generationId,
+          model_id: request.modelId,
+          provider: 'openrouter',
+          provider_cost_usd: providerCostUsd,
+          quoted_credits: requiredCredits,
+          charged_credits: requiredCredits,
+          market_usd_lyd: chatQuote.settings.marketUsdLyd,
+          openrouter_topup_fee_pct: chatQuote.settings.openRouterTopupFeePct,
+          bank_transfer_fee_pct: chatQuote.settings.bankTransferFeePct,
+          risk_buffer_pct: chatQuote.settings.riskBufferPct,
+          target_gross_margin_pct: chatQuote.settings.targetGrossMarginPct,
+          reference_credit_value_lyd: chatQuote.settings.referenceCreditValueLyd,
+          acquisition_cost_lyd: actualPricing?.acquisitionCostLyd ?? null,
+          billed_reference_value_lyd: billedReferenceValueLyd,
+          realized_gross_margin_pct: realizedGrossMarginPct,
+          pricing_version: 'credits-v1',
+          updated_at: new Date().toISOString(),
+        });
+        if (financialError) throw new Error(`GENERATION_FINANCIAL_AUDIT_FAILED: ${financialError.message}`);
+      }
 
       return {
         success: true,
