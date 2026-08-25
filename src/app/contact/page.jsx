@@ -25,6 +25,7 @@ const STATUS_LABELS = {
 function ContactContent() {
   const searchParams = useSearchParams();
   const { user, loading } = useAuth();
+  const userId = user?.id || null;
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const categoryFromUrl = CATEGORIES.some(([id]) => id === searchParams.get('category')) ? searchParams.get('category') : 'general';
   const [category, setCategory] = useState(categoryFromUrl || 'general');
@@ -36,26 +37,26 @@ function ContactContent() {
   const [notice, setNotice] = useState(null);
 
   const loadRequests = useCallback(async () => {
-    if (!user?.id) return;
+    if (!userId) return;
     const { data, error } = await supabase
       .from('support_requests')
       .select('id,category,subject,message,status,created_at,updated_at')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(20);
     if (!error) setRequests(data || []);
     setRequestsLoaded(true);
-  }, [supabase, user?.id]);
+  }, [supabase, userId]);
 
   useEffect(() => {
-    if (!user?.id) return undefined;
+    if (!userId) return undefined;
     const timer = window.setTimeout(() => { void loadRequests(); }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadRequests, user?.id]);
+  }, [loadRequests, userId]);
 
   async function submitRequest(event) {
     event.preventDefault();
-    if (!user?.id || sending) return;
+    if (!userId || sending) return;
     const cleanSubject = subject.trim();
     const cleanMessage = message.trim();
     if (cleanSubject.length < 3 || cleanMessage.length < 10) {
@@ -66,7 +67,7 @@ function ContactContent() {
     setSending(true);
     setNotice(null);
     const { error } = await supabase.from('support_requests').insert({
-      user_id: user.id,
+      user_id: userId,
       category,
       subject: cleanSubject,
       message: cleanMessage,
