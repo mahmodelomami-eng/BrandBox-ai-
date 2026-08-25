@@ -43,7 +43,7 @@ export default function TemplatesPage() {
         language: 'العربية',
         tone: 'احترافي',
       });
-      router.push(`/projects/images/workspace?project=${encodeURIComponent(project.id)}&prompt=${encodeURIComponent(tpl.description)}`);
+      router.push(`/projects/images/workspace?project=${encodeURIComponent(project.id)}`);
     } catch (err) {
       showToast(err?.message || 'تعذر إنشاء المشروع من القالب');
       setCreatingId(null);
@@ -65,7 +65,7 @@ export default function TemplatesPage() {
           <div>
             <div className="text-xs font-black tracking-wider text-[#ff6674]">TEMPLATES</div>
             <h1 className="mt-2 flex items-center gap-2 text-3xl font-black"><Layers3 className="text-[#FF2E4C]" /> مكتبة القوالب</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-400">اختر اتجاهًا بصريًا؛ سننشئ مشروع صور حقيقي ونفتح الاستوديو مع وصف القالب جاهزًا للتعديل والتوليد.</p>
+            <p className="mt-2 max-w-2xl text-sm leading-7 text-gray-400">اختر اتجاهًا بصريًا؛ سننشئ مشروع صور حقيقي ونفتح الاستوديو مع سياق القالب محفوظًا داخل المشروع لتستخدمه كمرجع أثناء التوليد.</p>
           </div>
           <div className="relative">
             <Search className="absolute right-3 top-3.5 h-4 w-4 text-gray-500" />
