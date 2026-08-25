@@ -4,7 +4,6 @@ import { AdminService } from '@/lib/admin/admin-service';
 import {
   AdminRole,
   ROLE_DEFINITIONS,
-  checkPermission,
 } from '@/lib/auth/rbac-engine';
 import {
   assertRoleChangePolicy,
@@ -61,6 +60,7 @@ export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get('q')?.trim() || '';
   const statusFilter = request.nextUrl.searchParams.get('status')?.trim() || '';
   const roleFilter = request.nextUrl.searchParams.get('role')?.trim() || '';
+  const adminOnly = request.nextUrl.searchParams.get('adminOnly') === '1';
   const page = Math.max(1, Number(request.nextUrl.searchParams.get('page') || 1));
   const limit = Math.min(100, Math.max(1, Number(request.nextUrl.searchParams.get('limit') || 25)));
   const from = (page - 1) * limit;
@@ -83,6 +83,8 @@ export async function GET(request: NextRequest) {
 
   if (roleFilter && isKnownRole(roleFilter)) {
     query = query.eq('role', roleFilter);
+  } else if (adminOnly) {
+    query = query.neq('role', 'USER');
   }
 
   const { data: profiles, error, count } = await query;
