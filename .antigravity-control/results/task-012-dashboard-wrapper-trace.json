@@ -1,0 +1,27 @@
+﻿{
+    "id":  "task-012-dashboard-wrapper-trace",
+    "ok":  true,
+    "mode":  "plan",
+    "bridge_request_id":  "4e25f4a8-4733-47a6-b0f7-07f6f23e3fdd",
+    "antigravity":  {
+                        "conversation_id":  "7745883a-0389-48bd-ba59-232baa1544ae",
+                        "status":  "SUCCESS",
+                        "response":  "I have inspected the runtime component hierarchy wrapping `/dashboard` and prepared a detailed analysis artifact for your review: [trace_dashboard_layout_plan.md](file:///C:/Users/msicy/.gemini/antigravity-cli/brain/7745883a-0389-48bd-ba59-232baa1544ae/trace_dashboard_layout_plan.md).\n\n### 1. Exact Runtime Component Chain for `/dashboard`\n1. [`RootLayout`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/layout.jsx#L14-L26) (`src/app/layout.jsx`)\n2. [`AuthProvider`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/context/AuthContext.jsx#L26-L100) (`src/context/AuthContext.jsx`)\n3. [`AppNavigationWrapper`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/layout/AppNavigationWrapper.jsx#L6-L13) (`src/components/layout/AppNavigationWrapper.jsx`)\n4. [`GlobalNavigation`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/GlobalNavigation.jsx#L59-L340) (`src/components/GlobalNavigation.jsx`) + `\u003cdiv className=\"pt-20\"\u003e{children}\u003c/div\u003e`\n5. [`DashboardPage`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/page.jsx#L6-L8) (`src/app/dashboard/page.jsx`)\n6. [`StableUserDashboard`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/StableUserDashboard.jsx#L81-L285) (`src/components/StableUserDashboard.jsx`)\n\n---\n\n### 2. Component Rendering the Visible Sidebar / Header\n- **Top Header**: Rendered by [`GlobalNavigation`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/GlobalNavigation.jsx) (`fixed inset-x-0 top-0 z-[100] h-20`).\n- **Sidebar \u0026 Secondary Header**:\n  - In the root `/dashboard` route, [`StableUserDashboard`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/StableUserDashboard.jsx) does **not** render any sidebar or secondary header.\n  - If a sidebar/compact header is visible in Vercel Preview, it originates from either:\n    1. **Legacy view queries / bridges** (e.g. `/?view=dashboard`), which invoke [`LegacyWorkspaceStateBridge`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/LegacyWorkspaceStateBridge.jsx) or [`AdminControlCenter`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/AdminControlCenter.jsx) containing `\u003caside\u003e` and floating `ToolDock` compact headers.\n    2. **Dashboard subroutes** like [`src/app/dashboard/account/page.jsx`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/account/page.jsx) and [`src/app/dashboard/brand/page.jsx`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/brand/page.jsx), which wrap their content inside [`WorkspaceLayout`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/navigation/WorkspaceLayout.jsx) and [`WorkspaceDashboardShell`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/WorkspaceDashboardShell.jsx).\n\n---\n\n### 3. Smallest File(s) to Ensure `GlobalNavigation` is the Only Navigation\n- **[`src/app/dashboard/page.jsx`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/page.jsx)** and **[`src/components/layout/AppNavigationWrapper.jsx`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/layout/AppNavigationWrapper.jsx)** already maintain [`GlobalNavigation`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/components/GlobalNavigation.jsx) as the sole top navigation for `/dashboard`.\n- To unify the dashboard subroutes (if modifying them), the smallest targeted files are:\n  - [`src/app/dashboard/account/page.jsx`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/account/page.jsx) (replace `\u003cWorkspaceLayout\u003e` wrapper).\n  - [`src/app/dashboard/brand/page.jsx`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/brand/page.jsx), [`src/app/dashboard/marketing/page.jsx`](file:///C:/Users/msicy/BrandBox-UI-Restore/src/app/dashboard/marketing/page.jsx), etc. (replace `\u003cWorkspaceDashboardShell\u003e`).\n",
+                        "duration_seconds":  76.2556114,
+                        "num_turns":  1,
+                        "usage":  {
+                                      "input_tokens":  180803,
+                                      "output_tokens":  8952,
+                                      "thinking_tokens":  3737,
+                                      "cache_read_tokens":  1178756,
+                                      "total_tokens":  189755
+                                  }
+                    },
+    "stderr":  null,
+    "worktree":  {
+                     "status":  "",
+                     "diff":  "",
+                     "diff_stat":  ""
+                 },
+    "completed_at":  "2026-08-25T03:14:25.2031402+02:00"
+}
