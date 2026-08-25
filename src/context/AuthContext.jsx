@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import { checkPermission } from '../lib/auth/rbac-engine';
 
@@ -24,10 +25,11 @@ export const ROLE_LABELS = {
 };
 
 export function AuthProvider({ children }) {
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createBrowserSupabaseClient();
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const fetchProfile = useCallback(async (userId) => {
     try {
@@ -52,7 +54,7 @@ export function AuthProvider({ children }) {
     if (!user?.id) return;
     const prof = await fetchProfile(user.id);
     if (prof) setProfile(prof);
-  }, [user?.id, fetchProfile]);
+  }, [user, fetchProfile]);
 
   useEffect(() => {
     let mounted = true;
@@ -77,7 +79,7 @@ export function AuthProvider({ children }) {
       }
     }
 
-    initAuth();
+    void initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return;
@@ -103,13 +105,12 @@ export function AuthProvider({ children }) {
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
-      if (typeof window !== 'undefined') {
-        window.location.href = '/';
-      }
+      router.replace('/');
+      router.refresh();
     } catch (err) {
       console.error('[AuthContext] Sign out error:', err);
     }
-  }, [supabase]);
+  }, [supabase, router]);
 
   const role = profile?.role || 'USER';
   const roleLabel = ROLE_LABELS[role] || 'مستخدم';
