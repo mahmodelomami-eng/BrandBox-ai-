@@ -1,4 +1,43 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { HealthCheckEngine } from '../lib/observability/telemetry';
+
+function verifyAdminControlCenterContract() {
+  const repoRoot = process.cwd();
+  const adminRoutePath = join(repoRoot, 'src/app/admin/page.jsx');
+  const controlCenterPath = join(repoRoot, 'src/components/AdminControlCenter.jsx');
+  const obsoleteDepartmentDashboardPath = join(repoRoot, 'src/components/AdminDepartmentDashboard.jsx');
+
+  if (!existsSync(adminRoutePath) || !existsSync(controlCenterPath)) return false;
+
+  const adminRouteSource = readFileSync(adminRoutePath, 'utf8');
+  const controlCenterSource = readFileSync(controlCenterPath, 'utf8');
+
+  const routeUsesCanonicalControlCenter =
+    adminRouteSource.includes("import AdminControlCenter from '../../components/AdminControlCenter'") &&
+    adminRouteSource.includes('<AdminControlCenter />');
+
+  const routeDoesNotContainLegacyPlaceholder = ![
+    'حالة النظام',
+    'بوابة الدفع Ezone',
+    'مزود الذكاء OpenRouter',
+    'المؤشرات العامة',
+  ].some((token) => adminRouteSource.includes(token));
+
+  const userManagementIsPresent =
+    controlCenterSource.includes("['users', 'المستخدمون والصلاحيات'") &&
+    controlCenterSource.includes("section === 'users'") &&
+    controlCenterSource.includes("fetch('/api/v1/admin/users'");
+
+  const obsoletePlaceholderRemoved = !existsSync(obsoleteDepartmentDashboardPath);
+
+  return (
+    routeUsesCanonicalControlCenter &&
+    routeDoesNotContainLegacyPlaceholder &&
+    userManagementIsPresent &&
+    obsoletePlaceholderRemoved
+  );
+}
 
 export async function runProductionHardeningTests() {
   const health = await HealthCheckEngine.runFullHealthCheck();
@@ -15,9 +54,16 @@ export async function runProductionHardeningTests() {
     .filter((component) => component.name !== 'Database (PostgreSQL)')
     .every((component) => component.status !== 'unhealthy');
 
+  const adminControlCenterContract = verifyAdminControlCenterContract();
+
   return {
-    allPassed: health.liveness === true && nonDatabaseHealthy && (!databaseConfigured || health.readiness === true),
+    allPassed:
+      health.liveness === true &&
+      nonDatabaseHealthy &&
+      (!databaseConfigured || health.readiness === true) &&
+      adminControlCenterContract,
     databaseConfigured,
+    adminControlCenterContract,
     health,
   };
 }
@@ -25,9 +71,13 @@ export async function runProductionHardeningTests() {
 runProductionHardeningTests()
   .then((result) => {
     if (!result.allPassed) {
+      if (!result.adminControlCenterContract) {
+        throw new Error('Admin control center regression guard failed.');
+      }
       throw new Error('Production hardening health check failed.');
     }
 
+    console.log('Admin control center regression guard passed.');
     console.log(
       result.databaseConfigured
         ? 'Production hardening health check passed with database readiness.'
