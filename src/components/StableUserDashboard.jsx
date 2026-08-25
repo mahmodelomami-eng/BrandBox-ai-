@@ -90,14 +90,7 @@ export default function StableUserDashboard() {
 
   useEffect(() => {
     let mounted = true;
-    if (authLoading) return;
-    if (!authUser?.id) {
-      setProjects([]);
-      setGenerations([]);
-      setSubscription(null);
-      setStats({ projects: 0, generations: 0 });
-      return;
-    }
+    if (authLoading || !authUser?.id) return undefined;
 
     const loadBusinessData = async () => {
       try {
