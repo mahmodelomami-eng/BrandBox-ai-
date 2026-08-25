@@ -51,7 +51,7 @@ export default function MarketingPlansPage() {
         tone: 'احترافي',
       });
 
-      router.push(`/projects/chat/workspace?project=${encodeURIComponent(project.id)}`);
+      router.push(`/projects/chat/workspace?project=${encodeURIComponent(project.id)}&prompt=${encodeURIComponent(description)}`);
     } catch (err) {
       setError(err?.message || 'تعذر إنشاء مشروع الخطة التسويقية.');
       setCreating(false);
@@ -72,7 +72,7 @@ export default function MarketingPlansPage() {
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
           <form onSubmit={createPlanProject} className="rounded-3xl border border-white/10 bg-[#0d1016] p-5 sm:p-7">
             <h2 className="text-lg font-black">ابدأ مشروع الخطة</h2>
-            <p className="mt-1 text-xs leading-6 text-gray-500">لن يتم تشغيل نموذج AI أو خصم نقاط قبل أن تدخل Workspace وتبدأ المحادثة بنفسك.</p>
+            <p className="mt-1 text-xs leading-6 text-gray-500">لن يتم تشغيل نموذج AI أو خصم نقاط قبل أن تدخل Workspace وتبدأ المحادثة بنفسك. سنجهز الطلب الأول داخل خانة المحادثة لتراجعه قبل الإرسال.</p>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <label className="text-xs font-bold text-gray-400">اسم النشاط
