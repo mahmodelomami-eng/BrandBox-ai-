@@ -1,0 +1,6 @@
+{
+  "id": "task-013-dashboard-entrypoint-trace",
+  "mode": "plan",
+  "effort": "low",
+  "prompt": "Read files only; do not edit and do not use terminal/command tools. The root /dashboard chain is already confirmed correct, but the Vercel Preview still showed the old dashboard shell with sidebar. Trace every user-facing entry point that is labeled or behaves like Dashboard/لوحة التحكم/user-name click, including GlobalNavigation account menu, home/header links, StableUserDashboard links, dashboard subroutes, WorkspaceDashboardShell navigation, WorkspaceLayout navigation, and any legacy ?view=dashboard routing. Identify which href/router.push can land users on /dashboard/marketing, /dashboard/brand, /dashboard/studio, /dashboard/commerce, /dashboard/print, /dashboard/account, /?view=dashboard, or any route that renders the old sidebar shell. Also trace every Images AI link inside those old dashboard/sidebar components and state which ones do not point to /projects/images. Return a concise table: source file/component, visible label/action, current target, desired canonical target. Do not inspect unrelated systems."
+}
