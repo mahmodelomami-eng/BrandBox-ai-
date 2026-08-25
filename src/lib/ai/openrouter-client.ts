@@ -1,6 +1,10 @@
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
 
+export const OPENROUTER_CHAT_MODELS = [
+  'google/gemini-3.7-flash',
+] as const;
+
 export const OPENROUTER_IMAGE_MODELS = [
   'openai/gpt-image-2',
   'bytedance-seed/seedream-5-0-lite',
@@ -122,7 +126,10 @@ export async function createOpenRouterChatCompletion(
 ): Promise<OpenRouterChatResult> {
   const apiKey = options.apiKey || process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY_MISSING');
-  if (!request.model || !request.prompt.trim()) throw new Error('OPENROUTER_INVALID_REQUEST');
+  if (!OPENROUTER_CHAT_MODELS.includes(request.model as typeof OPENROUTER_CHAT_MODELS[number])) {
+    throw new Error('OPENROUTER_CHAT_MODEL_NOT_ALLOWED');
+  }
+  if (!request.prompt.trim()) throw new Error('OPENROUTER_INVALID_REQUEST');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 45_000);
@@ -142,6 +149,7 @@ export async function createOpenRouterChatCompletion(
         messages: [{ role: 'user', content: request.prompt.trim() }],
         temperature: request.temperature ?? 0.7,
         max_tokens: request.maxTokens ?? 1200,
+        usage: { include: true },
       }),
     });
 
