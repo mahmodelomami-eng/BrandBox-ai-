@@ -1,0 +1,12 @@
+﻿{
+    "id":  "task-010-dashboard-globalnav-fix",
+    "ok":  false,
+    "mode":  "accept-edits",
+    "error":  "The remote server returned an error: (500) Internal Server Error.",
+    "worktree":  {
+                     "status":  "",
+                     "diff":  "",
+                     "diff_stat":  ""
+                 },
+    "completed_at":  "2026-08-25T02:34:55.2821057+02:00"
+}
