@@ -43,7 +43,7 @@ export class GenerationEngine {
     let chatQuote: ChatCreditQuote | null = null;
     let requiredCredits: number;
     try {
-      if (request.generationType === 'chat' && request.modelId === 'google/gemini-3.7-flash') {
+      if (request.generationType === 'chat') {
         chatQuote = await PricingEngine.quoteChat({
           modelId: request.modelId,
           prompt: request.prompt,
