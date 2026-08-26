@@ -33,6 +33,13 @@ function nullableNumber(value: unknown) {
   return parsed;
 }
 
+function nullablePositiveInteger(value: unknown) {
+  if (value === '' || value == null) return null;
+  const parsed = Math.trunc(Number(value));
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1000) throw new Error('INVALID_DAILY_LIMIT');
+  return parsed;
+}
+
 function bool(value: unknown, fallback = false) {
   return typeof value === 'boolean' ? value : fallback;
 }
@@ -63,7 +70,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await createPrivilegedSupabaseClient()
     .from('ai_model_catalog')
-    .select('model_id,provider,vendor_name,generation_type,tool_category,display_name_ar,display_name_en,public_description_ar,public_description_en,pricing_mode,input_cost_per_million_usd,output_cost_per_million_usd,fixed_provider_cost_usd,provider_cost_per_second_usd,reservation_multiplier,minimum_credits,minimum_plan_id,fallback_model_id,is_enabled,is_visible_to_users,is_featured,sort_order,metadata,pricing_checked_at,created_at,updated_at')
+    .select('model_id,provider,vendor_name,generation_type,tool_category,display_name_ar,display_name_en,public_description_ar,public_description_en,pricing_mode,input_cost_per_million_usd,output_cost_per_million_usd,fixed_provider_cost_usd,provider_cost_per_second_usd,reservation_multiplier,minimum_credits,minimum_plan_id,fallback_model_id,is_enabled,is_visible_to_users,is_featured,is_free,daily_free_user_limit,supports_vision,free_tier_note,sort_order,metadata,pricing_checked_at,created_at,updated_at')
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
 
@@ -87,6 +94,7 @@ export async function POST(request: NextRequest) {
   const vendorName = String(body.vendorName || '').trim();
   const minimumPlanId = body.minimumPlanId ? String(body.minimumPlanId) : null;
   const fallbackModelId = body.fallbackModelId ? String(body.fallbackModelId).trim() : null;
+  const isFree = bool(body.isFree, false);
 
   if (!modelIdValid(modelId) || !displayName || !GENERATION_TYPES.has(generationType) || !TOOL_CATEGORIES.has(toolCategory) || !PRICING_MODES.has(pricingMode)) {
     return NextResponse.json({ error: 'INVALID_AI_MODEL' }, { status: 400 });
@@ -106,17 +114,21 @@ export async function POST(request: NextRequest) {
       public_description_ar: String(body.descriptionAr || '').trim() || null,
       public_description_en: String(body.descriptionEn || '').trim() || null,
       pricing_mode: pricingMode,
-      input_cost_per_million_usd: nullableNumber(body.inputCostPerMillionUsd),
-      output_cost_per_million_usd: nullableNumber(body.outputCostPerMillionUsd),
-      fixed_provider_cost_usd: nullableNumber(body.fixedProviderCostUsd),
-      provider_cost_per_second_usd: nullableNumber(body.providerCostPerSecondUsd),
+      input_cost_per_million_usd: isFree && pricingMode === 'token' ? 0 : nullableNumber(body.inputCostPerMillionUsd),
+      output_cost_per_million_usd: isFree && pricingMode === 'token' ? 0 : nullableNumber(body.outputCostPerMillionUsd),
+      fixed_provider_cost_usd: isFree ? 0 : nullableNumber(body.fixedProviderCostUsd),
+      provider_cost_per_second_usd: isFree ? 0 : nullableNumber(body.providerCostPerSecondUsd),
       reservation_multiplier: Math.max(1, Number(body.reservationMultiplier || 1.25)),
-      minimum_credits: Math.max(1, Math.trunc(Number(body.minimumCredits || 1))),
+      minimum_credits: isFree ? 0 : Math.max(1, Math.trunc(Number(body.minimumCredits || 1))),
       minimum_plan_id: minimumPlanId,
       fallback_model_id: fallbackModelId,
       is_enabled: bool(body.isEnabled, false),
       is_visible_to_users: bool(body.isVisibleToUsers, false),
       is_featured: bool(body.isFeatured, false),
+      is_free: isFree,
+      daily_free_user_limit: isFree ? nullablePositiveInteger(body.dailyFreeUserLimit) : null,
+      supports_vision: bool(body.supportsVision, false),
+      free_tier_note: isFree ? (String(body.freeTierNote || '').trim() || null) : null,
       sort_order: Math.trunc(Number(body.sortOrder || 100)),
       metadata: { source: 'admin', show_real_model_name: true },
       pricing_checked_at: new Date().toISOString(),
@@ -160,7 +172,22 @@ export async function PATCH(request: NextRequest) {
     if (fallback && !modelIdValid(fallback)) return NextResponse.json({ error: 'INVALID_FALLBACK_MODEL' }, { status: 400 });
     patch.fallback_model_id = fallback;
   }
-  if (body.minimumCredits !== undefined) patch.minimum_credits = Math.max(1, Math.trunc(Number(body.minimumCredits || 1)));
+  if (typeof body.isFree === 'boolean') {
+    patch.is_free = body.isFree;
+    if (body.isFree) {
+      patch.minimum_credits = 0;
+      patch.input_cost_per_million_usd = 0;
+      patch.output_cost_per_million_usd = 0;
+      patch.fixed_provider_cost_usd = 0;
+      patch.provider_cost_per_second_usd = 0;
+    } else if (body.minimumCredits === undefined) {
+      patch.minimum_credits = 1;
+    }
+  }
+  if (body.dailyFreeUserLimit !== undefined) patch.daily_free_user_limit = body.dailyFreeUserLimit == null ? null : nullablePositiveInteger(body.dailyFreeUserLimit);
+  if (typeof body.supportsVision === 'boolean') patch.supports_vision = body.supportsVision;
+  if (body.freeTierNote !== undefined) patch.free_tier_note = String(body.freeTierNote || '').trim() || null;
+  if (body.minimumCredits !== undefined) patch.minimum_credits = Math.max(0, Math.trunc(Number(body.minimumCredits || 0)));
   if (body.sortOrder !== undefined) patch.sort_order = Math.trunc(Number(body.sortOrder || 0));
 
   const { data, error } = await createPrivilegedSupabaseClient().from('ai_model_catalog').update(patch).eq('model_id', modelId).select('*').maybeSingle();
