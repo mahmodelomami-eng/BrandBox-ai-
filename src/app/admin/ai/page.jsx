@@ -1,5 +1,10 @@
-import { redirect } from 'next/navigation';
+import AuthGate from '../../../components/AuthGate';
+import AdminAIModelManager from '../../../components/AdminAIModelManager';
 
-export default function Page() {
-  redirect('/admin?section=ai');
+export default function AdminAIPage() {
+  return (
+    <AuthGate>
+      <AdminAIModelManager />
+    </AuthGate>
+  );
 }
