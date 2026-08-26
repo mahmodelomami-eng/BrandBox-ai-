@@ -30,6 +30,7 @@ const NAV_ITEMS = [
   ['القوالب', '/templates'],
   ['خطط تسويقية', '/marketing-plans'],
   ['الأسعار', '/pricing'],
+  ['الدليل', '/help'],
   ['المتجر', '/store'],
   ['المطبعة', '/print'],
   ['من نحن', '/about'],
@@ -206,15 +207,14 @@ export default function GlobalNavigation() {
             </>
           ) : (
             <>
-              {/* Real Credits Badge */}
               <Link
                 href="/pricing"
-                className="flex items-center gap-1.5 rounded-xl border border-[#f31325]/30 bg-[#f31325]/10 px-3 py-1.5 text-xs font-extrabold text-[#ff3344] transition hover:bg-[#f31325]/20"
-                title="الرصيد المتاح - اضغط لشحن الرصيد"
+                className="flex items-center gap-2 rounded-xl border border-amber-300/35 bg-[radial-gradient(circle_at_30%_25%,rgba(255,244,173,.18),transparent_38%),linear-gradient(145deg,rgba(245,158,11,.16),rgba(120,53,15,.10))] px-3 py-1.5 text-xs font-extrabold text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,.08),0_6px_20px_rgba(245,158,11,.08)] transition hover:border-amber-200/60 hover:bg-amber-400/15"
+                title="رصيد Credit المتاح - اضغط للشحن أو عرض الباقات"
               >
-                <Coins size={15} className="text-[#ff3344]" />
-                <span className="hidden sm:inline text-[11px] text-gray-400">الرصيد:</span>
-                <span>{currentCredits.toLocaleString('ar-LY')}</span>
+                <span className="grid h-6 w-6 place-items-center rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200 via-amber-400 to-amber-700 text-[#2a1700] shadow-[0_0_14px_rgba(251,191,36,.25)]"><Coins size={14} strokeWidth={2.7} /></span>
+                <span className="hidden sm:inline text-[11px] text-amber-100/70">Credit</span>
+                <span className="tabular-nums">{currentCredits.toLocaleString('ar-LY')}</span>
               </Link>
 
               <div ref={accountRef} className="relative flex items-center gap-1">
@@ -241,6 +241,7 @@ export default function GlobalNavigation() {
                   <div className="absolute left-0 top-full z-[135] mt-3 w-64 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1016] p-2 shadow-[0_24px_70px_rgba(0,0,0,.72)]">
                     <Link href="/dashboard" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-gray-200 hover:bg-white/5 hover:text-white"><LayoutDashboard size={18} className="text-[#ff3344]" /> لوحة تحكم المستخدم</Link>
                     <Link href="/dashboard/account" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-gray-200 hover:bg-white/5 hover:text-white"><Settings size={18} className="text-gray-400" /> إعدادات الحساب</Link>
+                    <Link href="/help" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-amber-100 hover:bg-amber-400/[.06]"><Coins size={18} className="text-amber-300" /> دليل Credit والباقات</Link>
                     {canOpenAdmin && <Link href="/admin" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-amber-200 hover:bg-amber-500/10"><ShieldCheck size={18} /> لوحة الإدارة</Link>}
                     <div className="my-1 border-t border-white/10" />
                     <button type="button" onClick={signOut} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-black text-[#ff5b67] hover:bg-red-500/10"><LogOut size={18} /> تسجيل الخروج</button>
@@ -318,14 +319,15 @@ export default function GlobalNavigation() {
                   <Link
                     href="/pricing"
                     onClick={() => setMobileOpen(false)}
-                    className="flex items-center justify-between rounded-xl border border-[#f31325]/30 bg-[#f31325]/10 px-4 py-3 text-xs font-extrabold text-[#ff3344]"
+                    className="flex items-center justify-between rounded-xl border border-amber-300/35 bg-amber-400/[.07] px-4 py-3 text-xs font-extrabold text-amber-100"
                   >
                     <span className="flex items-center gap-2">
-                      <Coins size={16} />
-                      <span>الرصيد المتاح</span>
+                      <span className="grid h-7 w-7 place-items-center rounded-full border border-amber-200/70 bg-gradient-to-br from-amber-200 via-amber-400 to-amber-700 text-[#2a1700]"><Coins size={15} /></span>
+                      <span>Credit</span>
                     </span>
-                    <span>{currentCredits.toLocaleString('ar-LY')} نقطة</span>
+                    <span>{currentCredits.toLocaleString('ar-LY')}</span>
                   </Link>
+                  <Link href="/help" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-xl border border-amber-300/15 bg-amber-400/[.03] px-4 py-3 text-sm font-black text-amber-100"><Coins size={17} className="text-amber-300" /> دليل Credit والباقات</Link>
                   <Link href="/dashboard/account" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm font-black text-gray-300"><Settings size={17} /> إعدادات الحساب</Link>
                   {canOpenAdmin && <Link href="/admin" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm font-black text-amber-200"><ShieldCheck size={17} /> لوحة الإدارة</Link>}
                   <button type="button" onClick={signOut} className="flex w-full items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm font-black text-[#ff5b67]"><LogOut size={17} /> تسجيل الخروج</button>
