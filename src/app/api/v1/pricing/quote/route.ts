@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const { data: model, error: modelError } = await createPrivilegedSupabaseClient()
     .from('ai_model_catalog')
-    .select('model_id,display_name_ar,display_name_en,minimum_plan_id')
+    .select('model_id,display_name_ar,display_name_en,minimum_plan_id,is_free,daily_free_user_limit,supports_vision,free_tier_note')
     .eq('model_id', modelId)
     .eq('generation_type', 'chat')
     .eq('is_enabled', true)
@@ -58,9 +58,13 @@ export async function POST(request: NextRequest) {
         displayName: model.display_name_ar || model.display_name_en || model.model_id,
         requiredPlan: model.minimum_plan_id || 'free',
         credits: quote.credits,
+        free: quote.isFree,
+        dailyFreeLimit: model.daily_free_user_limit == null ? null : Number(model.daily_free_user_limit),
+        supportsVision: Boolean(model.supports_vision),
+        freeTierNote: model.free_tier_note || null,
         estimatedInputTokens: quote.estimatedInputTokens,
         reservedOutputTokens: quote.reservedOutputTokens,
-        kind: 'estimated-max',
+        kind: quote.isFree ? 'free' : 'estimated-max',
       },
     });
   } catch (error) {
