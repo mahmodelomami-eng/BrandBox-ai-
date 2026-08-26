@@ -2,7 +2,7 @@
 
 import React, { Suspense } from 'react';
 import Link from 'next/link';
-import { Headphones } from 'lucide-react';
+import { Headphones, Sparkles } from 'lucide-react';
 import AuthGate from '../../components/AuthGate';
 import AdminControlCenter from '../../components/AdminControlCenter';
 
@@ -22,9 +22,14 @@ export default function AdminPage() {
     <AuthGate>
       <Suspense fallback={<AdminLoadingState />}>
         <AdminControlCenter />
-        <Link href="/admin/support" className="fixed bottom-5 left-5 z-[80] flex items-center gap-2 rounded-2xl border border-[#f31325]/35 bg-[#11131a] px-4 py-3 text-xs font-black text-white shadow-2xl transition hover:border-[#f31325] hover:bg-[#f31325]" title="فتح طلبات الدعم">
-          <Headphones size={17} /> طلبات الدعم
-        </Link>
+        <div className="fixed bottom-5 left-5 z-[80] flex flex-col gap-2">
+          <Link href="/admin/ai" className="flex items-center gap-2 rounded-2xl border border-amber-500/35 bg-[#11131a] px-4 py-3 text-xs font-black text-amber-200 shadow-2xl transition hover:border-amber-400 hover:bg-amber-500/10" title="إدارة أدوات وموديلات الذكاء الاصطناعي">
+            <Sparkles size={17} /> AI Tools & Models
+          </Link>
+          <Link href="/admin/support" className="flex items-center gap-2 rounded-2xl border border-[#f31325]/35 bg-[#11131a] px-4 py-3 text-xs font-black text-white shadow-2xl transition hover:border-[#f31325] hover:bg-[#f31325]" title="فتح طلبات الدعم">
+            <Headphones size={17} /> طلبات الدعم
+          </Link>
+        </div>
       </Suspense>
     </AuthGate>
   );
