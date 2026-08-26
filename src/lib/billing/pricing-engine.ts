@@ -11,6 +11,9 @@ export interface BillingSettingsSnapshot {
   maxBonusPct: number;
   emergencyFxThresholdLyd: number;
   hardStopFxThresholdLyd: number;
+  freeGlobalDailyLimit: number;
+  freeUserDailyLimit: number;
+  freeModelsEnabled: boolean;
 }
 
 export interface ModelPricingSnapshot {
@@ -24,6 +27,9 @@ export interface ModelPricingSnapshot {
   providerCostPerSecondUsd?: number;
   reservationMultiplier: number;
   minimumCredits: number;
+  isFree: boolean;
+  dailyFreeUserLimit?: number;
+  supportsVision: boolean;
 }
 
 export interface CreditPricingBreakdown {
@@ -39,6 +45,7 @@ export interface ChatCreditQuote extends CreditPricingBreakdown {
   reservedOutputTokens: number;
   reservationMultiplier: number;
   rawEstimatedProviderCostUsd: number;
+  isFree: boolean;
   settings: BillingSettingsSnapshot;
 }
 
@@ -66,6 +73,15 @@ export class PricingEngine {
   ): CreditPricingBreakdown {
     if (!Number.isFinite(providerCostUsd) || providerCostUsd < 0) {
       throw new Error('INVALID_PROVIDER_COST');
+    }
+
+    if (providerCostUsd === 0 && modelMinimumCredits === 0) {
+      return {
+        providerCostUsd: 0,
+        acquisitionCostLyd: 0,
+        targetRetailValueLyd: 0,
+        credits: 0,
+      };
     }
 
     const acquisitionRate = this.calculateUsdAcquisitionRateLyd(settings);
@@ -109,6 +125,9 @@ export class PricingEngine {
       maxBonusPct: numberValue(data.max_bonus_pct, 20),
       emergencyFxThresholdLyd: numberValue(data.emergency_fx_threshold_lyd, 18),
       hardStopFxThresholdLyd: numberValue(data.hard_stop_fx_threshold_lyd, 22),
+      freeGlobalDailyLimit: Math.max(1, Math.trunc(numberValue(data.openrouter_free_global_daily_limit, 40))),
+      freeUserDailyLimit: Math.max(1, Math.trunc(numberValue(data.free_user_daily_limit, 5))),
+      freeModelsEnabled: data.free_models_enabled !== false,
     };
   }
 
@@ -135,7 +154,10 @@ export class PricingEngine {
       fixedProviderCostUsd: data.fixed_provider_cost_usd == null ? undefined : numberValue(data.fixed_provider_cost_usd),
       providerCostPerSecondUsd: data.provider_cost_per_second_usd == null ? undefined : numberValue(data.provider_cost_per_second_usd),
       reservationMultiplier: Math.max(1, numberValue(data.reservation_multiplier, 1.25)),
-      minimumCredits: Math.max(1, Math.trunc(numberValue(data.minimum_credits, 1))),
+      minimumCredits: Math.max(0, Math.trunc(numberValue(data.minimum_credits, 1))),
+      isFree: Boolean(data.is_free),
+      dailyFreeUserLimit: data.daily_free_user_limit == null ? undefined : Math.max(1, Math.trunc(numberValue(data.daily_free_user_limit, 5))),
+      supportsVision: Boolean(data.supports_vision),
     };
   }
 
@@ -161,6 +183,9 @@ export class PricingEngine {
     if (model.inputCostPerMillionUsd == null || model.outputCostPerMillionUsd == null) {
       throw new Error('MODEL_TOKEN_PRICING_INCOMPLETE');
     }
+    if (model.isFree && !settings.freeModelsEnabled) {
+      throw new Error('FREE_MODELS_DISABLED');
+    }
 
     const estimatedInputTokens = this.estimateTextTokens(input.prompt);
     const reservedOutputTokens = Math.max(1, Math.min(65_536, Math.trunc(input.maxTokens || 1200)));
@@ -176,6 +201,7 @@ export class PricingEngine {
       reservedOutputTokens,
       reservationMultiplier: model.reservationMultiplier,
       rawEstimatedProviderCostUsd,
+      isFree: model.isFree,
       ...priced,
       settings,
     };
@@ -183,9 +209,13 @@ export class PricingEngine {
 
   public static settleActualProviderCost(
     actualProviderCostUsd: number,
-    quote: Pick<ChatCreditQuote, 'settings'>,
+    quote: Pick<ChatCreditQuote, 'settings' | 'isFree'>,
     modelMinimumCredits = 1,
   ) {
-    return this.providerCostToCredits(actualProviderCostUsd, quote.settings, modelMinimumCredits);
+    return this.providerCostToCredits(
+      actualProviderCostUsd,
+      quote.settings,
+      quote.isFree ? 0 : modelMinimumCredits,
+    );
   }
 }
