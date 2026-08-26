@@ -24,7 +24,22 @@ export interface GenerationResponse {
   content?: string;
   errorMessage?: string;
   wasRefunded?: boolean;
+  freeUsage?: {
+    userUsed: number;
+    userLimit: number;
+    globalUsed: number;
+    globalLimit: number;
+  };
 }
+
+type FreeClaim = {
+  allowed: boolean;
+  message: string;
+  user_used: number;
+  user_limit: number;
+  global_used: number;
+  global_limit: number;
+};
 
 export class GenerationEngine {
   public static async executeGeneration(
@@ -63,42 +78,78 @@ export class GenerationEngine {
       };
     }
 
+    const database = createPrivilegedSupabaseClient();
     const currentBalance = await CreditEngine.getBalance(actor.userId);
-    if (currentBalance < requiredCredits) {
-      return {
-        success: false,
-        generationId,
-        creditsConsumed: 0,
-        remainingBalance: currentBalance,
-        errorMessage: `INSUFFICIENT_CREDITS: Required ${requiredCredits} Credit, but current balance is ${currentBalance}.`
-      };
-    }
+    const isFreeOperation = Boolean(chatQuote?.isFree && requiredCredits === 0);
+    let freeClaim: FreeClaim | null = null;
+    let balanceAfterReservation = currentBalance;
+    const reservationKey = isFreeOperation ? `free_claim_${generationId}` : `gen_deduct_${generationId}`;
 
-    const deductDkey = `gen_deduct_${generationId}`;
-    const deductionRes = await CreditEngine.deductCredits(
-      actor.userId,
-      requiredCredits,
-      `AI Generation (${request.modelId})`,
-      'generation',
-      generationId,
-      deductDkey,
-      actor.userId
-    );
+    if (isFreeOperation) {
+      const { data: claimRows, error: claimError } = await database.rpc('claim_free_ai_request', {
+        p_user_id: actor.userId,
+        p_model_id: request.modelId,
+        p_generation_id: generationId,
+      });
+      freeClaim = Array.isArray(claimRows) ? (claimRows[0] as FreeClaim | undefined) || null : null;
+      if (claimError || !freeClaim?.allowed) {
+        return {
+          success: false,
+          generationId,
+          creditsConsumed: 0,
+          remainingBalance: currentBalance,
+          errorMessage: freeClaim?.message || `FREE_QUOTA_UNAVAILABLE: ${claimError?.message || 'Unable to reserve free request.'}`,
+          freeUsage: freeClaim ? {
+            userUsed: freeClaim.user_used,
+            userLimit: freeClaim.user_limit,
+            globalUsed: freeClaim.global_used,
+            globalLimit: freeClaim.global_limit,
+          } : undefined,
+        };
+      }
+    } else {
+      if (currentBalance < requiredCredits) {
+        return {
+          success: false,
+          generationId,
+          creditsConsumed: 0,
+          remainingBalance: currentBalance,
+          errorMessage: `INSUFFICIENT_CREDITS: Required ${requiredCredits} Credit, but current balance is ${currentBalance}.`
+        };
+      }
 
-    if (!deductionRes.success) {
-      return {
-        success: false,
+      const deductionRes = await CreditEngine.deductCredits(
+        actor.userId,
+        requiredCredits,
+        `AI Generation (${request.modelId})`,
+        'generation',
         generationId,
-        creditsConsumed: 0,
-        remainingBalance: deductionRes.newBalance,
-        errorMessage: deductionRes.message
-      };
+        reservationKey,
+        actor.userId
+      );
+
+      if (!deductionRes.success) {
+        return {
+          success: false,
+          generationId,
+          creditsConsumed: 0,
+          remainingBalance: deductionRes.newBalance,
+          errorMessage: deductionRes.message
+        };
+      }
+      balanceAfterReservation = deductionRes.newBalance;
     }
 
     const uploadedPaths: string[] = [];
+    let providerAttempted = false;
     try {
       const startedAt = Date.now();
-      const database = createPrivilegedSupabaseClient();
+      const persistedSettings = { ...(request.settings || {}) };
+      if ('imageDataUrl' in persistedSettings) {
+        delete persistedSettings.imageDataUrl;
+        persistedSettings.hasInputImage = true;
+      }
+
       const { error: insertError } = await database.from('generations').insert({
         id: generationId,
         user_id: actor.userId,
@@ -107,26 +158,30 @@ export class GenerationEngine {
         provider: 'openrouter',
         model: request.modelId,
         prompt: request.prompt,
-        settings: request.settings || {},
+        settings: persistedSettings,
         status: 'processing',
         credits_reserved: requiredCredits,
         credits_consumed: 0,
-        idempotency_key: deductDkey,
+        idempotency_key: reservationKey,
       });
       if (insertError) throw new Error(`GENERATION_LOG_CREATE_FAILED: ${insertError.message}`);
 
       if (request.simulateFailure) {
+        providerAttempted = true;
         throw new Error('SIMULATED_AI_PROVIDER_TIMEOUT');
       }
 
+      if (request.generationType === 'chat') providerAttempted = true;
       const chatResult = request.generationType === 'chat'
         ? await createOpenRouterChatCompletion({
             model: request.modelId,
             prompt: request.prompt,
             temperature: typeof request.settings?.temperature === 'number' ? request.settings.temperature : undefined,
             maxTokens: typeof request.settings?.maxTokens === 'number' ? request.settings.maxTokens : undefined,
+            imageDataUrl: typeof request.settings?.imageDataUrl === 'string' ? request.settings.imageDataUrl : undefined,
           })
         : undefined;
+      if (request.generationType === 'image') providerAttempted = true;
       const imageResult = request.generationType === 'image'
         ? await createOpenRouterImageGeneration({
             model: request.modelId,
@@ -181,17 +236,17 @@ export class GenerationEngine {
         prompt_tokens: providerUsage?.promptTokens ?? null,
         completion_tokens: providerUsage?.completionTokens ?? null,
         total_tokens: providerUsage?.totalTokens ?? null,
-        provider_cost_usd: providerUsage?.costUsd ?? null,
+        provider_cost_usd: providerUsage?.costUsd ?? (isFreeOperation ? 0 : null),
         duration_ms: Date.now() - startedAt,
       }).eq('id', generationId).eq('user_id', actor.userId);
       if (completeError) throw new Error(`GENERATION_LOG_COMPLETE_FAILED: ${completeError.message}`);
 
       if (chatQuote) {
         try {
-          const providerCostUsd = typeof providerUsage?.costUsd === 'number' ? providerUsage.costUsd : null;
+          const providerCostUsd = typeof providerUsage?.costUsd === 'number' ? providerUsage.costUsd : (chatQuote.isFree ? 0 : null);
           const actualPricing = providerCostUsd == null
             ? null
-            : PricingEngine.settleActualProviderCost(providerCostUsd, chatQuote, 1);
+            : PricingEngine.settleActualProviderCost(providerCostUsd, chatQuote, chatQuote.isFree ? 0 : 1);
           const billedReferenceValueLyd = requiredCredits * chatQuote.settings.referenceCreditValueLyd;
           const realizedGrossMarginPct = actualPricing && billedReferenceValueLyd > 0
             ? ((billedReferenceValueLyd - actualPricing.acquisitionCostLyd) / billedReferenceValueLyd) * 100
@@ -213,12 +268,10 @@ export class GenerationEngine {
             acquisition_cost_lyd: actualPricing?.acquisitionCostLyd ?? null,
             billed_reference_value_lyd: billedReferenceValueLyd,
             realized_gross_margin_pct: realizedGrossMarginPct,
-            pricing_version: 'credits-v1',
+            pricing_version: chatQuote.isFree ? 'free-pilot-v1' : 'credits-v1',
             updated_at: new Date().toISOString(),
           });
-          if (financialError) {
-            console.error('GENERATION_FINANCIAL_AUDIT_FAILED', financialError.message, generationId);
-          }
+          if (financialError) console.error('GENERATION_FINANCIAL_AUDIT_FAILED', financialError.message, generationId);
         } catch (financialAuditError) {
           console.error('GENERATION_FINANCIAL_AUDIT_FAILED', financialAuditError, generationId);
         }
@@ -228,33 +281,48 @@ export class GenerationEngine {
         success: true,
         generationId,
         creditsConsumed: requiredCredits,
-        remainingBalance: deductionRes.newBalance,
+        remainingBalance: balanceAfterReservation,
         content: responseContent,
         resultUrl: responseUrls[0],
         resultUrls: responseUrls,
         storagePaths: uploadedPaths,
+        freeUsage: freeClaim ? {
+          userUsed: freeClaim.user_used,
+          userLimit: freeClaim.user_limit,
+          globalUsed: freeClaim.global_used,
+          globalLimit: freeClaim.global_limit,
+        } : undefined,
       };
     } catch (err: any) {
       if (uploadedPaths.length) {
         try {
-          const cleanupDatabase = createPrivilegedSupabaseClient();
-          await cleanupDatabase.from('assets').delete().eq('generation_id', generationId).eq('user_id', actor.userId);
-          await cleanupDatabase.storage.from('generation-assets').remove(uploadedPaths);
+          await database.from('assets').delete().eq('generation_id', generationId).eq('user_id', actor.userId);
+          await database.storage.from('generation-assets').remove(uploadedPaths);
         } catch { /* best-effort cleanup */ }
       }
-      const refundDkey = `gen_refund_${generationId}`;
-      const refundRes = await CreditEngine.refundCredits(
-        actor.userId,
-        requiredCredits,
-        `Automatic Refund: AI Provider Failure (${err?.message || 'Unknown Error'})`,
-        'generation_failure_refund',
-        generationId,
-        refundDkey,
-        actor.userId
-      );
+
+      let remainingBalance = balanceAfterReservation;
+      let wasRefunded = false;
+      if (!isFreeOperation && requiredCredits > 0) {
+        const refundDkey = `gen_refund_${generationId}`;
+        const refundRes = await CreditEngine.refundCredits(
+          actor.userId,
+          requiredCredits,
+          `Automatic Refund: AI Provider Failure (${err?.message || 'Unknown Error'})`,
+          'generation_failure_refund',
+          generationId,
+          refundDkey,
+          actor.userId
+        );
+        remainingBalance = refundRes.newBalance;
+        wasRefunded = true;
+      } else if (isFreeOperation && !providerAttempted) {
+        // A local persistence failure before the provider request should not consume free quota.
+        try { await database.from('free_ai_request_claims').delete().eq('generation_id', generationId); } catch { /* best effort */ }
+      }
 
       try {
-        await createPrivilegedSupabaseClient().from('generations').update({
+        await database.from('generations').update({
           status: 'failed',
           credits_consumed: 0,
           error_message: err?.message || 'Generation failed',
@@ -267,9 +335,17 @@ export class GenerationEngine {
         success: false,
         generationId,
         creditsConsumed: 0,
-        remainingBalance: refundRes.newBalance,
-        errorMessage: `AI_PROVIDER_ERROR: ${err?.message || 'Generation failed'}. Credits refunded automatically.`,
-        wasRefunded: true
+        remainingBalance,
+        errorMessage: isFreeOperation
+          ? `AI_PROVIDER_ERROR: ${err?.message || 'Generation failed'}. No Credit was charged.`
+          : `AI_PROVIDER_ERROR: ${err?.message || 'Generation failed'}. Credits refunded automatically.`,
+        wasRefunded,
+        freeUsage: freeClaim ? {
+          userUsed: freeClaim.user_used,
+          userLimit: freeClaim.user_limit,
+          globalUsed: freeClaim.global_used,
+          globalLimit: freeClaim.global_limit,
+        } : undefined,
       };
     }
   }
