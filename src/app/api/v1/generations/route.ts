@@ -1,13 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { GenerationEngine, GenerationRequest } from '@/lib/generations/generation-engine';
-import { OPENROUTER_CHAT_MODELS, OPENROUTER_IMAGE_MODELS } from '@/lib/ai/openrouter-client';
+import { OPENROUTER_IMAGE_MODELS } from '@/lib/ai/openrouter-client';
+
+const PLAN_RANK: Record<string, number> = { free: 0, starter: 1, pro: 2, business: 3 };
 
 async function authenticate(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return null;
   const { data, error } = await createServerSupabaseClient().auth.getUser(token);
   return error ? null : data.user;
+}
+
+async function currentPlanId(userId: string) {
+  const database = createPrivilegedSupabaseClient();
+  const { data } = await database
+    .from('subscriptions')
+    .select('plan_id,current_period_end')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .gt('current_period_end', new Date().toISOString())
+    .order('current_period_end', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.plan_id || 'free';
 }
 
 export async function GET(request: NextRequest) {
@@ -40,12 +56,33 @@ export async function POST(request: NextRequest) {
   if (!['chat', 'image'].includes(body.generationType) || !body.modelId || !body.prompt?.trim() || body.prompt.trim().length > 4000) {
     return NextResponse.json({ error: 'INVALID_GENERATION_REQUEST' }, { status: 400 });
   }
-  if (body.generationType === 'chat' && !OPENROUTER_CHAT_MODELS.includes(body.modelId as typeof OPENROUTER_CHAT_MODELS[number])) {
-    return NextResponse.json({ error: 'CHAT_MODEL_NOT_ALLOWED' }, { status: 400 });
+
+  if (body.generationType === 'chat') {
+    const database = createPrivilegedSupabaseClient();
+    const { data: model, error: modelError } = await database
+      .from('ai_model_catalog')
+      .select('model_id,minimum_plan_id')
+      .eq('model_id', body.modelId)
+      .eq('generation_type', 'chat')
+      .eq('is_enabled', true)
+      .eq('is_visible_to_users', true)
+      .maybeSingle();
+
+    if (modelError || !model) {
+      return NextResponse.json({ error: 'CHAT_MODEL_NOT_AVAILABLE' }, { status: 400 });
+    }
+
+    const userPlan = await currentPlanId(user.id);
+    const requiredPlan = model.minimum_plan_id || 'free';
+    if ((PLAN_RANK[userPlan] ?? 0) < (PLAN_RANK[requiredPlan] ?? 0)) {
+      return NextResponse.json({ error: 'MODEL_PLAN_REQUIRED', requiredPlan, currentPlan: userPlan }, { status: 403 });
+    }
   }
+
   if (body.generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
     return NextResponse.json({ error: 'IMAGE_MODEL_NOT_ALLOWED' }, { status: 400 });
   }
+
   if (body.projectId) {
     const { data: project, error: projectError } = await createPrivilegedSupabaseClient().from('projects').select('id').eq('id', body.projectId).eq('owner_id', user.id).maybeSingle();
     if (projectError || !project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
