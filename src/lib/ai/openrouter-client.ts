@@ -1,9 +1,11 @@
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
 
-// Compatibility list for the current pilot. Runtime chat authorization is enforced
+// Compatibility list for the current pilot. Runtime authorization is enforced
 // against public.ai_model_catalog in the authenticated generation route.
 export const OPENROUTER_CHAT_MODELS = [
+  'openrouter/free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
   'google/gemini-3.7-flash',
 ] as const;
 
@@ -23,6 +25,7 @@ export interface OpenRouterChatRequest {
   prompt: string;
   temperature?: number;
   maxTokens?: number;
+  imageDataUrl?: string;
 }
 
 export interface OpenRouterChatResult {
@@ -59,6 +62,15 @@ export interface OpenRouterImageResult {
   completionTokens?: number;
   totalTokens?: number;
   costUsd?: number;
+}
+
+function validateImageDataUrl(value?: string) {
+  if (!value) return undefined;
+  if (value.length > 6_000_000) throw new Error('OPENROUTER_INPUT_IMAGE_TOO_LARGE');
+  if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(value)) {
+    throw new Error('OPENROUTER_INVALID_INPUT_IMAGE');
+  }
+  return value;
 }
 
 export async function createOpenRouterImageGeneration(
@@ -131,12 +143,21 @@ export async function createOpenRouterChatCompletion(
   if (!request.model || !/^[A-Za-z0-9._:-]+\/[A-Za-z0-9._:-]+$/.test(request.model)) {
     throw new Error('OPENROUTER_INVALID_MODEL_ID');
   }
-  if (!request.prompt.trim()) throw new Error('OPENROUTER_INVALID_REQUEST');
+  const prompt = request.prompt.trim();
+  if (!prompt) throw new Error('OPENROUTER_INVALID_REQUEST');
+  const imageDataUrl = validateImageDataUrl(request.imageDataUrl);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 45_000);
 
   try {
+    const userContent = imageDataUrl
+      ? [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: imageDataUrl } },
+        ]
+      : prompt;
+
     const response = await (options.fetchImpl || fetch)(OPENROUTER_URL, {
       method: 'POST',
       signal: controller.signal,
@@ -148,7 +169,7 @@ export async function createOpenRouterChatCompletion(
       },
       body: JSON.stringify({
         model: request.model,
-        messages: [{ role: 'user', content: request.prompt.trim() }],
+        messages: [{ role: 'user', content: userContent }],
         temperature: request.temperature ?? 0.7,
         max_tokens: request.maxTokens ?? 1200,
         usage: { include: true },
