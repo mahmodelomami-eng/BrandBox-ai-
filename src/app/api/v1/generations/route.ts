@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     const database = createPrivilegedSupabaseClient();
     const { data: model, error: modelError } = await database
       .from('ai_model_catalog')
-      .select('model_id,minimum_plan_id')
+      .select('model_id,minimum_plan_id,supports_vision')
       .eq('model_id', body.modelId)
       .eq('generation_type', 'chat')
       .eq('is_enabled', true)
@@ -70,6 +70,14 @@ export async function POST(request: NextRequest) {
 
     if (modelError || !model) {
       return NextResponse.json({ error: 'CHAT_MODEL_NOT_AVAILABLE' }, { status: 400 });
+    }
+
+    const imageDataUrl = typeof body.settings?.imageDataUrl === 'string' ? body.settings.imageDataUrl : '';
+    if (imageDataUrl && !model.supports_vision) {
+      return NextResponse.json({ error: 'MODEL_VISION_NOT_SUPPORTED' }, { status: 400 });
+    }
+    if (imageDataUrl.length > 6_000_000) {
+      return NextResponse.json({ error: 'INPUT_IMAGE_TOO_LARGE' }, { status: 413 });
     }
 
     const userPlan = await currentPlanId(user.id);
@@ -92,5 +100,15 @@ export async function POST(request: NextRequest) {
     { userId: user.id, email: user.email || '', role: 'USER' },
     body
   );
-  return NextResponse.json(result, { status: result.success ? 200 : 502 });
+
+  if (result.success) return NextResponse.json(result, { status: 200 });
+  const errorMessage = String(result.errorMessage || '');
+  const status = errorMessage.includes('FREE_USER_DAILY_LIMIT_REACHED') || errorMessage.includes('FREE_GLOBAL_DAILY_LIMIT_REACHED')
+    ? 429
+    : errorMessage.includes('INSUFFICIENT_CREDITS')
+      ? 402
+      : errorMessage.includes('BILLING_PRICING_UNAVAILABLE')
+        ? 503
+        : 502;
+  return NextResponse.json(result, { status });
 }
