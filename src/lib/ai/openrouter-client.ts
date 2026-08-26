@@ -1,6 +1,8 @@
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
 
+// Compatibility list for the current pilot. Runtime chat authorization is enforced
+// against public.ai_model_catalog in the authenticated generation route.
 export const OPENROUTER_CHAT_MODELS = [
   'google/gemini-3.7-flash',
 ] as const;
@@ -126,8 +128,8 @@ export async function createOpenRouterChatCompletion(
 ): Promise<OpenRouterChatResult> {
   const apiKey = options.apiKey || process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY_MISSING');
-  if (!OPENROUTER_CHAT_MODELS.includes(request.model as typeof OPENROUTER_CHAT_MODELS[number])) {
-    throw new Error('OPENROUTER_CHAT_MODEL_NOT_ALLOWED');
+  if (!request.model || !/^[A-Za-z0-9._:-]+\/[A-Za-z0-9._:-]+$/.test(request.model)) {
+    throw new Error('OPENROUTER_INVALID_MODEL_ID');
   }
   if (!request.prompt.trim()) throw new Error('OPENROUTER_INVALID_REQUEST');
 
