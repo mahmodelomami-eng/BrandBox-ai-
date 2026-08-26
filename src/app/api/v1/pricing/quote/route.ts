@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { OPENROUTER_CHAT_MODELS } from '@/lib/ai/openrouter-client';
 import { PricingEngine } from '@/lib/billing/pricing-engine';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 
 async function authenticate(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -28,16 +27,27 @@ export async function POST(request: NextRequest) {
   }
 
   const prompt = String(body.prompt || '').trim();
-  if (body.generationType !== 'chat' || !prompt || prompt.length > 4000) {
+  const modelId = String(body.modelId || '').trim();
+  if (body.generationType !== 'chat' || !modelId || !prompt || prompt.length > 4000) {
     return NextResponse.json({ error: 'INVALID_QUOTE_REQUEST' }, { status: 400 });
   }
-  if (!body.modelId || !OPENROUTER_CHAT_MODELS.includes(body.modelId as typeof OPENROUTER_CHAT_MODELS[number])) {
-    return NextResponse.json({ error: 'CHAT_MODEL_NOT_ALLOWED' }, { status: 400 });
+
+  const { data: model, error: modelError } = await createPrivilegedSupabaseClient()
+    .from('ai_model_catalog')
+    .select('model_id,display_name_ar,display_name_en,minimum_plan_id')
+    .eq('model_id', modelId)
+    .eq('generation_type', 'chat')
+    .eq('is_enabled', true)
+    .eq('is_visible_to_users', true)
+    .maybeSingle();
+
+  if (modelError || !model) {
+    return NextResponse.json({ error: 'CHAT_MODEL_NOT_AVAILABLE' }, { status: 400 });
   }
 
   try {
     const quote = await PricingEngine.quoteChat({
-      modelId: body.modelId,
+      modelId,
       prompt,
       maxTokens: body.settings?.maxTokens,
     });
@@ -45,7 +55,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       quote: {
         modelId: quote.modelId,
-        displayName: 'Brand Box Smart',
+        displayName: model.display_name_ar || model.display_name_en || model.model_id,
+        requiredPlan: model.minimum_plan_id || 'free',
         credits: quote.credits,
         estimatedInputTokens: quote.estimatedInputTokens,
         reservedOutputTokens: quote.reservedOutputTokens,
