@@ -2,28 +2,28 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Bot, ChevronDown, Loader2, MessageSquare, Send, Sparkles } from 'lucide-react';
+import { Bot, Loader2, MessageSquare, Send, Sparkles } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import { listUserProjects } from '../lib/projects/projects-service';
+import CreditCoin from './CreditCoin';
 import ProjectToolNav from './ProjectToolNav';
 
-const MODELS = [
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', cost: 2 },
-  { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', cost: 1 },
-  { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', cost: 2 },
-  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', cost: 4 },
-];
+const PILOT_MODEL = {
+  id: 'google/gemini-3.7-flash',
+  name: 'Brand Box Smart',
+};
 
 export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [project, setProject] = useState(null);
   const [history, setHistory] = useState([]);
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [modelId, setModelId] = useState(MODELS[0].id);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [balance, setBalance] = useState(null);
+  const [quoteCredits, setQuoteCredits] = useState(1);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();
@@ -40,6 +40,24 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
       .filter((item) => item.project_id === projectId && item.generation_type === 'chat')
       .reverse();
     setHistory(rows);
+  }
+
+  async function fetchQuote(text, token) {
+    const cleanPrompt = String(text || '').trim();
+    if (!cleanPrompt || !token) return 1;
+    const response = await fetch('/api/v1/pricing/quote', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        generationType: 'chat',
+        modelId: PILOT_MODEL.id,
+        prompt: cleanPrompt,
+        settings: { maxTokens: 1400 },
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'تعذر حساب تكلفة Credit.');
+    return Math.max(1, Number(result.quote?.credits) || 1);
   }
 
   useEffect(() => {
@@ -66,6 +84,34 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
     return () => { mounted = false; };
   }, [projectId, supabase]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const cleanPrompt = prompt.trim();
+    if (!cleanPrompt) {
+      setQuoteCredits(1);
+      setQuoteLoading(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setQuoteLoading(true);
+      try {
+        const token = await getToken();
+        const credits = await fetchQuote(cleanPrompt, token);
+        if (!cancelled) setQuoteCredits(credits);
+      } catch {
+        if (!cancelled) setQuoteCredits(1);
+      } finally {
+        if (!cancelled) setQuoteLoading(false);
+      }
+    }, 600);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [prompt]);
+
   async function sendMessage() {
     if (!prompt.trim() || sending) return;
     setSending(true);
@@ -73,12 +119,19 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
     try {
       const token = await getToken();
       if (!token) throw new Error('انتهت جلسة الدخول.');
+
+      const authoritativeQuote = await fetchQuote(prompt, token);
+      setQuoteCredits(authoritativeQuote);
+      if (balance != null && balance < authoritativeQuote) {
+        throw new Error(`الرصيد غير كافٍ. تحتاج ${authoritativeQuote} Credit لهذه العملية.`);
+      }
+
       const response = await fetch('/api/v1/generations', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           generationType: 'chat',
-          modelId,
+          modelId: PILOT_MODEL.id,
           prompt: prompt.trim(),
           projectId,
           settings: { temperature: 0.7, maxTokens: 1400 },
@@ -87,6 +140,7 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.errorMessage || result.error || 'تعذر تنفيذ المحادثة.');
       setPrompt('');
+      setQuoteCredits(1);
       setBalance(result.remainingBalance ?? balance);
       await loadHistory();
     } catch (err) {
@@ -133,10 +187,18 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
 
           <div className="border-t border-white/10 bg-[#0d1016] p-4">
             {error && <div className="mb-3 rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-300">{error}</div>}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-gray-500">التكلفة المحجوزة لهذه الرسالة</span>
+              <span className="flex items-center gap-2 font-black text-amber-200">
+                {quoteLoading && <Loader2 size={13} className="animate-spin" />}
+                حتى {quoteCredits} Credit
+              </span>
+            </div>
             <div className="flex gap-2">
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="اكتب رسالتك أو المهمة التي تريد تنفيذها داخل هذا المشروع..." className="min-h-24 flex-1 resize-none rounded-2xl border border-white/10 bg-[#171a21] p-4 text-sm leading-7 outline-none focus:border-[#f31325]/60" />
-              <button type="button" onClick={sendMessage} disabled={sending || !prompt.trim()} className="flex w-28 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#f31325] text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">
-                {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} إرسال
+              <button type="button" onClick={sendMessage} disabled={sending || !prompt.trim()} className="flex w-32 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl bg-[#f31325] px-2 text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">
+                <span className="flex items-center gap-2">{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} إرسال</span>
+                <span className="text-[10px] font-bold text-white/70">حتى {quoteCredits} Credit</span>
               </button>
             </div>
           </div>
@@ -145,15 +207,16 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
         <aside className="order-1 h-fit rounded-3xl border border-white/10 bg-[#0d1016] p-5 xl:order-2 xl:sticky xl:top-[150px]">
           <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#f31325]/12 text-[#ff3344]"><MessageSquare size={22} /></span><div><div className="text-sm font-black">إعدادات الشات</div><div className="text-[11px] text-gray-500">محفوظ داخل المشروع</div></div></div>
           {project?.description && <div className="mt-5 rounded-2xl border border-white/10 bg-[#11141a] p-4 text-xs leading-6 text-gray-500"><div className="mb-2 font-black text-gray-300">سياق المشروع</div>{project.description}</div>}
-          <label className="mt-6 block text-xs font-black text-gray-400">النموذج</label>
-          <div className="relative mt-2">
-            <select value={modelId} onChange={(e) => setModelId(e.target.value)} className="w-full appearance-none rounded-xl border border-white/10 bg-[#171a21] px-4 py-3 text-sm font-black outline-none focus:border-[#f31325]/55">
-              {MODELS.map((model) => <option key={model.id} value={model.id}>{model.name} — {model.cost} نقطة</option>)}
-            </select>
-            <ChevronDown size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+
+          <div className="mt-6 rounded-2xl border border-amber-300/20 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,.10),transparent_42%),#11141a] p-4">
+            <div className="text-[10px] font-black tracking-widest text-amber-300">PILOT MODEL</div>
+            <div className="mt-2 text-base font-black">{PILOT_MODEL.name}</div>
+            <p className="mt-2 text-xs leading-6 text-gray-500">نموذج Brand Box الافتراضي للتجربة. الاسم التقني للمزود مخفي عن المستخدم في التشغيل العادي.</p>
           </div>
-          <div className="mt-5 rounded-2xl border border-white/10 bg-[#11141a] p-4 text-xs leading-6 text-gray-500"><Sparkles size={17} className="mb-2 text-[#ff3344]" /> يتم ربط كل توليد تلقائيًا بالمشروع الحالي، لذلك لا تختلط المحادثات بين المشاريع.</div>
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-[#f31325]/20 bg-[#f31325]/5 px-4 py-3 text-xs"><span className="text-gray-400">الرصيد</span><span className="font-black text-[#ff3344]">{balance ?? '—'} نقطة</span></div>
+
+          <div className="mt-5 rounded-2xl border border-white/10 bg-[#11141a] p-4 text-xs leading-6 text-gray-500"><Sparkles size={17} className="mb-2 text-[#ff3344]" /> يتم ربط كل توليد تلقائيًا بالمشروع الحالي، وتظهر تكلفة Credit قبل التنفيذ.</div>
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-amber-300/20 bg-amber-400/[.04] px-4 py-3 text-xs"><span className="text-gray-400">الرصيد المتاح</span><CreditCoin value={balance ?? 0} /></div>
+          <Link href="/help" className="mt-3 block text-center text-xs font-black text-gray-500 transition hover:text-amber-200">كيف يعمل Credit والترحيل؟</Link>
         </aside>
       </div>
     </main>
