@@ -85,6 +85,7 @@ export async function createStoreOrder(input: CreateStoreOrderInput) {
       id,
       title,
       sell_price_lyd,
+      inventory_mode,
       is_active,
       store_products!inner (
         id,
@@ -110,6 +111,12 @@ export async function createStoreOrder(input: CreateStoreOrderInput) {
 
   if (product.requires_customer_identifier && !input.customerIdentifier?.trim()) {
     throw new Error('STORE_CUSTOMER_IDENTIFIER_REQUIRED');
+  }
+
+  if ((sku as any).inventory_mode === 'CODE_STOCK') {
+    const { data: availableCount, error: inventoryError } = await supabase.rpc('store_available_code_count', { p_sku_id: input.skuId });
+    if (inventoryError) throw new Error(`STORE_INVENTORY_CHECK_FAILED: ${inventoryError.message}`);
+    if (Number(availableCount || 0) < quantity) throw new Error('STORE_OUT_OF_STOCK');
   }
 
   const unitPrice = Number((sku as any).sell_price_lyd);
