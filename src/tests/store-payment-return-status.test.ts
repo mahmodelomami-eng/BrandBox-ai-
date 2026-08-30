@@ -1,0 +1,4 @@
+import { readFileSync } from 'node:fs'; import { join } from 'node:path'; import assert from 'node:assert/strict';
+const root=process.cwd(); const api=readFileSync(join(root,'src/app/api/v1/store/payment-status/route.ts'),'utf8'); const page=readFileSync(join(root,'src/app/store/purchases/page.jsx'),'utf8');
+assert.ok(api.includes(".eq('user_id',user.id)")); assert.ok(api.includes("paymentConfirmed:order.payment_status==='PAID'")); assert.ok(page.includes('/api/v1/store/payment-status?order=')); assert.ok(page.includes('جارٍ التحقق من عملية الدفع')); assert.ok(page.includes('تم تأكيد الدفع وتنفيذ الطلب بنجاح'));
+console.log('Store payment return status tests passed.');
