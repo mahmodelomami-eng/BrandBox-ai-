@@ -65,6 +65,23 @@ export async function GET(request: NextRequest) {
   }
 
   const jobs = jobsResult.data || [];
+  const products = productsResult.data || [];
+  const providers = providersResult.data || [];
+  const readiness = products.map((product: any) => {
+    const provider = providers.find((item: any) => item.id === product.provider_id);
+    const mappings = (provider?.store_provider_products || []).filter((mapping: any) => (product.store_skus || []).some((sku: any) => sku.id === mapping.sku_id));
+    const activeSkus = (product.store_skus || []).filter((sku: any) => sku.is_active);
+    const checks = {
+      supplierAuthorized: Boolean(product.supplier_authorization_verified),
+      regionVerified: Boolean(product.regional_validity_verified),
+      fulfillmentVerified: Boolean(product.automated_fulfillment_verified),
+      providerActive: product.fulfillment_mode === 'BRAND_BOX_CREDITS' || provider?.status === 'ACTIVE',
+      activeSku: activeSkus.length > 0,
+      providerMapping: product.fulfillment_mode === 'BRAND_BOX_CREDITS' || mappings.some((mapping: any) => mapping.is_enabled && mapping.external_sku_id),
+      sellableMode: !['PARTNER_REQUIRED','CATALOG_ONLY'].includes(product.fulfillment_mode),
+    };
+    return { productId: product.id, checks, ready: Object.values(checks).every(Boolean) };
+  });
   return NextResponse.json({
     capabilities: { canManage: actor.canManage },
     metrics: {
@@ -76,7 +93,8 @@ export async function GET(request: NextRequest) {
     },
     orders: ordersResult.data || [],
     jobs,
-    products: productsResult.data || [],
+    products,
+    readiness,
     refunds: refundsResult.data || [],
     categories: categoriesResult.data || [],
     providers: providersResult.data || [],
