@@ -3,6 +3,7 @@ import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/li
 import { AdminRole, checkPermission } from '@/lib/auth/rbac-engine';
 import { isKnownRole } from '@/lib/admin/admin-user-policy';
 import { processBrandBoxCreditFulfillmentForOrder } from '@/lib/store/store-credit-fulfillment';
+import { decideStoreRefund } from '@/lib/store/store-refund-service';
 
 async function actorFromRequest(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
 
   const database = createPrivilegedSupabaseClient();
 
-  const [ordersResult, jobsResult, productsResult] = await Promise.all([
+  const [ordersResult, jobsResult, productsResult, refundsResult] = await Promise.all([
     database
       .from('store_orders')
       .select('id,order_number,user_id,status,payment_status,total_lyd,currency,created_at,paid_at,fulfilled_at,store_order_items(id,product_name_snapshot,sku_title_snapshot,quantity,fulfillment_mode)')
@@ -50,9 +51,14 @@ export async function GET(request: NextRequest) {
       .from('store_products')
       .select('id,slug,name,brand,fulfillment_mode,sale_status,supplier_authorization_verified,regional_validity_verified,automated_fulfillment_verified,store_skus(id,sku_code,title,sell_price_lyd,region_code,is_active)')
       .order('name'),
+    database
+      .from('store_refunds')
+      .select('id,order_id,amount_lyd,status,reason,requested_by,provider_reference,created_at,updated_at,store_orders!inner(order_number,user_id,payment_status,status)')
+      .order('created_at', { ascending: false })
+      .limit(50),
   ]);
 
-  if (ordersResult.error || jobsResult.error || productsResult.error) {
+  if (ordersResult.error || jobsResult.error || productsResult.error || refundsResult.error) {
     return NextResponse.json({ error: 'STORE_OPERATIONS_UNAVAILABLE' }, { status: 503 });
   }
 
@@ -64,10 +70,12 @@ export async function GET(request: NextRequest) {
       pendingJobs: jobs.filter((job) => ['PENDING', 'PROCESSING'].includes(job.status)).length,
       failedJobs: jobs.filter((job) => job.status === 'FAILED').length,
       fulfilledJobs: jobs.filter((job) => job.status === 'SUCCEEDED').length,
+      pendingRefunds: (refundsResult.data || []).filter((refund) => ['REQUESTED', 'REVIEWING'].includes(refund.status)).length,
     },
     orders: ordersResult.data || [],
     jobs,
     products: productsResult.data || [],
+    refunds: refundsResult.data || [],
   });
 }
 
@@ -76,8 +84,28 @@ export async function PATCH(request: NextRequest) {
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   if (!actor.canManage) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
 
-  const body = await request.json().catch(() => null) as { action?: string; jobId?: string } | null;
-  if (!body || body.action !== 'retry_fulfillment' || !body.jobId) {
+  const body = await request.json().catch(() => null) as { action?: string; jobId?: string; refundId?: string; note?: string } | null;
+  if (!body?.action) return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
+
+  if (body.action === 'approve_refund' || body.action === 'reject_refund') {
+    if (!body.refundId) return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
+    try {
+      const refund = await decideStoreRefund(
+        actor.userId,
+        actor.role,
+        body.refundId,
+        body.action === 'approve_refund' ? 'APPROVED' : 'REJECTED',
+        body.note,
+      );
+      return NextResponse.json({ success: true, refund });
+    } catch (refundError) {
+      return NextResponse.json({
+        error: refundError instanceof Error ? refundError.message : 'STORE_REFUND_REVIEW_FAILED',
+      }, { status: 409 });
+    }
+  }
+
+  if (body.action !== 'retry_fulfillment' || !body.jobId) {
     return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
   }
 
