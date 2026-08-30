@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Logger } from '@/lib/observability/telemetry';
 import { EzonePayFulfillmentService } from '@/lib/payments/ezonepay-fulfillment';
 import { StoreEzonePayService } from '@/lib/store/store-ezonepay';
+import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
+import { parseEzonePayOrderReference } from '@/lib/payments/ezonepay-order-reference';
 
 export async function POST(req: NextRequest) {
   const requestId = req.headers.get('x-correlation-id') || `req_${Date.now()}`;
@@ -46,6 +48,35 @@ export async function POST(req: NextRequest) {
       operation: 'WEBHOOK_FULFILLMENT',
       metadata: { orderReference: result.orderReference, duplicate: result.isDuplicate },
     });
+
+    if (!result.isDuplicate) {
+      const parsed = parseEzonePayOrderReference(result.orderReference);
+      if (parsed) {
+        const database = createPrivilegedSupabaseClient();
+        const { data: payment } = await database
+          .from('payment_transactions')
+          .select('amount_lyd,currency')
+          .eq('order_reference', result.orderReference)
+          .maybeSingle();
+
+        const amountLabel = payment ? Number(payment.amount_lyd || 0).toLocaleString('ar-LY') : '';
+        const title = parsed.itemType === 'subscription' ? 'تم تفعيل اشتراكك' : 'تمت إضافة الرصيد';
+        const body = parsed.itemType === 'subscription'
+          ? `تم تأكيد دفع ${amountLabel} د.ل وتفعيل الاشتراك. رصيدك الحالي ${Number(result.newBalance || 0).toLocaleString('ar-LY')} نقطة.`
+          : `تم تأكيد دفع ${amountLabel} د.ل وإضافة ${Number(result.creditsGranted || 0).toLocaleString('ar-LY')} نقطة. رصيدك الحالي ${Number(result.newBalance || 0).toLocaleString('ar-LY')} نقطة.`;
+
+        await database.from('user_notifications').insert({
+          user_id: parsed.userId,
+          title,
+          body,
+          kind: 'payment',
+          action_url: `/payment/result?order=${encodeURIComponent(result.orderReference)}`,
+        }).then(({ error }) => {
+          if (error) Logger.error('Failed to create Ezone payment notification', new Error(error.message), { requestId });
+        });
+      }
+    }
+
     return NextResponse.json(result, { status: 200 });
   } catch (err: unknown) {
     Logger.error('Ezone Pay webhook handling exception', err instanceof Error ? err : new Error('Unknown webhook error'), { requestId });
