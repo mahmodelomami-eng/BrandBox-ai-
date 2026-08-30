@@ -165,6 +165,7 @@ export async function GET(request: NextRequest) {
       changeRoles: checkPermission(actor.role, 'roles.assign'),
       deleteUsers: checkPermission(actor.role, 'users.delete'),
       viewCommercial: canViewCommercial,
+      viewPayments: checkPermission(actor.role, 'payments.read'),
       viewAudit: canViewAudit,
       viewCredits: canViewCredits,
       viewAI: canViewAI,
