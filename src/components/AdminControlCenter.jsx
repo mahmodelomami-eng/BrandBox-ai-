@@ -27,9 +27,10 @@ import {
   X,
 } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
+import AdminSettingsHub from './AdminSettingsHub';
 
 const SECTION_IDS = new Set(['overview', 'users', 'projects', 'finance', 'commercial', 'ai', 'audit', 'settings']);
-const ROLE_LABELS = { SUPER_ADMIN: 'المدير العام', ADMIN: 'مدير', SUPPORT: 'مشرف دعم', USER: 'مستخدم' };
+const ROLE_LABELS = { SUPER_ADMIN: 'المدير العام', PLATFORM_ADMIN: 'مدير المنصة', OPERATIONS_MANAGER: 'مدير العمليات', CONTENT_MANAGER: 'مدير المحتوى', USER_MANAGER: 'مدير المستخدمين', SUPPORT_AGENT: 'موظف الدعم', FINANCE_MANAGER: 'المدير المالي', MARKETING_MANAGER: 'مدير التسويق', SECURITY_AUDITOR: 'المدقق الأمني', ANALYST: 'المحلل', ADMIN: 'مدير قديم', SUPPORT: 'دعم قديم', USER: 'مستخدم' };
 
 function formatDate(value) {
   if (!value) return '—';
@@ -129,7 +130,7 @@ export default function AdminControlCenter() {
   const actor = payload?.actor || {};
   const data = payload?.data || {};
   const metrics = payload?.metrics || {};
-  const section = (requestedValid === 'commercial' && !permissions.viewCommercial) || (requestedValid === 'audit' && !permissions.viewAudit) ? 'overview' : requestedValid;
+  const section = (requestedValid === 'commercial' && !permissions.viewCommercial) || (requestedValid === 'audit' && !permissions.viewAudit) || (requestedValid === 'settings' && !permissions.viewSettings) ? 'overview' : requestedValid;
 
   const peopleById = useMemo(() => {
     const map = new Map();
@@ -145,7 +146,7 @@ export default function AdminControlCenter() {
     ...(permissions.viewCommercial ? [['commercial', 'الباقات والأسعار', WalletCards]] : []),
     ['ai', 'الذكاء الاصطناعي', Sparkles],
     ...(permissions.viewAudit ? [['audit', 'التدقيق والسجلات', FileText]] : []),
-    ['settings', 'التشغيل والإعدادات', Settings],
+    ...(permissions.viewSettings ? [['settings', 'التشغيل والإعدادات', Settings]] : []),
   ];
 
   function go(next) { router.replace(`/admin?section=${encodeURIComponent(next)}`, { scroll: false }); }
@@ -206,7 +207,7 @@ export default function AdminControlCenter() {
 
         {section === 'audit' && <Card title="سجل التدقيق" subtitle="الأحداث الفعلية من audit_logs"><div className="space-y-2">{(data.auditLogs || []).map((a) => <div key={a.id} className="flex items-center gap-3 rounded-xl border border-white/[.07] bg-[#10131a] p-4"><Activity size={18} className="text-[#ff3344]"/><div className="min-w-0 flex-1"><div className="font-black">{a.action}</div><div className="mt-1 text-[10px] text-gray-500">{a.resource} · {a.resource_id || '—'} · {personName(peopleById.get(a.actor_id))}</div></div><div className="text-[10px] text-gray-600">{formatDate(a.created_at)}</div></div>)}{!(data.auditLogs || []).length && <Empty>لا توجد سجلات تدقيق مرئية.</Empty>}</div></Card>}
 
-        {section === 'settings' && <div className="grid gap-5 xl:grid-cols-2"><Card title="التشغيل" subtitle="روابط فعلية"><div className="grid gap-3 sm:grid-cols-2"><Link href="/admin/home-content" className="rounded-2xl border border-white/10 bg-[#10131a] p-5"><Boxes className="text-[#ff3344]"/><div className="mt-4 font-black">محتوى الصفحة الرئيسية</div></Link><a href="/api/health" target="_blank" rel="noreferrer" className="rounded-2xl border border-white/10 bg-[#10131a] p-5"><Gauge className="text-emerald-300"/><div className="mt-4 font-black">حالة الخدمة</div></a></div></Card><Card title="مصادر البيانات" subtitle="لا توجد قيم تجريبية في هذه الشاشة"><div className="space-y-2">{Object.entries(payload?.sources || {}).map(([key,value]) => <div key={key} className="flex justify-between rounded-xl border border-white/[.07] bg-[#10131a] px-4 py-3 text-xs"><span className="font-mono text-gray-400">{key}</span><Badge value={value}/></div>)}</div><div className="mt-4 rounded-xl border border-amber-500/15 bg-amber-500/5 p-4 text-xs leading-6 text-amber-100/80">لم أضف محررات وهمية لمزودي AI أو النماذج لأن إعداداتها ليست مخزنة حاليًا في جدول إعدادات مستقل.</div></Card></div>}
+        {section === 'settings' && <AdminSettingsHub sources={payload?.sources || {}} />}
       </div>
     </div>
   </div>

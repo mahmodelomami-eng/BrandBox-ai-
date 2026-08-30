@@ -181,11 +181,16 @@ export default function AdminUsersRolesPanel() {
   }, [adminOnly, api, page, query, role, roleFilter, status]);
 
   useEffect(() => {
-    if (authLoading) return;
-    Promise.all([loadRoles(), loadUsers()]).catch((err) => {
-      setError(err instanceof Error ? err.message : 'تعذر تحميل مركز إدارة المستخدمين');
-      setLoading(false);
-    });
+    if (authLoading) return undefined;
+
+    const timeout = window.setTimeout(() => {
+      void Promise.all([loadRoles(), loadUsers()]).catch((err) => {
+        setError(err instanceof Error ? err.message : 'تعذر تحميل مركز إدارة المستخدمين');
+        setLoading(false);
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [authLoading, loadRoles, loadUsers]);
 
   useEffect(() => {

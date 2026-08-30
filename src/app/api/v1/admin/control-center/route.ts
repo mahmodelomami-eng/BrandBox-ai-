@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
-
-type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'USER';
+import { AdminRole, checkPermission } from '@/lib/auth/rbac-engine';
+import { isKnownRole } from '@/lib/admin/admin-user-policy';
 
 type Actor = {
   userId: string;
@@ -25,7 +25,8 @@ async function actorFromRequest(request: NextRequest): Promise<Actor | null> {
 
   if (profileError || !profile || profile.status === 'suspended') return null;
   const role = (profile.role || 'USER') as AdminRole;
-  if (!['SUPER_ADMIN', 'ADMIN', 'SUPPORT'].includes(role)) return null;
+  if (!isKnownRole(role)) return null;
+  if (!checkPermission(role, 'analytics.read') && !checkPermission(role, 'users.read') && !checkPermission(role, 'settings.read')) return null;
 
   return {
     userId: data.user.id,
@@ -43,9 +44,9 @@ export async function GET(request: NextRequest) {
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
   const database = createPrivilegedSupabaseClient();
-  const canViewCommercial = actor.role !== 'SUPPORT';
-  const canViewAudit = actor.role !== 'SUPPORT';
-  const canViewCredits = actor.role !== 'SUPPORT';
+  const canViewCommercial = checkPermission(actor.role, 'plans.read') || checkPermission(actor.role, 'packages.read');
+  const canViewAudit = checkPermission(actor.role, 'audit.read');
+  const canViewCredits = checkPermission(actor.role, 'credits.read');
 
   const [
     profilesResult,
@@ -154,13 +155,15 @@ export async function GET(request: NextRequest) {
       role: actor.role,
     },
     permissions: {
-      manageUsers: actor.role === 'SUPER_ADMIN' || actor.role === 'ADMIN',
-      manageCredits: actor.role === 'SUPER_ADMIN',
-      changeRoles: actor.role === 'SUPER_ADMIN',
-      deleteUsers: actor.role === 'SUPER_ADMIN',
+      manageUsers: checkPermission(actor.role, 'users.manage'),
+      manageCredits: checkPermission(actor.role, 'credits.adjust'),
+      changeRoles: checkPermission(actor.role, 'roles.assign'),
+      deleteUsers: checkPermission(actor.role, 'users.delete'),
       viewCommercial: canViewCommercial,
       viewAudit: canViewAudit,
       viewCredits: canViewCredits,
+      viewSettings: checkPermission(actor.role, 'settings.read'),
+      manageSettings: checkPermission(actor.role, 'settings.manage'),
     },
     metrics: {
       totalUsers: profiles.length,
