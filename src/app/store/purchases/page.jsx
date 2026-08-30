@@ -28,6 +28,7 @@ function formatDate(value) {
 export default function StorePurchasesPage() {
   const router = useRouter();
   const [state, setState] = useState({ loading: true, error: '', orders: [], entitlements: [] });
+  const [refundBusy, setRefundBusy] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -76,6 +77,29 @@ export default function StorePurchasesPage() {
     return () => { mounted = false; };
   }, [router]);
 
+  async function requestRefund(orderId) {
+    const reason = window.prompt('اكتب سبب طلب الاسترداد:');
+    if (!reason) return;
+    setRefundBusy(orderId);
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return router.replace('/auth?next=%2Fstore%2Fpurchases');
+      const response = await fetch('/api/v1/store/refunds', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, reason }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'تعذر إرسال طلب الاسترداد.');
+      window.alert('تم إرسال طلب الاسترداد للمراجعة.');
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'تعذر إرسال طلب الاسترداد.');
+    } finally {
+      setRefundBusy('');
+    }
+  }
+
   return (
     <main dir="rtl" className="min-h-screen bg-zinc-950 text-white">
       <section className="mx-auto max-w-5xl px-5 py-10 md:px-8">
@@ -122,6 +146,13 @@ export default function StorePurchasesPage() {
                     </div>
                   ))}
                 </div>
+                {order.payment_status === 'PAID' && ['FULFILLED', 'FULFILLMENT_PENDING', 'REVIEW_REQUIRED'].includes(order.status) && (
+                  <div className="mt-4 border-t border-zinc-800 pt-4">
+                    <button disabled={refundBusy === order.id} onClick={() => void requestRefund(order.id)} className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-700 hover:text-red-300 disabled:opacity-50">
+                      {refundBusy === order.id ? 'جاري الإرسال...' : 'طلب استرداد'}
+                    </button>
+                  </div>
+                )}
               </article>
             ))}
           </div>
