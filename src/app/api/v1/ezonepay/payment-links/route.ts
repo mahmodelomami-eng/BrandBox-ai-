@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
     }
     const orderReference = createEzonePayOrderReference({ userId: authData.user.id, itemType: body.itemType!, itemId: body.itemId });
     const payment = await EzonePayClient.createPaymentLink({ title: `BrandBox - ${String(item.name)}`, orderReference,
-      internalReference: `${body.itemType}:${body.itemId}`, amount, redirectUrl: `${new URL(request.url).origin}/?payment=returned`,
+      internalReference: `${body.itemType}:${body.itemId}`, amount, redirectUrl: `${new URL(request.url).origin}/payment/result?order=${encodeURIComponent(orderReference)}`,
       customer: { firstName: profile.first_name.trim(), lastName: profile.last_name.trim(), phoneNumber: profile.phone.trim() } });
-    return NextResponse.json({ paymentUrl: payment.link, paymentLinkId: payment.id, orderReference });
+    return NextResponse.json({ paymentUrl: payment.link, paymentLinkId: payment.id, orderReference, mode: 'sandbox' });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'EZONEPAY_CHECKOUT_FAILED';
     console.error('[ezonepay/payment-links] checkout failed', {
