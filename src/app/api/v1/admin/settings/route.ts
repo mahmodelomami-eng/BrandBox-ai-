@@ -4,6 +4,7 @@ import { AdminRole, checkPermission } from '@/lib/auth/rbac-engine';
 import { isKnownRole } from '@/lib/admin/admin-user-policy';
 import {
   PLATFORM_SETTING_DEFINITIONS,
+  PlatformSettingKey,
   defaultPlatformSettings,
   isPlatformSettingKey,
   validateSettingValue,
@@ -95,17 +96,19 @@ export async function PATCH(request: NextRequest) {
   }
 
   const database = createPrivilegedSupabaseClient();
-  const keys = entries.map(([key]) => key);
+  const validatedEntries: Array<[PlatformSettingKey, unknown]> = [];
 
-  for (const key of keys) {
+  for (const [key, rawValue] of entries) {
     if (!isPlatformSettingKey(key)) {
       return NextResponse.json({ error: `INVALID_SETTING_KEY:${key}` }, { status: 400 });
     }
     if (key.startsWith('security.') && !checkPermission(actor.role, 'security.manage')) {
       return NextResponse.json({ error: 'SECURITY_SETTING_FORBIDDEN' }, { status: 403 });
     }
+    validatedEntries.push([key, rawValue]);
   }
 
+  const keys = validatedEntries.map(([key]) => key);
   const { data: beforeRows, error: beforeError } = await database
     .from('platform_settings')
     .select('key,value')
@@ -121,7 +124,7 @@ export async function PATCH(request: NextRequest) {
   const rows = [];
 
   try {
-    for (const [key, rawValue] of entries) {
+    for (const [key, rawValue] of validatedEntries) {
       const definition = PLATFORM_SETTING_DEFINITIONS.find((item) => item.key === key);
       if (!definition) throw new Error('INVALID_SETTING_KEY');
       rows.push({
