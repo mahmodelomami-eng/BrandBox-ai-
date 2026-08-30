@@ -20,7 +20,8 @@
     "test:ezone-sandbox": "tsx src/tests/ezone-sandbox-checkout.test.ts",
     "test:store-v1": "tsx src/tests/store-v1-operations.test.ts",
     "test:admin-store": "tsx src/tests/admin-store-operations.test.ts",
-    "test:store-refunds": "tsx src/tests/store-refund-foundation.test.ts"
+    "test:store-refunds": "tsx src/tests/store-refund-foundation.test.ts",
+    "test:store-admin-catalog": "tsx src/tests/store-admin-catalog-manager.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
