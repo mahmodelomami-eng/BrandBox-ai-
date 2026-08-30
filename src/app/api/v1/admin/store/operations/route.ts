@@ -65,6 +65,8 @@ export async function GET(request: NextRequest) {
   }
 
   const jobs = jobsResult.data || [];
+  const { data: codeInventory } = await database.from('store_digital_codes').select('sku_id,status,expires_at');
+  const inventoryBySku = (codeInventory || []).reduce((acc: Record<string,{available:number,reserved:number,delivered:number}>, code: any) => { const row=acc[code.sku_id] ||= {available:0,reserved:0,delivered:0}; if(code.status==='AVAILABLE' && (!code.expires_at || new Date(code.expires_at)>new Date())) row.available++; else if(code.status==='RESERVED') row.reserved++; else if(code.status==='DELIVERED') row.delivered++; return acc; }, {});
   const products = productsResult.data || [];
   const providers = providersResult.data || [];
   const readiness = products.map((product: any) => {
@@ -95,6 +97,7 @@ export async function GET(request: NextRequest) {
     jobs,
     products,
     readiness,
+    inventoryBySku,
     refunds: refundsResult.data || [],
     categories: categoriesResult.data || [],
     providers: providersResult.data || [],

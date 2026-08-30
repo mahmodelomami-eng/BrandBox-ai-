@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       'STORE_SKU_UNAVAILABLE',
       'STORE_PRODUCT_NOT_FOR_SALE',
       'STORE_CUSTOMER_IDENTIFIER_REQUIRED',
+      'STORE_OUT_OF_STOCK',
       'STORE_VALIDATION_ERROR',
     ];
     const status = clientErrors.some((code) => message.includes(code)) ? 400 : 500;
