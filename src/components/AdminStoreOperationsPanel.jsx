@@ -43,6 +43,48 @@ export default function AdminStoreOperationsPanel() {
     }
   }
 
+  async function updateProduct(product) {
+    setBusy(product.id); setError('');
+    try {
+      const accessToken = await token();
+      if (!accessToken) throw new Error('انتهت جلسة الدخول.');
+      const response = await fetch('/api/v1/admin/store/operations', {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_product', productId: product.id, saleStatus: product.sale_status,
+          supplierAuthorizationVerified: product.supplier_authorization_verified,
+          regionalValidityVerified: product.regional_validity_verified,
+          automatedFulfillmentVerified: product.automated_fulfillment_verified }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'تعذر تحديث المنتج.');
+      await load();
+    } catch (err) { setError(err instanceof Error ? err.message : 'تعذر تحديث المنتج.'); } finally { setBusy(''); }
+  }
+
+  async function updateSku(sku) {
+    setBusy(sku.id); setError('');
+    try {
+      const accessToken = await token();
+      if (!accessToken) throw new Error('انتهت جلسة الدخول.');
+      const response = await fetch('/api/v1/admin/store/operations', {
+        method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_sku', skuId: sku.id, sellPriceLyd: Number(sku.sell_price_lyd),
+          providerCost: sku.provider_cost == null || sku.provider_cost === '' ? null : Number(sku.provider_cost),
+          regionCode: sku.region_code, isActive: sku.is_active }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'تعذر تحديث SKU.');
+      await load();
+    } catch (err) { setError(err instanceof Error ? err.message : 'تعذر تحديث SKU.'); } finally { setBusy(''); }
+  }
+
+  function patchProduct(id, patch) {
+    setPayload((current) => ({ ...current, products: current.products.map((product) => product.id === id ? { ...product, ...patch } : product) }));
+  }
+  function patchSku(productId, skuId, patch) {
+    setPayload((current) => ({ ...current, products: current.products.map((product) => product.id === productId ? { ...product, store_skus: product.store_skus.map((sku) => sku.id === skuId ? { ...sku, ...patch } : sku) } : product) }));
+  }
+
   async function reviewRefund(refundId, action) {
     setBusy(refundId);
     setError('');
@@ -155,7 +197,19 @@ export default function AdminStoreOperationsPanel() {
 
     <section className="grid gap-5 xl:grid-cols-2">
       <div className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><h3 className="font-black">آخر الطلبات</h3><div className="mt-4 space-y-3">{orders.slice(0,10).map((order) => <div key={order.id} className="rounded-2xl border border-white/[.06] bg-[#10131a] p-4"><div className="flex justify-between gap-4"><div><div className="font-mono text-[10px] text-gray-500">{order.order_number}</div><div className={`mt-1 font-black ${tone(order.status)}`}>{order.status}</div></div><div className="text-left"><div className="font-black">{Number(order.total_lyd || 0).toLocaleString('ar-LY')} د.ل</div><div className="mt-1 text-[10px] text-gray-500">{order.payment_status}</div></div></div></div>)}</div></div>
-      <div className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><h3 className="font-black">بوابات بيع المنتجات</h3><div className="mt-4 space-y-3">{products.map((product) => <div key={product.id} className="rounded-2xl border border-white/[.06] bg-[#10131a] p-4"><div className="flex justify-between gap-3"><div><div className="font-black">{product.name}</div><div className="mt-1 text-[10px] text-gray-500">{product.fulfillment_mode}</div></div><div className={`text-xs font-black ${tone(product.sale_status)}`}>{product.sale_status}</div></div><div className="mt-3 flex gap-2 text-[10px] text-gray-500"><span>{product.supplier_authorization_verified ? <CheckCircle2 size={12} className="inline text-emerald-300"/> : '○'} مورد</span><span>{product.regional_validity_verified ? <CheckCircle2 size={12} className="inline text-emerald-300"/> : '○'} منطقة</span><span>{product.automated_fulfillment_verified ? <CheckCircle2 size={12} className="inline text-emerald-300"/> : '○'} تفعيل</span></div></div>)}</div></div>
+      <div className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><h3 className="font-black">إدارة المنتجات والأسعار</h3><p className="mt-1 text-[10px] text-gray-500">لا يمكن تفعيل البيع قبل اجتياز بوابات المورد والمنطقة والتفعيل الآلي.</p><div className="mt-4 space-y-3">{products.map((product) => <div key={product.id} className="rounded-2xl border border-white/[.06] bg-[#10131a] p-4">
+        <div className="flex flex-wrap justify-between gap-3"><div><div className="font-black">{product.name}</div><div className="mt-1 text-[10px] text-gray-500">{product.fulfillment_mode}</div></div>
+        <select disabled={!canManage} value={product.sale_status} onChange={(e) => patchProduct(product.id,{sale_status:e.target.value})} className="rounded-lg border border-white/10 bg-[#090b10] px-2 py-1 text-xs"><option>DRAFT</option><option>CATALOG_ONLY</option><option>ACTIVE_FOR_SALE</option><option>PAUSED</option><option>ARCHIVED</option></select></div>
+        <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-gray-400">{[['supplier_authorization_verified','مورد معتمد'],['regional_validity_verified','منطقة صالحة'],['automated_fulfillment_verified','تفعيل آلي']].map(([key,label]) => <label key={key} className="flex items-center gap-1"><input disabled={!canManage} type="checkbox" checked={Boolean(product[key])} onChange={(e)=>patchProduct(product.id,{[key]:e.target.checked})}/>{label}</label>)}</div>
+        {canManage && <button disabled={busy===product.id} onClick={()=>void updateProduct(product)} className="mt-3 rounded-lg border border-[#ff3344]/30 px-3 py-2 text-[10px] font-black text-[#ff5967]">حفظ بوابات المنتج</button>}
+        <div className="mt-4 space-y-2">{(product.store_skus||[]).map((sku)=><div key={sku.id} className="grid gap-2 rounded-xl border border-white/[.05] p-3 sm:grid-cols-5">
+          <div><div className="text-[10px] text-gray-600">SKU</div><div className="text-xs font-bold">{sku.title}</div></div>
+          <label className="text-[10px] text-gray-500">سعر البيع د.ل<input disabled={!canManage} value={sku.sell_price_lyd} onChange={(e)=>patchSku(product.id,sku.id,{sell_price_lyd:e.target.value})} className="mt-1 w-full rounded-lg border border-white/10 bg-[#090b10] p-2 text-white"/></label>
+          <label className="text-[10px] text-gray-500">تكلفة المورد<input disabled={!canManage} value={sku.provider_cost ?? ''} onChange={(e)=>patchSku(product.id,sku.id,{provider_cost:e.target.value})} className="mt-1 w-full rounded-lg border border-white/10 bg-[#090b10] p-2 text-white"/></label>
+          <label className="text-[10px] text-gray-500">المنطقة<input disabled={!canManage} value={sku.region_code} onChange={(e)=>patchSku(product.id,sku.id,{region_code:e.target.value})} className="mt-1 w-full rounded-lg border border-white/10 bg-[#090b10] p-2 text-white"/></label>
+          <div className="flex items-end gap-2"><label className="flex items-center gap-1 text-[10px]"><input disabled={!canManage} type="checkbox" checked={Boolean(sku.is_active)} onChange={(e)=>patchSku(product.id,sku.id,{is_active:e.target.checked})}/>نشط</label>{canManage&&<button disabled={busy===sku.id} onClick={()=>void updateSku(sku)} className="rounded-lg border border-white/10 px-2 py-2 text-[10px]">حفظ</button>}</div>
+        </div>)}</div>
+      </div>)}</div></div>
     </section>
   </div>;
 }
