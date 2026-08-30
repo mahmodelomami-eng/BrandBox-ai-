@@ -23,6 +23,73 @@ const STATUS_LABELS = {
   pending: 'قيد المراجعة',
 };
 
+const PRESENCE_THRESHOLDS = {
+  online: 2 * 60 * 1000,
+  idle: 10 * 60 * 1000,
+};
+
+function getPresenceState(user, now = Date.now()) {
+  if (!user?.lastSeenAt) return 'offline';
+
+  const lastSeen = new Date(user.lastSeenAt).getTime();
+  if (!Number.isFinite(lastSeen)) return 'offline';
+
+  const age = Math.max(0, now - lastSeen);
+
+  if (user.online || age <= PRESENCE_THRESHOLDS.online) return 'online';
+  if (age <= PRESENCE_THRESHOLDS.idle) return 'idle';
+
+  return 'offline';
+}
+
+function presenceMeta(state) {
+  if (state === 'online') {
+    return {
+      label: 'متصل الآن',
+      tone: 'text-emerald-400',
+      dot: 'bg-emerald-400',
+    };
+  }
+
+  if (state === 'idle') {
+    return {
+      label: 'خامل',
+      tone: 'text-amber-400',
+      dot: 'bg-amber-400',
+    };
+  }
+
+  return {
+    label: 'غير متصل',
+    tone: 'text-gray-400',
+    dot: 'bg-gray-500',
+  };
+}
+
+function formatLastSeen(value, now = Date.now()) {
+  if (!value) return 'لم يسجل نشاطاً بعد';
+
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return 'غير معروف';
+
+  const diff = Math.max(0, now - timestamp);
+  const minutes = Math.floor(diff / 60000);
+
+  if (minutes < 1) return 'الآن';
+  if (minutes === 1) return 'منذ دقيقة';
+  if (minutes < 60) return `منذ ${minutes} دقيقة`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours === 1) return 'منذ ساعة';
+  if (hours < 24) return `منذ ${hours} ساعة`;
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'منذ يوم';
+  if (days < 7) return `منذ ${days} أيام`;
+
+  return new Date(value).toLocaleString('ar-LY');
+}
+
 function roleTone(role) {
   if (role === 'SUPER_ADMIN') return 'border-red-500/35 bg-red-500/10 text-red-300';
   if (role === 'PLATFORM_ADMIN' || role === 'ADMIN') return 'border-amber-500/35 bg-amber-500/10 text-amber-300';
@@ -48,6 +115,8 @@ export default function AdminUsersRolesPanel() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [presenceFilter, setPresenceFilter] = useState('');
+  const [presenceNow, setPresenceNow] = useState(() => Date.now());
   const [adminOnly, setAdminOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -119,6 +188,14 @@ export default function AdminUsersRolesPanel() {
     });
   }, [authLoading, loadRoles, loadUsers]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setPresenceNow(Date.now());
+    }, 60_000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
   const executePatch = async (body) => {
     setBusy(`${body.action}:${body.userId}`);
     setError('');
@@ -144,6 +221,31 @@ export default function AdminUsersRolesPanel() {
   const canAdjustCredits = ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'FINANCE_MANAGER'].includes(actorRole);
   const canSuspend = ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN', 'USER_MANAGER'].includes(actorRole);
 
+  const usersWithPresence = useMemo(
+    () =>
+      users.map((user) => ({
+        ...user,
+        presenceState: getPresenceState(user, presenceNow),
+      })),
+    [users, presenceNow]
+  );
+
+  const visibleUsers = useMemo(
+    () =>
+      presenceFilter
+        ? usersWithPresence.filter((user) => user.presenceState === presenceFilter)
+        : usersWithPresence,
+    [presenceFilter, usersWithPresence]
+  );
+
+  const onlineCount = usersWithPresence.filter(
+    (user) => user.presenceState === 'online'
+  ).length;
+
+  const idleCount = usersWithPresence.filter(
+    (user) => user.presenceState === 'idle'
+  ).length;
+
   if (authLoading) {
     return <div className="py-20 text-center text-sm text-gray-400">جاري التحقق من الصلاحيات...</div>;
   }
@@ -164,8 +266,9 @@ export default function AdminUsersRolesPanel() {
 
       {error && <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-white/10 bg-[#0f1118] p-4"><div className="text-xs text-gray-500">إجمالي النتائج</div><div className="mt-1 text-2xl font-black">{total.toLocaleString('ar-LY')}</div></div>
+        <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-4"><div className="text-xs text-gray-500">الحضور في الصفحة الحالية</div><div className="mt-1 flex items-baseline gap-2"><span className="text-2xl font-black text-emerald-400">{onlineCount}</span><span className="text-xs text-gray-500">متصل</span>{idleCount > 0 && <span className="text-xs text-amber-400">· {idleCount} خامل</span>}</div></div>
         <div className="rounded-2xl border border-white/10 bg-[#0f1118] p-4"><div className="text-xs text-gray-500">دورك الحالي</div><div className="mt-1 text-lg font-black text-amber-300">{roleMap.get(actorRole)?.labelAr || actorRole}</div></div>
         <div className="rounded-2xl border border-white/10 bg-[#0f1118] p-4"><div className="text-xs text-gray-500">الأدوار الإدارية القابلة للتعيين</div><div className="mt-1 text-2xl font-black">{assignableAdminRoles.length}</div></div>
       </div>
@@ -177,10 +280,11 @@ export default function AdminUsersRolesPanel() {
 
       {tab === 'users' ? (
         <div className="space-y-4">
-          <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#0f1118] p-4 md:grid-cols-[1fr_170px_210px_auto]">
+          <div className="grid gap-3 rounded-2xl border border-white/10 bg-[#0f1118] p-4 md:grid-cols-2 xl:grid-cols-[1fr_160px_180px_180px_auto]">
             <label className="relative"><Search className="absolute right-3 top-3 text-gray-500" size={16} /><input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="ابحث بالاسم أو البريد..." className="w-full rounded-xl border border-white/10 bg-[#07080c] py-2.5 pr-10 pl-3 text-sm outline-none focus:border-[#FF2E4C]/50" /></label>
             <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="rounded-xl border border-white/10 bg-[#07080c] px-3 py-2.5 text-sm"><option value="">كل الحالات</option><option value="active">نشط</option><option value="suspended">موقوف</option><option value="pending">قيد المراجعة</option></select>
             <select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setAdminOnly(false); setPage(1); }} className="rounded-xl border border-white/10 bg-[#07080c] px-3 py-2.5 text-sm"><option value="">كل الأدوار</option>{roles.map((item) => <option key={item.role} value={item.role}>{item.labelAr}</option>)}</select>
+            <select value={presenceFilter} onChange={(e) => { setPresenceFilter(e.target.value); setPage(1); }} className="rounded-xl border border-white/10 bg-[#07080c] px-3 py-2.5 text-sm"><option value="">كل حالات الاتصال</option><option value="online">متصل الآن</option><option value="idle">خامل</option><option value="offline">غير متصل</option></select>
             <div className="flex gap-2"><button onClick={() => { setAdminOnly((value) => !value); setRoleFilter(''); setPage(1); }} className={`rounded-xl border px-3 py-2.5 text-xs font-bold ${adminOnly ? 'border-[#FF2E4C]/50 bg-[#FF2E4C]/10 text-[#ff5364]' : 'border-white/10 bg-white/5 text-gray-300'}`}>المسؤولون فقط</button><button onClick={() => void loadUsers()} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-bold">تطبيق</button></div>
           </div>
 
@@ -188,14 +292,20 @@ export default function AdminUsersRolesPanel() {
             <table className="min-w-[1050px] w-full text-right text-xs">
               <thead className="border-b border-white/10 bg-[#090a0f] text-gray-400"><tr><th className="p-4">المستخدم</th><th className="p-4">الدور</th><th className="p-4">الحالة</th><th className="p-4">الخطة</th><th className="p-4">الرصيد</th><th className="p-4">آخر نشاط</th><th className="p-4">الإجراءات</th></tr></thead>
               <tbody className="divide-y divide-white/5">
-                {loading ? <tr><td colSpan="7" className="p-10 text-center text-gray-500">جاري تحميل المستخدمين...</td></tr> : users.length === 0 ? <tr><td colSpan="7" className="p-10 text-center text-gray-500">لا توجد نتائج مطابقة.</td></tr> : users.map((user) => (
+                {loading ? <tr><td colSpan="7" className="p-10 text-center text-gray-500">جاري تحميل المستخدمين...</td></tr> : visibleUsers.length === 0 ? <tr><td colSpan="7" className="p-10 text-center text-gray-500">لا توجد نتائج مطابقة.</td></tr> : visibleUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-white/[.02]">
                     <td className="p-4"><div className="font-bold text-white">{[user.firstName, user.lastName].filter(Boolean).join(' ') || 'بدون اسم'}</div><div className="mt-1 text-[11px] text-gray-500">{user.email}</div></td>
                     <td className="p-4"><span className={`rounded-full border px-2.5 py-1 font-bold ${roleTone(user.role)}`}>{user.roleLabelAr || roleMap.get(user.role)?.labelAr || user.role}</span>{user.role !== 'USER' && <div className="mt-1 text-[10px] text-gray-500">حساب إداري</div>}</td>
-                    <td className="p-4"><span className={user.status === 'active' ? 'text-emerald-400' : user.status === 'suspended' ? 'text-red-400' : 'text-amber-400'}>{STATUS_LABELS[user.status] || user.status}</span>{user.online && <div className="mt-1 text-[10px] text-emerald-500">● متصل الآن</div>}</td>
+                    <td className="p-4">
+                      <span className={user.status === 'active' ? 'text-emerald-400' : user.status === 'suspended' ? 'text-red-400' : 'text-amber-400'}>{STATUS_LABELS[user.status] || user.status}</span>
+                      {(() => {
+                        const presence = presenceMeta(user.presenceState);
+                        return <div className={`mt-1 flex items-center gap-1.5 text-[10px] font-bold ${presence.tone}`}><span className={`h-2 w-2 rounded-full ${presence.dot}`} />{presence.label}</div>;
+                      })()}
+                    </td>
                     <td className="p-4 font-bold">{user.planId}</td>
                     <td className="p-4 font-black text-[#ff4a5d]">{Number(user.creditBalance || 0).toLocaleString('ar-LY')}</td>
-                    <td className="p-4 text-gray-500">{user.lastSeenAt ? new Date(user.lastSeenAt).toLocaleString('ar-LY') : '—'}</td>
+                    <td className="p-4"><div className="text-gray-300">{formatLastSeen(user.lastSeenAt, presenceNow)}</div>{user.lastSeenAt && <div className="mt-1 text-[10px] text-gray-600">{new Date(user.lastSeenAt).toLocaleString('ar-LY')}</div>}</td>
                     <td className="p-4"><div className="flex flex-wrap gap-2">
                       {canChangeRoles && <button onClick={() => { setSelectedUser(user); setSelectedRole(user.role); setRoleModal(true); }} className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-amber-300"><UserCog size={13} className="inline ml-1" />الدور</button>}
                       {canAdjustCredits && <button onClick={() => { setSelectedUser(user); setCreditModal(true); }} className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-300"><Coins size={13} className="inline ml-1" />رصيد</button>}
