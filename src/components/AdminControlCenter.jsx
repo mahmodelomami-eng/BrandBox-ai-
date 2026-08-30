@@ -30,7 +30,7 @@ import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import AdminSettingsHub from './AdminSettingsHub';
 
 const SECTION_IDS = new Set(['overview', 'users', 'projects', 'finance', 'commercial', 'ai', 'audit', 'settings']);
-const ROLE_LABELS = { SUPER_ADMIN: 'المدير العام', ADMIN: 'مدير', SUPPORT: 'مشرف دعم', USER: 'مستخدم' };
+const ROLE_LABELS = { SUPER_ADMIN: 'المدير العام', PLATFORM_ADMIN: 'مدير المنصة', OPERATIONS_MANAGER: 'مدير العمليات', CONTENT_MANAGER: 'مدير المحتوى', USER_MANAGER: 'مدير المستخدمين', SUPPORT_AGENT: 'موظف الدعم', FINANCE_MANAGER: 'المدير المالي', MARKETING_MANAGER: 'مدير التسويق', SECURITY_AUDITOR: 'المدقق الأمني', ANALYST: 'المحلل', ADMIN: 'مدير قديم', SUPPORT: 'دعم قديم', USER: 'مستخدم' };
 
 function formatDate(value) {
   if (!value) return '—';
@@ -130,7 +130,7 @@ export default function AdminControlCenter() {
   const actor = payload?.actor || {};
   const data = payload?.data || {};
   const metrics = payload?.metrics || {};
-  const section = (requestedValid === 'commercial' && !permissions.viewCommercial) || (requestedValid === 'audit' && !permissions.viewAudit) ? 'overview' : requestedValid;
+  const section = (requestedValid === 'commercial' && !permissions.viewCommercial) || (requestedValid === 'audit' && !permissions.viewAudit) || (requestedValid === 'settings' && !permissions.viewSettings) ? 'overview' : requestedValid;
 
   const peopleById = useMemo(() => {
     const map = new Map();
@@ -146,7 +146,7 @@ export default function AdminControlCenter() {
     ...(permissions.viewCommercial ? [['commercial', 'الباقات والأسعار', WalletCards]] : []),
     ['ai', 'الذكاء الاصطناعي', Sparkles],
     ...(permissions.viewAudit ? [['audit', 'التدقيق والسجلات', FileText]] : []),
-    ['settings', 'التشغيل والإعدادات', Settings],
+    ...(permissions.viewSettings ? [['settings', 'التشغيل والإعدادات', Settings]] : []),
   ];
 
   function go(next) { router.replace(`/admin?section=${encodeURIComponent(next)}`, { scroll: false }); }
