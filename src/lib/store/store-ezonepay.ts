@@ -103,6 +103,24 @@ export class StoreEzonePayService {
 
     await markStoreOrderPaid(order.id, payload.orderReference);
 
+    const { data: fulfilledOrder } = await supabase
+      .from('store_orders')
+      .select('status')
+      .eq('id', order.id)
+      .maybeSingle();
+
+    if (order.payment_status !== 'PAID') {
+      await supabase.from('user_notifications').insert({
+        user_id: order.user_id,
+        title: fulfilledOrder?.status === 'FULFILLED' ? 'اكتملت عملية الشراء' : 'تم تأكيد دفع المتجر',
+        body: fulfilledOrder?.status === 'FULFILLED'
+          ? 'تم تأكيد الدفع وتنفيذ طلبك في Brand Box Store بنجاح.'
+          : 'تم تأكيد الدفع وسيظهر التفعيل في مشترياتك فور اكتماله.',
+        kind: 'payment',
+        action_url: `/store/purchases?order=${encodeURIComponent(order.id)}`,
+      });
+    }
+
     await supabase.from('store_webhook_events').update({
       status: 'PROCESSED',
       processed_at: new Date().toISOString(),
