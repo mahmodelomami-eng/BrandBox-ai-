@@ -24,7 +24,8 @@
     "test:store-admin-catalog": "tsx src/tests/store-admin-catalog-manager.test.ts",
     "test:store-providers": "tsx src/tests/store-provider-manager.test.ts",
     "test:store-payment-return": "tsx src/tests/store-payment-return-status.test.ts",
-    "test:store-finance": "tsx src/tests/store-financial-dashboard.test.ts"
+    "test:store-finance": "tsx src/tests/store-financial-dashboard.test.ts",
+    "test:store-readiness": "tsx src/tests/store-readiness-guardrails.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
