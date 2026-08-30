@@ -31,10 +31,10 @@ const SETTINGS_GROUPS = [
   { id: 'notifications', title: 'الإشعارات', description: 'قنوات الإشعارات العامة داخل المنصة والبريد والدفع.', icon: Bell },
   { id: 'storage', title: 'التخزين والاحتفاظ', description: 'سياسات الاحتفاظ والضغط وCDN.', icon: HardDrive },
   { id: 'finance', title: 'التكلفة وسعر الصرف', description: 'سعر صرف الدولار والعمولات وهامش الربح المستخدم في حاسبة تكلفة أدوات AI.', icon: Calculator },
+  { id: 'features', title: 'Feature Flags', description: 'تشغيل الميزات التجريبية والتحكم في نسب الإطلاق التدريجي.', icon: Flag },
 ];
 
 const FUTURE_GROUPS = [
-  { title: 'Feature Flags', icon: Flag, note: 'سيتم ربطها بتجارب الإطلاق التدريجي ونسب التفعيل.' },
   { title: 'البريد والقوالب', icon: Mail, note: 'لن يتم كشف كلمات مرور SMTP أو أي أسرار داخل المتصفح.' },
   { title: 'تكاملات النظام', icon: KeyRound, note: 'مفاتيح AI والدفع والويب هوكس تبقى في بيئة الخادم فقط.' },
 ];
