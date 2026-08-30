@@ -1,3 +1,5 @@
+import { assertEzonePayModeAllowed } from './ezonepay-mode';
+
 type JsonRecord = Record<string, unknown>;
 
 export interface CreatePaymentLinkInput {
@@ -19,6 +21,7 @@ export interface EzonePayTransaction {
 }
 
 function requiredConfig() {
+  assertEzonePayModeAllowed();
   const apiKey = process.env.EZONEPAY_API_KEY;
   const baseUrl = process.env.EZONEPAY_API_BASE_URL;
   if (!apiKey) throw new Error('EZONEPAY_API_KEY_MISSING');
