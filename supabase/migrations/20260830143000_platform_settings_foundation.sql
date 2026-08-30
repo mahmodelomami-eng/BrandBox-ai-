@@ -51,5 +51,9 @@ values
   ('storage.cdn_enabled', 'storage', 'true'::jsonb, false),
   ('finance.usd_lyd_rate', 'finance', '11'::jsonb, false),
   ('finance.bank_commission_percent', 'finance', '0'::jsonb, false),
-  ('finance.target_margin_percent', 'finance', '30'::jsonb, false)
+  ('finance.target_margin_percent', 'finance', '30'::jsonb, false),
+  ('features.beta_models_enabled', 'features', 'false'::jsonb, false),
+  ('features.new_dashboard_rollout_percent', 'features', '0'::jsonb, false),
+  ('features.video_editor_enabled', 'features', 'false'::jsonb, false),
+  ('features.advanced_upscaler_enabled', 'features', 'false'::jsonb, false)
 on conflict (key) do nothing;
