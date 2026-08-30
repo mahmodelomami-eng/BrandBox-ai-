@@ -48,5 +48,8 @@ values
   ('notifications.push_enabled', 'notifications', 'false'::jsonb, false),
   ('storage.default_retention_days', 'storage', '30'::jsonb, false),
   ('storage.compression_enabled', 'storage', 'true'::jsonb, false),
-  ('storage.cdn_enabled', 'storage', 'true'::jsonb, false)
+  ('storage.cdn_enabled', 'storage', 'true'::jsonb, false),
+  ('finance.usd_lyd_rate', 'finance', '11'::jsonb, false),
+  ('finance.bank_commission_percent', 'finance', '0'::jsonb, false),
+  ('finance.target_margin_percent', 'finance', '30'::jsonb, false)
 on conflict (key) do nothing;
