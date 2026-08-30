@@ -108,7 +108,13 @@ export default function AdminSettingsHub({ sources = {} }) {
     }
   }
 
-  useEffect(() => { void loadSettings(); }, []);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadSettings();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   const dirtySettings = useMemo(() => {
     const changed = {};
