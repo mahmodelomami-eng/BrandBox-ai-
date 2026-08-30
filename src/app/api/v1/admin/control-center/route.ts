@@ -26,7 +26,7 @@ async function actorFromRequest(request: NextRequest): Promise<Actor | null> {
   if (profileError || !profile || profile.status === 'suspended') return null;
   const role = (profile.role || 'USER') as AdminRole;
   if (!isKnownRole(role)) return null;
-  if (!checkPermission(role, 'analytics.read') && !checkPermission(role, 'users.read') && !checkPermission(role, 'settings.read')) return null;
+  if (!checkPermission(role, 'analytics.read') && !checkPermission(role, 'users.read') && !checkPermission(role, 'settings.read') && !checkPermission(role, 'providers.read') && !checkPermission(role, 'models.read')) return null;
 
   return {
     userId: data.user.id,
@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
   const canViewCommercial = checkPermission(actor.role, 'plans.read') || checkPermission(actor.role, 'packages.read');
   const canViewAudit = checkPermission(actor.role, 'audit.read');
   const canViewCredits = checkPermission(actor.role, 'credits.read');
+  const canViewAI = checkPermission(actor.role, 'providers.read') || checkPermission(actor.role, 'models.read') || checkPermission(actor.role, 'generations.read');
 
   const [
     profilesResult,
@@ -80,16 +81,20 @@ export async function GET(request: NextRequest) {
       .select('id,order_reference,user_id,provider,provider_tx_id,amount_lyd,currency,status,item_type,created_at,updated_at')
       .order('created_at', { ascending: false })
       .limit(250),
-    database
-      .from('generations')
-      .select('id,user_id,project_id,generation_type,provider,model,prompt,status,credits_consumed,result_url,error_message,duration_ms,created_at,provider_cost_usd,total_tokens')
-      .order('created_at', { ascending: false })
-      .limit(250),
-    database
-      .from('assets')
-      .select('id,user_id,project_id,generation_id,name,file_path,mime_type,width,height,created_at')
-      .order('created_at', { ascending: false })
-      .limit(250),
+    canViewAI
+      ? database
+          .from('generations')
+          .select('id,user_id,project_id,generation_type,provider,model,prompt,status,credits_consumed,result_url,error_message,duration_ms,created_at,provider_cost_usd,total_tokens')
+          .order('created_at', { ascending: false })
+          .limit(250)
+      : Promise.resolve({ data: [], error: null }),
+    canViewAI
+      ? database
+          .from('assets')
+          .select('id,user_id,project_id,generation_id,name,file_path,mime_type,width,height,created_at')
+          .order('created_at', { ascending: false })
+          .limit(250)
+      : Promise.resolve({ data: [], error: null }),
     canViewCredits
       ? database
           .from('credit_transactions')
@@ -162,6 +167,10 @@ export async function GET(request: NextRequest) {
       viewCommercial: canViewCommercial,
       viewAudit: canViewAudit,
       viewCredits: canViewCredits,
+      viewAI: canViewAI,
+      manageProviders: checkPermission(actor.role, 'providers.manage'),
+      manageModels: checkPermission(actor.role, 'models.manage'),
+      manageModelPricing: checkPermission(actor.role, 'models.pricing_manage'),
       viewSettings: checkPermission(actor.role, 'settings.read'),
       manageSettings: checkPermission(actor.role, 'settings.manage'),
     },
