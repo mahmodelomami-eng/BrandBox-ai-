@@ -107,6 +107,59 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ success: true });
   }
 
+  if (action === 'update_billing') {
+    if (!checkPermission(actor.role, 'models.pricing_manage')) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
+
+    const current = await database.from('billing_settings').select('*').eq('id', 'default').maybeSingle();
+    if (current.error) return NextResponse.json({ error: current.error.message }, { status: 500 });
+
+    const patch: Record<string, number | boolean | string> = { updated_at: new Date().toISOString() };
+    const numericRules = [
+      ['marketUsdLyd', 'market_usd_lyd', 0.01, 1000],
+      ['openrouterTopupFeePct', 'openrouter_topup_fee_pct', 0, 99.9999],
+      ['bankTransferFeePct', 'bank_transfer_fee_pct', 0, 99.9999],
+      ['riskBufferPct', 'risk_buffer_pct', 0, 99.9999],
+      ['targetGrossMarginPct', 'target_gross_margin_pct', 0, 99.9999],
+      ['referenceCreditValueLyd', 'reference_credit_value_lyd', 0.0001, 1000000],
+      ['minimumOperationCredits', 'minimum_operation_credits', 1, 1000000],
+      ['maxBonusPct', 'max_bonus_pct', 0, 20],
+      ['emergencyFxThresholdLyd', 'emergency_fx_threshold_lyd', 0.01, 1000],
+      ['hardStopFxThresholdLyd', 'hard_stop_fx_threshold_lyd', 0.01, 1000],
+      ['openrouterFreeGlobalDailyLimit', 'openrouter_free_global_daily_limit', 1, 1000],
+      ['freeUserDailyLimit', 'free_user_daily_limit', 1, 100],
+    ] as const;
+
+    for (const [inputKey, databaseKey, min, max] of numericRules) {
+      if (body[inputKey] === undefined) continue;
+      const value = Number(body[inputKey]);
+      if (!Number.isFinite(value) || value < min || value > max) {
+        return NextResponse.json({ error: 'INVALID_BILLING_VALUE', field: inputKey }, { status: 400 });
+      }
+      patch[databaseKey] = databaseKey.includes('limit') || databaseKey === 'minimum_operation_credits'
+        ? Math.trunc(value)
+        : value;
+    }
+
+    if (typeof body.freeModelsEnabled === 'boolean') patch.free_models_enabled = body.freeModelsEnabled;
+    if (Object.keys(patch).length === 1) return NextResponse.json({ error: 'NO_CHANGES' }, { status: 400 });
+
+    const { error } = await database.from('billing_settings').update(patch).eq('id', 'default');
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await database.from('audit_logs').insert({
+      actor_id: actor.userId,
+      actor_role: actor.role,
+      action: 'ADMIN_UPDATED_AI_BILLING_SETTINGS',
+      resource: 'billing_settings',
+      resource_id: 'default',
+      before_state: current.data || null,
+      after_state: patch,
+      metadata: { source: 'admin-ai-integrations' },
+    });
+
+    return NextResponse.json({ success: true });
+  }
+
   if (action === 'update_pricing') {
     if (!checkPermission(actor.role, 'models.pricing_manage')) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
     const modelId = String(body.modelId || '');
@@ -122,7 +175,18 @@ export async function PATCH(request: NextRequest) {
       ['minimumCredits', 'minimum_credits'],
     ] as const;
     for (const [inputKey, databaseKey] of numericFields) {
-      if (typeof body[inputKey] === 'number' && Number.isFinite(body[inputKey])) patch[databaseKey] = Math.max(0, Number(body[inputKey]));
+      if (typeof body[inputKey] !== 'number' || !Number.isFinite(body[inputKey])) continue;
+      const value = Number(body[inputKey]);
+      if (databaseKey === 'reservation_multiplier') {
+        if (value < 1 || value > 100) return NextResponse.json({ error: 'INVALID_RESERVATION_MULTIPLIER' }, { status: 400 });
+        patch[databaseKey] = value;
+      } else if (databaseKey === 'minimum_credits') {
+        if (value < 0 || value > 1000000) return NextResponse.json({ error: 'INVALID_MINIMUM_CREDITS' }, { status: 400 });
+        patch[databaseKey] = Math.trunc(value);
+      } else {
+        if (value < 0 || value > 1000000) return NextResponse.json({ error: 'INVALID_PRICING_VALUE', field: inputKey }, { status: 400 });
+        patch[databaseKey] = value;
+      }
     }
 
     const { error } = await database.from('ai_model_catalog').update(patch).eq('model_id', modelId);
