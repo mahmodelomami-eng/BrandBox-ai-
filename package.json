@@ -26,7 +26,8 @@
     "test:store-payment-return": "tsx src/tests/store-payment-return-status.test.ts",
     "test:store-finance": "tsx src/tests/store-financial-dashboard.test.ts",
     "test:store-readiness": "tsx src/tests/store-readiness-guardrails.test.ts",
-    "test:store-inventory": "tsx src/tests/store-digital-inventory.test.ts"
+    "test:store-inventory": "tsx src/tests/store-digital-inventory.test.ts",
+    "test:store-code-delivery": "tsx src/tests/store-code-delivery.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
