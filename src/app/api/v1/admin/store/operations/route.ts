@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
   const database = createPrivilegedSupabaseClient();
 
-  const [ordersResult, jobsResult, productsResult, refundsResult] = await Promise.all([
+  const [ordersResult, jobsResult, productsResult, refundsResult, categoriesResult, providersResult] = await Promise.all([
     database
       .from('store_orders')
       .select('id,order_number,user_id,status,payment_status,total_lyd,currency,created_at,paid_at,fulfilled_at,store_order_items(id,product_name_snapshot,sku_title_snapshot,quantity,fulfillment_mode)')
@@ -49,16 +49,18 @@ export async function GET(request: NextRequest) {
       .limit(50),
     database
       .from('store_products')
-      .select('id,slug,name,brand,fulfillment_mode,sale_status,supplier_authorization_verified,regional_validity_verified,automated_fulfillment_verified,store_skus(id,sku_code,title,sell_price_lyd,region_code,is_active)')
+      .select('id,category_id,provider_id,slug,name,brand,short_description,fulfillment_mode,sale_status,requires_customer_identifier,supplier_authorization_verified,regional_validity_verified,automated_fulfillment_verified,store_skus(id,sku_code,title,sell_price_lyd,provider_cost,provider_cost_currency,region_code,is_active)')
       .order('name'),
     database
       .from('store_refunds')
       .select('id,order_id,amount_lyd,status,reason,requested_by,provider_reference,created_at,updated_at,store_orders!inner(order_number,user_id,payment_status,status)')
       .order('created_at', { ascending: false })
       .limit(50),
+    database.from('store_categories').select('id,slug,name_ar,name_en,is_active,sort_order').order('sort_order'),
+    database.from('store_providers').select('id,code,display_name,provider_type,status').order('display_name'),
   ]);
 
-  if (ordersResult.error || jobsResult.error || productsResult.error || refundsResult.error) {
+  if (ordersResult.error || jobsResult.error || productsResult.error || refundsResult.error || categoriesResult.error || providersResult.error) {
     return NextResponse.json({ error: 'STORE_OPERATIONS_UNAVAILABLE' }, { status: 503 });
   }
 
@@ -76,6 +78,8 @@ export async function GET(request: NextRequest) {
     jobs,
     products: productsResult.data || [],
     refunds: refundsResult.data || [],
+    categories: categoriesResult.data || [],
+    providers: providersResult.data || [],
   });
 }
 
@@ -84,8 +88,78 @@ export async function PATCH(request: NextRequest) {
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   if (!actor.canManage) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
 
-  const body = await request.json().catch(() => null) as { action?: string; jobId?: string; refundId?: string; note?: string } | null;
+  const body = await request.json().catch(() => null) as { action?: string; jobId?: string; refundId?: string; note?: string; productId?: string; saleStatus?: string; supplierAuthorizationVerified?: boolean; regionalValidityVerified?: boolean; automatedFulfillmentVerified?: boolean; skuId?: string; sellPriceLyd?: number; providerCost?: number | null; regionCode?: string; isActive?: boolean } | null;
   if (!body?.action) return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
+
+  if (body.action === 'update_product') {
+    const input = body as typeof body & { productId?: string; saleStatus?: string; supplierAuthorizationVerified?: boolean; regionalValidityVerified?: boolean; automatedFulfillmentVerified?: boolean };
+    if (!input.productId) return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
+
+    const allowedStatuses = ['DRAFT', 'CATALOG_ONLY', 'ACTIVE_FOR_SALE', 'PAUSED', 'ARCHIVED'];
+    if (!input.saleStatus || !allowedStatuses.includes(input.saleStatus)) {
+      return NextResponse.json({ error: 'INVALID_SALE_STATUS' }, { status: 400 });
+    }
+
+    const { data: current } = await createPrivilegedSupabaseClient().from('store_products')
+      .select('id,fulfillment_mode').eq('id', input.productId).maybeSingle();
+    if (!current) return NextResponse.json({ error: 'STORE_PRODUCT_NOT_FOUND' }, { status: 404 });
+
+    const gates = {
+      supplier_authorization_verified: Boolean(input.supplierAuthorizationVerified),
+      regional_validity_verified: Boolean(input.regionalValidityVerified),
+      automated_fulfillment_verified: Boolean(input.automatedFulfillmentVerified),
+    };
+    if (input.saleStatus === 'ACTIVE_FOR_SALE' && (
+      !gates.supplier_authorization_verified ||
+      !gates.regional_validity_verified ||
+      !gates.automated_fulfillment_verified ||
+      ['PARTNER_REQUIRED', 'CATALOG_ONLY'].includes(current.fulfillment_mode)
+    )) return NextResponse.json({ error: 'STORE_PRODUCT_SALE_GATE_FAILED' }, { status: 409 });
+
+    const database = createPrivilegedSupabaseClient();
+    const { data: product, error: productError } = await database.from('store_products').update({
+      sale_status: input.saleStatus,
+      ...gates,
+      updated_at: new Date().toISOString(),
+    }).eq('id', input.productId).select('*').single();
+    if (productError || !product) return NextResponse.json({ error: 'STORE_PRODUCT_UPDATE_FAILED' }, { status: 409 });
+
+    await database.from('audit_logs').insert({
+      actor_id: actor.userId, actor_role: actor.role, action: 'ADMIN_UPDATED_STORE_PRODUCT_GATE',
+      resource: 'store_products', resource_id: input.productId,
+      metadata: { sale_status: input.saleStatus, ...gates },
+    });
+    return NextResponse.json({ success: true, product });
+  }
+
+  if (body.action === 'update_sku') {
+    const input = body as typeof body & { skuId?: string; sellPriceLyd?: number; providerCost?: number | null; regionCode?: string; isActive?: boolean };
+    const price = Number(input.sellPriceLyd);
+    if (!input.skuId || !Number.isFinite(price) || price < 0 || !input.regionCode?.trim()) {
+      return NextResponse.json({ error: 'INVALID_SKU_UPDATE' }, { status: 400 });
+    }
+    const providerCost = input.providerCost == null ? null : Number(input.providerCost);
+    if (providerCost != null && (!Number.isFinite(providerCost) || providerCost < 0)) {
+      return NextResponse.json({ error: 'INVALID_PROVIDER_COST' }, { status: 400 });
+    }
+
+    const database = createPrivilegedSupabaseClient();
+    const { data: sku, error: skuError } = await database.from('store_skus').update({
+      sell_price_lyd: price,
+      provider_cost: providerCost,
+      region_code: input.regionCode.trim().toUpperCase().slice(0, 32),
+      is_active: Boolean(input.isActive),
+      updated_at: new Date().toISOString(),
+    }).eq('id', input.skuId).select('*').single();
+    if (skuError || !sku) return NextResponse.json({ error: 'STORE_SKU_UPDATE_FAILED' }, { status: 409 });
+
+    await database.from('audit_logs').insert({
+      actor_id: actor.userId, actor_role: actor.role, action: 'ADMIN_UPDATED_STORE_SKU',
+      resource: 'store_skus', resource_id: input.skuId,
+      metadata: { sell_price_lyd: price, provider_cost: providerCost, region_code: input.regionCode, is_active: Boolean(input.isActive) },
+    });
+    return NextResponse.json({ success: true, sku });
+  }
 
   if (body.action === 'approve_refund' || body.action === 'reject_refund') {
     if (!body.refundId) return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
