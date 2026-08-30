@@ -6,7 +6,7 @@ const root = process.cwd();
 const service = readFileSync(join(root, 'src/lib/store/store-service.ts'), 'utf8');
 const fulfillment = readFileSync(join(root, 'src/lib/store/store-credit-fulfillment.ts'), 'utf8');
 const webhook = readFileSync(join(root, 'src/lib/store/store-ezonepay.ts'), 'utf8');
-const migration = readFileSync(join(root, 'supabase/migrations/20260830233500_store_brand_box_credit_launch_slice.sql'), 'utf8');
+const migration = readFileSync(join(root, 'supabase/migrations/20260830223410_store_brand_box_credit_launch_slice.sql'), 'utf8');
 
 assert.ok(service.includes('processBrandBoxCreditFulfillmentForOrder(orderId)'));
 assert.ok(fulfillment.includes("p_tx_type: 'purchase'"));
