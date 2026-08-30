@@ -102,8 +102,8 @@ function verifyPublicServicesContract() {
   const adminSupportPagePath = join(repoRoot, 'src/app/admin/support/page.jsx');
   const adminSupportComponentPath = join(repoRoot, 'src/components/AdminSupportRequests.jsx');
   const obsoleteSectionLandingPath = join(repoRoot, 'src/components/SectionLanding.jsx');
-  const supportMigrationPath = join(repoRoot, 'supabase/migrations/20260825211000_support_requests.sql');
-  const supportSecurityMigrationPath = join(repoRoot, 'supabase/migrations/20260825212000_support_requests_column_security.sql');
+  const supportMigrationPath = join(repoRoot, 'supabase/migrations/20260825210035_support_requests.sql');
+  const supportSecurityMigrationPath = join(repoRoot, 'supabase/migrations/20260825225945_support_requests_column_security.sql');
 
   const requiredPaths = [
     templatesPath,
