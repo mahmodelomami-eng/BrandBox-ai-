@@ -30,7 +30,11 @@ export type PlatformSettingKey =
   | 'storage.cdn_enabled'
   | 'finance.usd_lyd_rate'
   | 'finance.bank_commission_percent'
-  | 'finance.target_margin_percent';
+  | 'finance.target_margin_percent'
+  | 'features.beta_models_enabled'
+  | 'features.new_dashboard_rollout_percent'
+  | 'features.video_editor_enabled'
+  | 'features.advanced_upscaler_enabled';
 
 export type SettingValue = string | number | boolean;
 
@@ -84,6 +88,11 @@ export const PLATFORM_SETTING_DEFINITIONS: readonly PlatformSettingDefinition[] 
   { key: 'finance.usd_lyd_rate', category: 'finance', labelAr: 'سعر صرف الدولار مقابل الدينار', valueType: 'number', defaultValue: 11, min: 0.01, max: 1000 },
   { key: 'finance.bank_commission_percent', category: 'finance', labelAr: 'عمولة المصرف %', valueType: 'number', defaultValue: 0, min: 0, max: 100 },
   { key: 'finance.target_margin_percent', category: 'finance', labelAr: 'هامش الربح المستهدف %', valueType: 'number', defaultValue: 30, min: 0, max: 1000 },
+
+  { key: 'features.beta_models_enabled', category: 'features', labelAr: 'إتاحة نماذج Beta', valueType: 'boolean', defaultValue: false },
+  { key: 'features.new_dashboard_rollout_percent', category: 'features', labelAr: 'نسبة إطلاق لوحة التحكم الجديدة %', valueType: 'number', defaultValue: 0, min: 0, max: 100 },
+  { key: 'features.video_editor_enabled', category: 'features', labelAr: 'محرر الفيديو الجديد', valueType: 'boolean', defaultValue: false },
+  { key: 'features.advanced_upscaler_enabled', category: 'features', labelAr: 'المحسن المتقدم للصور', valueType: 'boolean', defaultValue: false },
 ] as const;
 
 const definitionMap = new Map(PLATFORM_SETTING_DEFINITIONS.map((definition) => [definition.key, definition]));
