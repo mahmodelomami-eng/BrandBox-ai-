@@ -18,9 +18,18 @@ const AuthContext = createContext({
 });
 
 export const ROLE_LABELS = {
-  SUPER_ADMIN: 'مدير عام',
-  ADMIN: 'مدير',
-  SUPPORT: 'مشرف',
+  SUPER_ADMIN: 'المدير العام',
+  PLATFORM_ADMIN: 'مدير المنصة',
+  OPERATIONS_MANAGER: 'مدير العمليات',
+  CONTENT_MANAGER: 'مدير المحتوى',
+  USER_MANAGER: 'مدير المستخدمين',
+  SUPPORT_AGENT: 'موظف الدعم',
+  FINANCE_MANAGER: 'المدير المالي',
+  MARKETING_MANAGER: 'مدير التسويق',
+  SECURITY_AUDITOR: 'المدقق الأمني',
+  ANALYST: 'المحلل',
+  ADMIN: 'مدير قديم',
+  SUPPORT: 'دعم قديم',
   USER: 'مستخدم',
 };
 

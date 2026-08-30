@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { AdminService } from '@/lib/admin/admin-service';
-
-type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'USER';
+import {
+  AdminRole,
+  ROLE_DEFINITIONS,
+} from '@/lib/auth/rbac-engine';
+import {
+  assertRoleChangePolicy,
+  assertSuspendPolicy,
+  canAdjustCredits,
+  canDeleteUsers,
+  canReadUsers,
+  canSuspendUsers,
+  isKnownRole,
+} from '@/lib/admin/admin-user-policy';
 
 async function actorFromRequest(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -20,7 +31,7 @@ async function actorFromRequest(request: NextRequest) {
 
   if (profileError || !profile || profile.status === 'suspended') return null;
   const role = (profile.role || 'USER') as AdminRole;
-  if (!['SUPER_ADMIN', 'ADMIN', 'SUPPORT'].includes(role)) return null;
+  if (!isKnownRole(role) || !canReadUsers(role)) return null;
 
   return {
     userId: data.user.id,
@@ -29,25 +40,54 @@ async function actorFromRequest(request: NextRequest) {
   };
 }
 
+function errorResponse(error: unknown) {
+  const message = error instanceof Error ? error.message : 'ADMIN_ACTION_FAILED';
+  const status = message.includes('FORBIDDEN')
+    ? 403
+    : message.includes('NOT_FOUND')
+      ? 404
+      : message.includes('INVALID_')
+        ? 400
+        : 500;
+  return NextResponse.json({ error: message }, { status });
+}
+
 export async function GET(request: NextRequest) {
   const actor = await actorFromRequest(request);
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
   const database = createPrivilegedSupabaseClient();
   const search = request.nextUrl.searchParams.get('q')?.trim() || '';
+  const statusFilter = request.nextUrl.searchParams.get('status')?.trim() || '';
+  const roleFilter = request.nextUrl.searchParams.get('role')?.trim() || '';
+  const adminOnly = request.nextUrl.searchParams.get('adminOnly') === '1';
+  const page = Math.max(1, Number(request.nextUrl.searchParams.get('page') || 1));
+  const limit = Math.min(100, Math.max(1, Number(request.nextUrl.searchParams.get('limit') || 25)));
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
 
   let query = database
     .from('profiles')
-    .select('id,email,first_name,last_name,phone,avatar_url,role,status,credit_balance,last_seen_at,created_at,updated_at')
+    .select('id,email,first_name,last_name,phone,avatar_url,role,status,credit_balance,last_seen_at,created_at,updated_at', { count: 'exact' })
     .order('created_at', { ascending: false })
-    .limit(500);
+    .range(from, to);
 
   if (search) {
     const safe = search.replace(/[%_,]/g, ' ').trim();
     if (safe) query = query.or(`email.ilike.%${safe}%,first_name.ilike.%${safe}%,last_name.ilike.%${safe}%`);
   }
 
-  const { data: profiles, error } = await query;
+  if (statusFilter && ['active', 'suspended', 'pending'].includes(statusFilter)) {
+    query = query.eq('status', statusFilter);
+  }
+
+  if (roleFilter && isKnownRole(roleFilter)) {
+    query = query.eq('role', roleFilter);
+  } else if (adminOnly) {
+    query = query.neq('role', 'USER');
+  }
+
+  const { data: profiles, error, count } = await query;
   if (error) return NextResponse.json({ error: 'USERS_UNAVAILABLE' }, { status: 503 });
 
   const ids = (profiles || []).map((profile) => profile.id);
@@ -74,6 +114,7 @@ export async function GET(request: NextRequest) {
       phone: profile.phone || null,
       avatarUrl: profile.avatar_url || null,
       role: profile.role || 'USER',
+      roleLabelAr: ROLE_DEFINITIONS[(profile.role || 'USER') as AdminRole]?.labelAr || 'مستخدم',
       status: profile.status || 'active',
       creditBalance: Number(profile.credit_balance || 0),
       planId: planByUser.get(profile.id) || 'free',
@@ -84,7 +125,14 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ users, actorRole: actor.role, total: users.length });
+  return NextResponse.json({
+    users,
+    actorRole: actor.role,
+    total: count || 0,
+    page,
+    limit,
+    pages: Math.max(1, Math.ceil((count || 0) / limit)),
+  });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -107,57 +155,84 @@ export async function PATCH(request: NextRequest) {
 
   if (!body.userId || !body.action) return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
 
+  const database = createPrivilegedSupabaseClient();
+  const { data: target, error: targetError } = await database
+    .from('profiles')
+    .select('id,email,role,status')
+    .eq('id', body.userId)
+    .maybeSingle();
+
+  if (targetError || !target) return NextResponse.json({ error: 'USER_NOT_FOUND' }, { status: 404 });
+  const targetRole = (target.role || 'USER') as AdminRole;
+
   try {
     if (body.action === 'grant_credits') {
-      if (actor.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'SUPER_ADMIN_REQUIRED' }, { status: 403 });
       const amount = Number(body.amount || 0);
-      if (!Number.isInteger(amount) || amount <= 0 || amount > 1_000_000) {
-        return NextResponse.json({ error: 'INVALID_CREDIT_AMOUNT' }, { status: 400 });
+      const reason = body.reason?.trim() || '';
+      if (!reason) return NextResponse.json({ error: 'CREDIT_REASON_REQUIRED' }, { status: 400 });
+      if (!canAdjustCredits(actor.role, amount)) {
+        return NextResponse.json({ error: 'CREDIT_ADJUSTMENT_FORBIDDEN' }, { status: 403 });
       }
-      const result = await AdminService.adjustUserCredits(
-        actor,
-        body.userId,
-        amount,
-        body.reason?.trim() || 'إضافة رصيد بواسطة المدير العام',
-      );
+      const result = await AdminService.adjustUserCredits(actor, body.userId, amount, reason);
       return NextResponse.json({ success: true, result });
     }
 
     if (body.action === 'change_role') {
-      if (actor.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'SUPER_ADMIN_REQUIRED' }, { status: 403 });
-      if (!body.role || !['SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'USER'].includes(body.role)) {
+      if (!body.role || !isKnownRole(body.role)) {
         return NextResponse.json({ error: 'INVALID_ROLE' }, { status: 400 });
       }
+
+      const { count: activeSuperAdminCount, error: countError } = await database
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'SUPER_ADMIN')
+        .eq('status', 'active');
+      if (countError) return NextResponse.json({ error: 'ROLE_SAFETY_CHECK_FAILED' }, { status: 503 });
+
+      assertRoleChangePolicy({
+        actorRole: actor.role,
+        actorUserId: actor.userId,
+        targetUserId: body.userId,
+        currentRole: targetRole,
+        nextRole: body.role,
+        activeSuperAdminCount: activeSuperAdminCount || 0,
+      });
+
       const result = await AdminService.changeUserRole(actor, body.userId, body.role);
       return NextResponse.json(result);
     }
 
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(actor.role)) {
-      return NextResponse.json({ error: 'ADMIN_REQUIRED' }, { status: 403 });
-    }
-
     if (body.action === 'suspend') {
-      const result = await AdminService.suspendUser(actor, body.userId, body.reason?.trim() || 'إيقاف إداري');
+      const reason = body.reason?.trim() || '';
+      if (!reason) return NextResponse.json({ error: 'SUSPENSION_REASON_REQUIRED' }, { status: 400 });
+      assertSuspendPolicy({
+        actorRole: actor.role,
+        actorUserId: actor.userId,
+        targetUserId: body.userId,
+        targetRole,
+      });
+      const result = await AdminService.suspendUser(actor, body.userId, reason);
       return NextResponse.json(result);
     }
 
     if (body.action === 'reactivate') {
+      if (!canSuspendUsers(actor.role)) {
+        return NextResponse.json({ error: 'REACTIVATION_FORBIDDEN' }, { status: 403 });
+      }
       const result = await AdminService.reactivateUser(actor, body.userId);
       return NextResponse.json(result);
     }
 
     return NextResponse.json({ error: 'UNKNOWN_ACTION' }, { status: 400 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'ADMIN_ACTION_FAILED';
-    const status = message.includes('FORBIDDEN') ? 403 : message.includes('NOT_FOUND') ? 404 : 400;
-    return NextResponse.json({ error: message }, { status });
+    return errorResponse(error);
   }
 }
 
 export async function DELETE(request: NextRequest) {
   const actor = await actorFromRequest(request);
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-  if (actor.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'SUPER_ADMIN_REQUIRED' }, { status: 403 });
+  if (!canDeleteUsers(actor.role)) return NextResponse.json({ error: 'SUPER_ADMIN_REQUIRED' }, { status: 403 });
 
   const targetUserId = request.nextUrl.searchParams.get('userId');
   if (!targetUserId) return NextResponse.json({ error: 'USER_ID_REQUIRED' }, { status: 400 });

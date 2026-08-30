@@ -1,5 +1,9 @@
-import { redirect } from 'next/navigation';
+import AdminUsersRolesPanel from '../../../components/AdminUsersRolesPanel';
 
 export default function Page() {
-  redirect('/admin?section=users');
+  return (
+    <main className="min-h-[calc(100vh-5rem)] bg-[#050608] text-white">
+      <AdminUsersRolesPanel />
+    </main>
+  );
 }
