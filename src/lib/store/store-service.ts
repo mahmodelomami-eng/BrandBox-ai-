@@ -1,4 +1,5 @@
 import { processBrandBoxCreditFulfillmentForOrder } from './store-credit-fulfillment';
+import { processDigitalCodeFulfillmentForOrder } from './store-code-fulfillment';
 import { createPrivilegedSupabaseClient } from '../supabase/server';
 import type { CreateStoreOrderInput, StoreCatalogProduct } from './types';
 
@@ -217,6 +218,7 @@ export async function markStoreOrderPaid(orderId: string, paymentReference: stri
   }
 
   await processBrandBoxCreditFulfillmentForOrder(orderId);
+  await processDigitalCodeFulfillmentForOrder(orderId);
 
   return updated;
 }
