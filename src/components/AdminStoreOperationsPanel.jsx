@@ -43,6 +43,27 @@ export default function AdminStoreOperationsPanel() {
     }
   }
 
+  async function reviewRefund(refundId, action) {
+    setBusy(refundId);
+    setError('');
+    try {
+      const accessToken = await token();
+      if (!accessToken) throw new Error('انتهت جلسة الدخول.');
+      const response = await fetch('/api/v1/admin/store/operations', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, refundId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'تعذر مراجعة طلب الاسترداد.');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر مراجعة طلب الاسترداد.');
+    } finally {
+      setBusy('');
+    }
+  }
+
   async function retry(jobId) {
     setBusy(jobId);
     setError('');
@@ -80,6 +101,7 @@ export default function AdminStoreOperationsPanel() {
   const jobs = payload?.jobs || [];
   const orders = payload?.orders || [];
   const products = payload?.products || [];
+  const refunds = payload?.refunds || [];
   const canManage = Boolean(payload?.capabilities?.canManage);
 
   return <div className="space-y-5">
@@ -110,6 +132,25 @@ export default function AdminStoreOperationsPanel() {
         </table>
       </div>
       {!jobs.length && <div className="py-8 text-center text-sm text-gray-500">لا توجد وظائف تفعيل حتى الآن.</div>}
+    </section>
+
+    <section className="rounded-3xl border border-white/10 bg-[#0d1016] p-5">
+      <h3 className="font-black">طلبات الاسترداد</h3>
+      <p className="mt-1 text-[10px] text-gray-500">الموافقة هنا إدارية فقط ولا تنفذ إعادة الأموال لدى مزود الدفع تلقائيًا.</p>
+      <div className="mt-4 space-y-3">
+        {refunds.map((refund) => {
+          const order = Array.isArray(refund.store_orders) ? refund.store_orders[0] : refund.store_orders;
+          const reviewable = canManage && ['REQUESTED', 'REVIEWING'].includes(refund.status);
+          return <div key={refund.id} className="rounded-2xl border border-white/[.06] bg-[#10131a] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div><div className="font-mono text-[10px] text-gray-500">{order?.order_number || refund.order_id}</div><div className={`mt-1 text-xs font-black ${tone(refund.status)}`}>{refund.status}</div><div className="mt-2 max-w-2xl text-xs text-gray-400">{refund.reason || 'بدون سبب'}</div></div>
+              <div className="text-left"><div className="font-black">{Number(refund.amount_lyd || 0).toLocaleString('ar-LY')} د.ل</div><div className="mt-1 text-[10px] text-gray-500">{new Date(refund.created_at).toLocaleString('ar-LY')}</div></div>
+            </div>
+            {reviewable && <div className="mt-4 flex gap-2 border-t border-white/[.06] pt-3"><button disabled={busy === refund.id} onClick={() => void reviewRefund(refund.id, 'approve_refund')} className="rounded-lg border border-emerald-500/20 px-3 py-2 text-xs font-black text-emerald-300">موافقة للمراجعة المالية</button><button disabled={busy === refund.id} onClick={() => void reviewRefund(refund.id, 'reject_refund')} className="rounded-lg border border-red-500/20 px-3 py-2 text-xs font-black text-red-300">رفض</button></div>}
+          </div>;
+        })}
+        {!refunds.length && <div className="py-8 text-center text-sm text-gray-500">لا توجد طلبات استرداد.</div>}
+      </div>
     </section>
 
     <section className="grid gap-5 xl:grid-cols-2">
