@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Bell,
+  Calculator,
   Database,
   Flag,
   Gauge,
@@ -29,6 +30,7 @@ const SETTINGS_GROUPS = [
   { id: 'maintenance', title: 'وضع الصيانة', description: 'إيقاف الخدمة مؤقتًا مع رسالة واضحة واستثناء الإدارة.', icon: Wrench },
   { id: 'notifications', title: 'الإشعارات', description: 'قنوات الإشعارات العامة داخل المنصة والبريد والدفع.', icon: Bell },
   { id: 'storage', title: 'التخزين والاحتفاظ', description: 'سياسات الاحتفاظ والضغط وCDN.', icon: HardDrive },
+  { id: 'finance', title: 'التكلفة وسعر الصرف', description: 'سعر صرف الدولار والعمولات وهامش الربح المستخدم في حاسبة تكلفة أدوات AI.', icon: Calculator },
 ];
 
 const FUTURE_GROUPS = [
@@ -80,6 +82,7 @@ export default function AdminSettingsHub({ sources = {} }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [providerCostUsd, setProviderCostUsd] = useState(0.01);
 
   async function token() {
     const { data } = await supabase.auth.getSession();
@@ -116,6 +119,18 @@ export default function AdminSettingsHub({ sources = {} }) {
   }, [settings, original]);
 
   const dirtyCount = Object.keys(dirtySettings).length;
+
+  const costCalculator = useMemo(() => {
+    const usdToLyd = Number(settings['finance.usd_lyd_rate'] ?? 11);
+    const bankCommission = Number(settings['finance.bank_commission_percent'] ?? 0);
+    const targetMargin = Number(settings['finance.target_margin_percent'] ?? 30);
+    const providerUsd = Math.max(0, Number(providerCostUsd) || 0);
+    const providerLyd = providerUsd * usdToLyd;
+    const bankFeeLyd = providerLyd * (bankCommission / 100);
+    const landedCostLyd = providerLyd + bankFeeLyd;
+    const suggestedPriceLyd = landedCostLyd * (1 + targetMargin / 100);
+    return { usdToLyd, bankCommission, targetMargin, providerUsd, providerLyd, bankFeeLyd, landedCostLyd, suggestedPriceLyd };
+  }, [providerCostUsd, settings]);
 
   async function saveSettings() {
     if (!dirtyCount) return;
@@ -191,6 +206,25 @@ export default function AdminSettingsHub({ sources = {} }) {
           })}
         </div>
       )}
+
+      <section className="rounded-3xl border border-[#f31325]/15 bg-[#0d1016] p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#f31325]/20 bg-[#f31325]/8 text-[#ff3344]"><Calculator size={20} /></span>
+          <div><h3 className="font-black">حاسبة تكلفة أدوات AI</h3><p className="mt-1 text-xs leading-6 text-gray-500">أدخل تكلفة العملية بالدولار من المزود أو OpenRouter، وتحسب المنصة التكلفة المحلية بعد سعر الصرف وعمولة المصرف ثم السعر المقترح حسب هامش الربح.</p></div>
+        </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-[220px_1fr]">
+          <label className="block">
+            <span className="mb-2 block text-[11px] font-bold text-gray-400">تكلفة المزود بالدولار USD</span>
+            <input type="number" min="0" step="0.0001" value={providerCostUsd} onChange={(event) => setProviderCostUsd(Number(event.target.value))} className="w-full rounded-xl border border-white/10 bg-[#10131a] px-3 py-3 text-sm font-black text-white outline-none focus:border-[#f31325]/50" />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-white/10 bg-[#10131a] p-4"><div className="text-[10px] text-gray-500">التكلفة بعد الصرف</div><div className="mt-2 text-lg font-black">{costCalculator.providerLyd.toFixed(4)} د.ل</div><div className="mt-1 text-[10px] text-gray-600">1 USD = {costCalculator.usdToLyd} LYD</div></div>
+            <div className="rounded-2xl border border-white/10 bg-[#10131a] p-4"><div className="text-[10px] text-gray-500">عمولة المصرف</div><div className="mt-2 text-lg font-black text-amber-300">{costCalculator.bankFeeLyd.toFixed(4)} د.ل</div><div className="mt-1 text-[10px] text-gray-600">{costCalculator.bankCommission}%</div></div>
+            <div className="rounded-2xl border border-white/10 bg-[#10131a] p-4"><div className="text-[10px] text-gray-500">التكلفة الفعلية</div><div className="mt-2 text-lg font-black text-red-300">{costCalculator.landedCostLyd.toFixed(4)} د.ل</div><div className="mt-1 text-[10px] text-gray-600">قبل هامش الربح</div></div>
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4"><div className="text-[10px] text-gray-500">السعر المقترح</div><div className="mt-2 text-lg font-black text-emerald-300">{costCalculator.suggestedPriceLyd.toFixed(4)} د.ل</div><div className="mt-1 text-[10px] text-gray-600">هامش {costCalculator.targetMargin}%</div></div>
+          </div>
+        </div>
+      </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
         {FUTURE_GROUPS.map(({ title, icon: Icon, note }) => <div key={title} className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><div className="flex items-center gap-2 font-black"><Icon size={18} className="text-[#ff3344]" /> {title}</div><p className="mt-3 text-xs leading-6 text-gray-500">{note}</p><div className="mt-4 text-[10px] font-black text-amber-300">محجوز للمرحلة التالية</div></div>)}
