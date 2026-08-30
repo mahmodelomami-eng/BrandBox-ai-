@@ -18,7 +18,8 @@
     "test:admin-settings": "tsx src/tests/platform-settings.test.ts",
     "test:admin-ai": "tsx src/tests/admin-ai-integrations.test.ts",
     "test:ezone-sandbox": "tsx src/tests/ezone-sandbox-checkout.test.ts",
-    "test:store-v1": "tsx src/tests/store-v1-operations.test.ts"
+    "test:store-v1": "tsx src/tests/store-v1-operations.test.ts",
+    "test:admin-store": "tsx src/tests/admin-store-operations.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

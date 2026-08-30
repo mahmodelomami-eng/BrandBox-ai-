@@ -30,8 +30,9 @@ import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import AdminSettingsHub from './AdminSettingsHub';
 import AdminEzonePayPanel from './AdminEzonePayPanel';
 import AdminAIIntegrationsPanel from './AdminAIIntegrationsPanel';
+import AdminStoreOperationsPanel from './AdminStoreOperationsPanel';
 
-const SECTION_IDS = new Set(['overview', 'users', 'projects', 'finance', 'payments', 'commercial', 'ai', 'audit', 'settings']);
+const SECTION_IDS = new Set(['overview', 'users', 'projects', 'finance', 'payments', 'store', 'commercial', 'ai', 'audit', 'settings']);
 const ROLE_LABELS = { SUPER_ADMIN: 'المدير العام', PLATFORM_ADMIN: 'مدير المنصة', OPERATIONS_MANAGER: 'مدير العمليات', CONTENT_MANAGER: 'مدير المحتوى', USER_MANAGER: 'مدير المستخدمين', SUPPORT_AGENT: 'موظف الدعم', FINANCE_MANAGER: 'المدير المالي', MARKETING_MANAGER: 'مدير التسويق', SECURITY_AUDITOR: 'المدقق الأمني', ANALYST: 'المحلل', ADMIN: 'مدير قديم', SUPPORT: 'دعم قديم', USER: 'مستخدم' };
 
 function formatDate(value) {
@@ -132,7 +133,7 @@ export default function AdminControlCenter() {
   const actor = payload?.actor || {};
   const data = payload?.data || {};
   const metrics = payload?.metrics || {};
-  const section = (requestedValid === 'commercial' && !permissions.viewCommercial) || (requestedValid === 'audit' && !permissions.viewAudit) || (requestedValid === 'settings' && !permissions.viewSettings) || (requestedValid === 'ai' && !permissions.viewAI) ? 'overview' : requestedValid;
+  const section = (requestedValid === 'commercial' && !permissions.viewCommercial) || (requestedValid === 'audit' && !permissions.viewAudit) || (requestedValid === 'settings' && !permissions.viewSettings) || (requestedValid === 'ai' && !permissions.viewAI) || (requestedValid === 'store' && !(permissions.viewPayments || permissions.viewAI)) ? 'overview' : requestedValid;
 
   const peopleById = useMemo(() => {
     const map = new Map();
@@ -146,6 +147,7 @@ export default function AdminControlCenter() {
     ['projects', 'المشاريع', FolderOpen],
     ['finance', 'المالية والاشتراكات', CreditCard],
     ...(permissions.viewPayments ? [['payments', 'Ezone Pay التجريبي', CreditCard]] : []),
+    ...((permissions.viewPayments || permissions.viewAI) ? [['store', 'عمليات المتجر', Boxes]] : []),
     ...(permissions.viewCommercial ? [['commercial', 'الباقات والأسعار', WalletCards]] : []),
     ...(permissions.viewAI ? [['ai', 'الذكاء الاصطناعي والتكاملات', Sparkles]] : []),
     ...(permissions.viewAudit ? [['audit', 'التدقيق والسجلات', FileText]] : []),
@@ -205,6 +207,8 @@ export default function AdminControlCenter() {
         {section === 'finance' && <><Card title="الاشتراكات" subtitle="من جدول subscriptions"><Table headers={['المستخدم','الخطة','الحالة','المزود','الانتهاء']} rows={(data.subscriptions || []).map((s) => <tr key={s.id}><td className="p-3 font-black">{personName(peopleById.get(s.user_id))}</td><td className="p-3 text-amber-300">{s.plan_id}</td><td className="p-3"><Badge value={s.status}/></td><td className="p-3">{s.provider}</td><td className="p-3 text-gray-500">{formatDate(s.current_period_end)}</td></tr>)}/></Card><Card title="المدفوعات" subtitle="من payment_transactions"><Table headers={['المرجع','المستخدم','المبلغ','النوع','الحالة','التاريخ']} rows={(data.payments || []).map((p) => <tr key={p.id}><td className="p-3 font-mono text-amber-300">{p.order_reference}</td><td className="p-3 font-black">{personName(peopleById.get(p.user_id))}</td><td className="p-3">{Number(p.amount_lyd || 0).toLocaleString('ar-LY')} {p.currency}</td><td className="p-3">{p.item_type}</td><td className="p-3"><Badge value={p.status}/></td><td className="p-3 text-gray-500">{formatDate(p.created_at)}</td></tr>)}/></Card>{permissions.viewCredits && <Card title="سجل النقاط" subtitle="من credit_transactions"><Table headers={['المستخدم','القيمة','النوع','الوصف','التاريخ']} rows={(data.credits || []).map((t) => <tr key={t.id}><td className="p-3">{personName(peopleById.get(t.user_id))}</td><td className={`p-3 font-black ${Number(t.amount)>=0?'text-emerald-300':'text-red-300'}`}>{t.amount}</td><td className="p-3 text-amber-300">{t.transaction_type}</td><td className="p-3">{t.description}</td><td className="p-3 text-gray-500">{formatDate(t.created_at)}</td></tr>)}/></Card>}</>}
 
         {section === 'payments' && <AdminEzonePayPanel />}
+
+        {section === 'store' && <AdminStoreOperationsPanel />}
 
         {section === 'commercial' && <div className="grid gap-5 xl:grid-cols-2"><Card title="خطط الاشتراك" subtitle="من plans"><div className="space-y-3">{(data.plans || []).map((p) => <div key={p.id} className="rounded-2xl border border-white/[.07] bg-[#10131a] p-4"><div className="flex justify-between"><b>{p.name}</b><Badge value={p.is_active?'active':'disabled'}/></div><div className="mt-3 text-xs text-gray-400">{p.price_monthly_lyd} د.ل · {p.monthly_credits} نقطة · {p.max_projects} مشروع</div></div>)}</div></Card><Card title="حزم النقاط" subtitle="من credit_packages"><div className="space-y-3">{(data.packages || []).map((p) => <div key={p.id} className="flex justify-between rounded-2xl border border-white/[.07] bg-[#10131a] p-4"><div><b>{p.name}</b><div className="mt-1 text-[10px] text-gray-500">{p.purchased_credits} + {p.bonus_credits} مكافأة</div></div><div className="text-left"><b>{p.price_lyd} د.ل</b><div className="text-[10px] text-amber-300">{p.credits} نقطة</div></div></div>)}</div></Card></div>}
 
