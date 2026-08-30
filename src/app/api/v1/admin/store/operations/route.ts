@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(50),
     database.from('store_categories').select('id,slug,name_ar,name_en,is_active,sort_order').order('sort_order'),
-    database.from('store_providers').select('id,code,display_name,provider_type,status').order('display_name'),
+    database.from('store_providers').select('id,code,display_name,provider_type,status,metadata,created_at,updated_at,store_provider_products(id,sku_id,external_product_id,external_sku_id,provider_region,is_enabled)').order('display_name'),
   ]);
 
   if (ordersResult.error || jobsResult.error || productsResult.error || refundsResult.error || categoriesResult.error || providersResult.error) {
@@ -88,8 +88,40 @@ export async function PATCH(request: NextRequest) {
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   if (!actor.canManage) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
 
-  const body = await request.json().catch(() => null) as { action?: string; jobId?: string; refundId?: string; note?: string; productId?: string; saleStatus?: string; supplierAuthorizationVerified?: boolean; regionalValidityVerified?: boolean; automatedFulfillmentVerified?: boolean; skuId?: string; sellPriceLyd?: number; providerCost?: number | null; regionCode?: string; isActive?: boolean } | null;
+  const body = await request.json().catch(() => null) as { providerId?: string; providerStatus?: string; mappingId?: string; mappingEnabled?: boolean; externalProductId?: string; externalSkuId?: string; providerRegion?: string; action?: string; jobId?: string; refundId?: string; note?: string; productId?: string; saleStatus?: string; supplierAuthorizationVerified?: boolean; regionalValidityVerified?: boolean; automatedFulfillmentVerified?: boolean; skuId?: string; sellPriceLyd?: number; providerCost?: number | null; regionCode?: string; isActive?: boolean } | null;
   if (!body?.action) return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
+
+  if (body.action === 'update_provider') {
+    const allowed = ['DRAFT','ACTIVE','PAUSED','DISABLED'];
+    if (!body.providerId || !body.providerStatus || !allowed.includes(body.providerStatus)) {
+      return NextResponse.json({ error: 'INVALID_PROVIDER_UPDATE' }, { status: 400 });
+    }
+    const database = createPrivilegedSupabaseClient();
+    const { data: provider, error } = await database.from('store_providers').update({
+      status: body.providerStatus, updated_at: new Date().toISOString(),
+    }).eq('id', body.providerId).select('*').single();
+    if (error || !provider) return NextResponse.json({ error: 'STORE_PROVIDER_UPDATE_FAILED' }, { status: 409 });
+    await database.from('audit_logs').insert({ actor_id: actor.userId, actor_role: actor.role,
+      action: 'ADMIN_UPDATED_STORE_PROVIDER', resource: 'store_providers', resource_id: body.providerId,
+      metadata: { status: body.providerStatus } });
+    return NextResponse.json({ success: true, provider });
+  }
+
+  if (body.action === 'update_provider_mapping') {
+    if (!body.mappingId) return NextResponse.json({ error: 'INVALID_PROVIDER_MAPPING' }, { status: 400 });
+    const database = createPrivilegedSupabaseClient();
+    const { data: mapping, error } = await database.from('store_provider_products').update({
+      external_product_id: body.externalProductId?.trim().slice(0,200) || null,
+      external_sku_id: body.externalSkuId?.trim().slice(0,200) || null,
+      provider_region: body.providerRegion?.trim().toUpperCase().slice(0,32) || null,
+      is_enabled: Boolean(body.mappingEnabled), updated_at: new Date().toISOString(),
+    }).eq('id', body.mappingId).select('*').single();
+    if (error || !mapping) return NextResponse.json({ error: 'STORE_PROVIDER_MAPPING_UPDATE_FAILED' }, { status: 409 });
+    await database.from('audit_logs').insert({ actor_id: actor.userId, actor_role: actor.role,
+      action: 'ADMIN_UPDATED_STORE_PROVIDER_MAPPING', resource: 'store_provider_products', resource_id: body.mappingId,
+      metadata: { is_enabled: Boolean(body.mappingEnabled), provider_region: body.providerRegion || null } });
+    return NextResponse.json({ success: true, mapping });
+  }
 
   if (body.action === 'update_product') {
     const input = body as typeof body & { productId?: string; saleStatus?: string; supplierAuthorizationVerified?: boolean; regionalValidityVerified?: boolean; automatedFulfillmentVerified?: boolean };
