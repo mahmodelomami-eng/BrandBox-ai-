@@ -101,6 +101,9 @@ export async function PATCH(request: NextRequest) {
     if (!isPlatformSettingKey(key)) {
       return NextResponse.json({ error: `INVALID_SETTING_KEY:${key}` }, { status: 400 });
     }
+    if (key.startsWith('security.') && !checkPermission(actor.role, 'security.manage')) {
+      return NextResponse.json({ error: 'SECURITY_SETTING_FORBIDDEN' }, { status: 403 });
+    }
   }
 
   const { data: beforeRows, error: beforeError } = await database
