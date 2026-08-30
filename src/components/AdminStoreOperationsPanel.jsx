@@ -43,6 +43,25 @@ export default function AdminStoreOperationsPanel() {
     }
   }
 
+  async function updateProvider(provider) {
+    setBusy(provider.id); setError('');
+    try {
+      const accessToken=await token(); if(!accessToken) throw new Error('انتهت جلسة الدخول.');
+      const response=await fetch('/api/v1/admin/store/operations',{method:'PATCH',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({action:'update_provider',providerId:provider.id,providerStatus:provider.status})});
+      const result=await response.json(); if(!response.ok) throw new Error(result.error||'تعذر تحديث المورد.'); await load();
+    } catch(err){setError(err instanceof Error?err.message:'تعذر تحديث المورد.');} finally{setBusy('');}
+  }
+  async function updateMapping(mapping) {
+    setBusy(mapping.id); setError('');
+    try {
+      const accessToken=await token(); if(!accessToken) throw new Error('انتهت جلسة الدخول.');
+      const response=await fetch('/api/v1/admin/store/operations',{method:'PATCH',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({action:'update_provider_mapping',mappingId:mapping.id,mappingEnabled:mapping.is_enabled,externalProductId:mapping.external_product_id,externalSkuId:mapping.external_sku_id,providerRegion:mapping.provider_region})});
+      const result=await response.json(); if(!response.ok) throw new Error(result.error||'تعذر تحديث ربط المورد.'); await load();
+    } catch(err){setError(err instanceof Error?err.message:'تعذر تحديث ربط المورد.');} finally{setBusy('');}
+  }
+  function patchProvider(id,patch){setPayload((current)=>({...current,providers:current.providers.map((p)=>p.id===id?{...p,...patch}:p)}));}
+  function patchMapping(providerId,id,patch){setPayload((current)=>({...current,providers:current.providers.map((p)=>p.id===providerId?{...p,store_provider_products:(p.store_provider_products||[]).map((m)=>m.id===id?{...m,...patch}:m)}:p)}));}
+
   async function updateProduct(product) {
     setBusy(product.id); setError('');
     try {
@@ -144,6 +163,7 @@ export default function AdminStoreOperationsPanel() {
   const orders = payload?.orders || [];
   const products = payload?.products || [];
   const refunds = payload?.refunds || [];
+  const providers = payload?.providers || [];
   const canManage = Boolean(payload?.capabilities?.canManage);
 
   return <div className="space-y-5">
@@ -174,6 +194,22 @@ export default function AdminStoreOperationsPanel() {
         </table>
       </div>
       {!jobs.length && <div className="py-8 text-center text-sm text-gray-500">لا توجد وظائف تفعيل حتى الآن.</div>}
+    </section>
+
+    <section className="rounded-3xl border border-white/10 bg-[#0d1016] p-5">
+      <h3 className="font-black">إدارة الموردين والربط</h3>
+      <p className="mt-1 text-[10px] text-gray-500">بيانات الربط غير السرية فقط. مفاتيح API لا تُخزن أو تُعرض هنا.</p>
+      <div className="mt-4 space-y-3">{providers.map((provider)=><div key={provider.id} className="rounded-2xl border border-white/[.06] bg-[#10131a] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-black">{provider.display_name}</div><div className="text-[10px] text-gray-500">{provider.code} · {provider.provider_type}</div></div>
+        <div className="flex gap-2"><select disabled={!canManage} value={provider.status} onChange={(e)=>patchProvider(provider.id,{status:e.target.value})} className="rounded-lg border border-white/10 bg-[#090b10] px-2 py-2 text-xs"><option>DRAFT</option><option>ACTIVE</option><option>PAUSED</option><option>DISABLED</option></select>{canManage&&<button disabled={busy===provider.id} onClick={()=>void updateProvider(provider)} className="rounded-lg border border-[#ff3344]/30 px-3 py-2 text-[10px] font-black text-[#ff5967]">حفظ المورد</button>}</div></div>
+        <div className="mt-3 space-y-2">{(provider.store_provider_products||[]).map((m)=><div key={m.id} className="grid gap-2 rounded-xl border border-white/[.05] p-3 md:grid-cols-5">
+          <input disabled={!canManage} placeholder="External Product ID" value={m.external_product_id||''} onChange={(e)=>patchMapping(provider.id,m.id,{external_product_id:e.target.value})} className="rounded-lg border border-white/10 bg-[#090b10] p-2 text-xs"/>
+          <input disabled={!canManage} placeholder="External SKU ID" value={m.external_sku_id||''} onChange={(e)=>patchMapping(provider.id,m.id,{external_sku_id:e.target.value})} className="rounded-lg border border-white/10 bg-[#090b10] p-2 text-xs"/>
+          <input disabled={!canManage} placeholder="REGION" value={m.provider_region||''} onChange={(e)=>patchMapping(provider.id,m.id,{provider_region:e.target.value})} className="rounded-lg border border-white/10 bg-[#090b10] p-2 text-xs"/>
+          <label className="flex items-center gap-2 text-[10px]"><input disabled={!canManage} type="checkbox" checked={Boolean(m.is_enabled)} onChange={(e)=>patchMapping(provider.id,m.id,{is_enabled:e.target.checked})}/>ربط مفعل</label>
+          {canManage&&<button disabled={busy===m.id} onClick={()=>void updateMapping(m)} className="rounded-lg border border-white/10 px-2 py-2 text-[10px]">حفظ الربط</button>}
+        </div>)}</div>
+      </div>)}</div>
     </section>
 
     <section className="rounded-3xl border border-white/10 bg-[#0d1016] p-5">
