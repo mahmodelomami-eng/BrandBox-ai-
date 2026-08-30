@@ -1,0 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import assert from 'node:assert/strict';
+const root=process.cwd();
+const api=readFileSync(join(root,'src/app/api/v1/admin/store/operations/route.ts'),'utf8');
+const panel=readFileSync(join(root,'src/components/AdminStoreOperationsPanel.jsx'),'utf8');
+assert.ok(api.includes("body.action === 'update_product'"));
+assert.ok(api.includes("'STORE_PRODUCT_SALE_GATE_FAILED'"));
+assert.ok(api.includes("['PARTNER_REQUIRED', 'CATALOG_ONLY'].includes(current.fulfillment_mode)"));
+assert.ok(api.includes("body.action === 'update_sku'"));
+assert.ok(api.includes("'ADMIN_UPDATED_STORE_SKU'"));
+assert.ok(panel.includes('إدارة المنتجات والأسعار'));
+assert.ok(panel.includes('حفظ بوابات المنتج'));
+console.log('Store admin catalog manager tests passed.');
