@@ -29,6 +29,7 @@ export default function StorePurchasesPage() {
   const router = useRouter();
   const [state, setState] = useState({ loading: true, error: '', orders: [], entitlements: [] });
   const [refundBusy, setRefundBusy] = useState('');
+  const [paymentNotice, setPaymentNotice] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -74,7 +75,25 @@ export default function StorePurchasesPage() {
     }
 
     void load();
-    return () => { mounted = false; };
+    const orderId = new URLSearchParams(window.location.search).get('order');
+    let paymentTimer;
+    let attempts = 0;
+    async function checkPayment() {
+      if (!orderId || !mounted) return;
+      attempts += 1;
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const response = await fetch(`/api/v1/store/payment-status?order=${encodeURIComponent(orderId)}`, { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' });
+      if (!response.ok) return;
+      const result = await response.json();
+      if (result.state === 'completed') { setPaymentNotice('تم تأكيد الدفع وتنفيذ الطلب بنجاح.'); void load(); return; }
+      if (result.state === 'failed') { setPaymentNotice('لم تكتمل عملية الدفع أو تنفيذ الطلب. راجع حالة الطلب.'); return; }
+      setPaymentNotice(result.paymentConfirmed ? 'تم تأكيد الدفع، وجارٍ إكمال التفعيل.' : 'جارٍ التحقق من عملية الدفع...');
+      if (attempts < 8) paymentTimer = window.setTimeout(checkPayment, 3000);
+    }
+    void checkPayment();
+    return () => { mounted = false; if (paymentTimer) window.clearTimeout(paymentTimer); };
   }, [router]);
 
   async function requestRefund(orderId) {
@@ -112,6 +131,7 @@ export default function StorePurchasesPage() {
           <Link href="/store" className="text-sm text-zinc-400 transition hover:text-white">العودة للمتجر</Link>
         </div>
 
+        {paymentNotice && <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-200">{paymentNotice}</div>}
         {state.loading && <div className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-8 text-zinc-400">جاري تحميل المشتريات...</div>}
         {!state.loading && state.error && <div className="rounded-3xl border border-red-900/50 bg-red-950/20 p-8 text-red-300">{state.error}</div>}
 
