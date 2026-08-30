@@ -27,7 +27,10 @@ export type PlatformSettingKey =
   | 'notifications.push_enabled'
   | 'storage.default_retention_days'
   | 'storage.compression_enabled'
-  | 'storage.cdn_enabled';
+  | 'storage.cdn_enabled'
+  | 'finance.usd_lyd_rate'
+  | 'finance.bank_commission_percent'
+  | 'finance.target_margin_percent';
 
 export type SettingValue = string | number | boolean;
 
@@ -77,6 +80,10 @@ export const PLATFORM_SETTING_DEFINITIONS: readonly PlatformSettingDefinition[] 
   { key: 'storage.default_retention_days', category: 'storage', labelAr: 'مدة الاحتفاظ الافتراضية', valueType: 'number', defaultValue: 30, min: 1, max: 3650 },
   { key: 'storage.compression_enabled', category: 'storage', labelAr: 'ضغط الملفات', valueType: 'boolean', defaultValue: true },
   { key: 'storage.cdn_enabled', category: 'storage', labelAr: 'استخدام CDN', valueType: 'boolean', defaultValue: true },
+
+  { key: 'finance.usd_lyd_rate', category: 'finance', labelAr: 'سعر صرف الدولار مقابل الدينار', valueType: 'number', defaultValue: 11, min: 0.01, max: 1000 },
+  { key: 'finance.bank_commission_percent', category: 'finance', labelAr: 'عمولة المصرف %', valueType: 'number', defaultValue: 0, min: 0, max: 100 },
+  { key: 'finance.target_margin_percent', category: 'finance', labelAr: 'هامش الربح المستهدف %', valueType: 'number', defaultValue: 30, min: 0, max: 1000 },
 ] as const;
 
 const definitionMap = new Map(PLATFORM_SETTING_DEFINITIONS.map((definition) => [definition.key, definition]));
