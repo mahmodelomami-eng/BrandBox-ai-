@@ -1,3 +1,4 @@
+import { processBrandBoxCreditFulfillmentForOrder } from './store-credit-fulfillment';
 import { createPrivilegedSupabaseClient } from '../supabase/server';
 import type { CreateStoreOrderInput, StoreCatalogProduct } from './types';
 
@@ -207,6 +208,8 @@ export async function markStoreOrderPaid(orderId: string, paymentReference: stri
       { onConflict: 'idempotency_key', ignoreDuplicates: true },
     );
   }
+
+  await processBrandBoxCreditFulfillmentForOrder(orderId);
 
   return updated;
 }
