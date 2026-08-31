@@ -39,6 +39,24 @@ jobs:
         run: npm run lint
       - name: Unit tests
         run: npm test
+      - name: Store regression suite
+        run: |
+          npm run test:store-v1
+          npm run test:admin-store
+          npm run test:store-refunds
+          npm run test:store-admin-catalog
+          npm run test:store-providers
+          npm run test:store-payment-return
+          npm run test:store-finance
+          npm run test:store-readiness
+          npm run test:store-inventory
+          npm run test:store-code-delivery
+          npm run test:store-delivery
+          npm run test:store-inventory-admin
+          npm run test:store-stock-guard
+          npm run test:store-launch-readiness
+          npm run test:store-db-performance
+          npm run test:store-purchases-redaction
       - name: Build
         env:
           # Public, non-secret placeholders let client-only Supabase initialization
