@@ -31,7 +31,8 @@
     "test:store-delivery": "tsx src/tests/store-secure-delivery.test.ts",
     "test:store-inventory-admin": "tsx src/tests/store-inventory-admin.test.ts",
     "test:store-stock-guard": "tsx src/tests/store-stock-sale-guard.test.ts",
-    "test:store-launch-readiness": "tsx src/tests/store-launch-readiness.test.ts"
+    "test:store-launch-readiness": "tsx src/tests/store-launch-readiness.test.ts",
+    "test:store-db-performance": "tsx src/tests/store-db-performance.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
