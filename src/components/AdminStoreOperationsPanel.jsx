@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, PackageCheck, RefreshCw, RotateCcw, ShoppingBag } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
+import AdminStoreInventoryPanel from './AdminStoreInventoryPanel';
 
 function tone(status) {
   if (['FULFILLED', 'SUCCEEDED', 'PAID', 'ACTIVE_FOR_SALE'].includes(status)) return 'text-emerald-300';
@@ -214,6 +215,8 @@ export default function AdminStoreOperationsPanel() {
         </div>)}</div>
       </div>)}</div>
     </section>
+
+    <AdminStoreInventoryPanel />
 
     <section className="rounded-3xl border border-white/10 bg-[#0d1016] p-5">
       <h3 className="font-black">طلبات الاسترداد</h3>
