@@ -29,7 +29,8 @@
     "test:store-inventory": "tsx src/tests/store-digital-inventory.test.ts",
     "test:store-code-delivery": "tsx src/tests/store-code-delivery.test.ts",
     "test:store-delivery": "tsx src/tests/store-secure-delivery.test.ts",
-    "test:store-inventory-admin": "tsx src/tests/store-inventory-admin.test.ts"
+    "test:store-inventory-admin": "tsx src/tests/store-inventory-admin.test.ts",
+    "test:store-stock-guard": "tsx src/tests/store-stock-sale-guard.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
