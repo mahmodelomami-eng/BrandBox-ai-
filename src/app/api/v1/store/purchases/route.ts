@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   const { data: entitlements, error: entitlementsError } = await supabase
     .from('store_entitlements')
-    .select('id,order_item_id,entitlement_type,status,external_reference,delivery_payload,starts_at,expires_at,created_at')
+    .select('id,order_item_id,entitlement_type,status,external_reference,starts_at,expires_at,created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
