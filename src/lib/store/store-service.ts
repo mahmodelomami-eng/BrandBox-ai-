@@ -50,10 +50,37 @@ export async function listStoreCatalog(): Promise<StoreCatalogProduct[]> {
 
   if (error) throw new Error(`STORE_CATALOG_ERROR: ${error.message}`);
 
-  return ((data ?? []) as unknown as StoreCatalogProduct[]).map((product) => ({
+  const products = (data ?? []) as unknown as StoreCatalogProduct[];
+  const codeStockSkuIds = products
+    .flatMap((product) => product.store_skus ?? [])
+    .filter((sku) => sku.is_active && sku.inventory_mode === 'CODE_STOCK')
+    .map((sku) => sku.id);
+
+  const availableBySku = new Map<string, number>();
+  if (codeStockSkuIds.length) {
+    const { data: codes, error: inventoryError } = await supabase
+      .from('store_digital_codes')
+      .select('sku_id,expires_at')
+      .in('sku_id', codeStockSkuIds)
+      .eq('status', 'AVAILABLE');
+
+    if (inventoryError) throw new Error(`STORE_CATALOG_INVENTORY_ERROR: ${inventoryError.message}`);
+
+    const now = Date.now();
+    for (const code of codes ?? []) {
+      if (code.expires_at && new Date(code.expires_at).getTime() <= now) continue;
+      availableBySku.set(code.sku_id, (availableBySku.get(code.sku_id) ?? 0) + 1);
+    }
+  }
+
+  return products.map((product) => ({
     ...product,
     requires_customer_identifier: Boolean(product.requires_customer_identifier),
-    store_skus: (product.store_skus ?? []).filter((sku) => sku.is_active),
+    store_skus: (product.store_skus ?? []).filter((sku) => {
+      if (!sku.is_active) return false;
+      if (sku.inventory_mode !== 'CODE_STOCK') return true;
+      return (availableBySku.get(sku.id) ?? 0) > 0;
+    }),
   }));
 }
 
