@@ -1,3 +1,4 @@
+import { decryptStoreCode } from '@/lib/store/store-code-crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 
@@ -17,7 +18,20 @@ export async function GET(request:NextRequest){
  if(data.status!=='ACTIVE') return NextResponse.json({error:'ENTITLEMENT_NOT_ACTIVE'},{status:409});
  const payload=(data.delivery_payload||{}) as Record<string,unknown>;
  const safePayload: Record<string, unknown> = {};
- if(data.entitlement_type==='VOUCHER' && Array.isArray(payload.codes)) safePayload.codes=payload.codes;
+ if(data.entitlement_type==='VOUCHER') {
+   if (Array.isArray(payload.code_ids) && payload.code_ids.length) {
+     const { data: codes, error: codeError } = await db
+       .from('store_digital_codes')
+       .select('id,code_ciphertext,status')
+       .in('id', payload.code_ids as string[])
+       .eq('reserved_for_order_item_id', data.order_item_id)
+       .eq('status', 'DELIVERED');
+     if (codeError) return NextResponse.json({error:'DELIVERY_UNAVAILABLE'},{status:503});
+     safePayload.codes=(codes||[]).map((code) => decryptStoreCode(code.code_ciphertext));
+   } else if (Array.isArray(payload.codes)) {
+     safePayload.codes=payload.codes.map((code) => decryptStoreCode(String(code)));
+   }
+ }
  if(data.entitlement_type==='CREDITS'){safePayload.credits_granted=payload.credits_granted;safePayload.new_balance=payload.new_balance;}
  return NextResponse.json({entitlement:{id:data.id,type:data.entitlement_type,status:data.status,startsAt:data.starts_at,expiresAt:data.expires_at,delivery:safePayload}},{headers:{'Cache-Control':'private, no-store, max-age=0','Pragma':'no-cache'}});
 }
