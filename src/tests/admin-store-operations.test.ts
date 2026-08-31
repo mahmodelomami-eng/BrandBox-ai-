@@ -12,7 +12,8 @@ assert.ok(api.includes("fulfillment_mode !== 'BRAND_BOX_CREDITS'"));
 assert.ok(api.includes('processBrandBoxCreditFulfillmentForOrder(item.order_id)'));
 assert.ok(api.includes('ADMIN_RETRIED_STORE_FULFILLMENT'));
 assert.ok(panel.includes('إعادة المحاولة'));
-assert.ok(panel.includes('بوابات بيع المنتجات'));
+assert.ok(panel.includes('جاهزية الكتالوج للبيع'));
+assert.ok(panel.includes('حفظ بوابات المنتج'));
 assert.ok(center.includes("['store', 'عمليات المتجر', Boxes]"));
 
 console.log('Admin Store operations tests passed.');
