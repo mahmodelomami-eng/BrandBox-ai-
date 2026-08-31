@@ -1,0 +1,18 @@
+import { readFileSync } from 'node:fs'; import { join } from 'node:path'; import assert from 'node:assert/strict';
+const root=process.cwd();
+const crypto=readFileSync(join(root,'src/lib/store/store-code-crypto.ts'),'utf8');
+const api=readFileSync(join(root,'src/app/api/v1/admin/store/inventory/route.ts'),'utf8');
+const delivery=readFileSync(join(root,'src/app/api/v1/store/delivery/route.ts'),'utf8');
+const fulfillment=readFileSync(join(root,'src/lib/store/store-code-fulfillment.ts'),'utf8');
+const ui=readFileSync(join(root,'src/components/AdminStoreInventoryPanel.jsx'),'utf8');
+assert.ok(crypto.includes("createCipheriv('aes-256-gcm'"));
+assert.ok(crypto.includes("createHash('sha256')"));
+assert.ok(api.includes('ADMIN_IMPORTED_STORE_CODE_BATCH'));
+assert.ok(api.includes("code_ciphertext: encryptStoreCode(code)"));
+assert.ok(api.includes("codes.length > 500"));
+assert.ok(fulfillment.includes('delivery_payload:{code_ids:'));
+assert.ok(!fulfillment.includes('delivery_payload:{codes:delivered'));
+assert.ok(delivery.includes('decryptStoreCode'));
+assert.ok(delivery.includes("'Cache-Control':'private, no-store"));
+assert.ok(ui.includes('استيراد وتشفير الدفعة'));
+console.log('Store inventory admin and encryption tests passed.');
