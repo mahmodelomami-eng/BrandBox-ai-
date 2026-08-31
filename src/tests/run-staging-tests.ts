@@ -1,6 +1,34 @@
 import { runStagingCreditIntegrationTests } from './integration/credit-integration.test';
 import { runStagingEzonePayIntegrationTests } from './integration/ezonepay-integration.test';
 import { resetStagingTestData } from '../lib/supabase/test-db-reset';
+import { createStagingTestClient } from '../lib/supabase/test-client';
+
+async function runStoreStagingReadinessChecks() {
+  const supabase = createStagingTestClient();
+  const results: { testName: string; passed: boolean; details?: string }[] = [];
+
+  const requiredTables = [
+    'store_categories','store_products','store_skus','store_orders','store_order_items',
+    'store_entitlements','store_fulfillment_jobs','store_refunds','store_digital_codes'
+  ];
+  for (const table of requiredTables) {
+    const { error } = await supabase.from(table).select('*', { head: true, count: 'exact' }).limit(1);
+    results.push({ testName: `Store staging table: ${table}`, passed: !error, details: error?.message });
+  }
+
+  const { data: skus, error: skuError } = await supabase
+    .from('store_skus').select('id').eq('inventory_mode','CODE_STOCK').limit(1);
+  if (skuError) {
+    results.push({ testName: 'Store CODE_STOCK availability RPC', passed: false, details: skuError.message });
+  } else if (skus?.[0]?.id) {
+    const { error } = await supabase.rpc('store_available_code_count', { p_sku_id: skus[0].id });
+    results.push({ testName: 'Store CODE_STOCK availability RPC', passed: !error, details: error?.message });
+  } else {
+    results.push({ testName: 'Store CODE_STOCK availability RPC', passed: true, details: 'No CODE_STOCK SKU seeded; RPC destructive flow not invoked.' });
+  }
+
+  return { allPassed: results.every((result) => result.passed), results };
+}
 
 export async function main() {
   const dbMode = process.env.TEST_DATABASE_MODE;
@@ -25,12 +53,20 @@ export async function main() {
   try {
     const creditRes = await runStagingCreditIntegrationTests();
     const payRes = await runStagingEzonePayIntegrationTests();
+    const storeRes = await runStoreStagingReadinessChecks();
 
     console.log('\n--- CREDIT INTEGRATION RESULTS ---');
     console.table(creditRes.results);
 
     console.log('\n--- EZONE PAY INTEGRATION RESULTS ---');
     console.table(payRes.results);
+
+    console.log('\n--- STORE STAGING READINESS RESULTS ---');
+    console.table(storeRes.results);
+
+    if (!creditRes.allPassed || !payRes.allPassed || !storeRes.allPassed) {
+      throw new Error('One or more staging integration checks failed.');
+    }
 
     await resetStagingTestData();
     console.log('\n✅ Staging Test Data Reset Complete.');
