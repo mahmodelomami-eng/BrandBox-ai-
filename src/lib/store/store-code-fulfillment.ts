@@ -19,7 +19,7 @@ export async function processDigitalCodeFulfillmentForOrder(orderId:string){
   if(reserveError||!reserved||reserved.length<item.quantity){await db.from('store_fulfillment_jobs').update({status:'FAILED',last_error_code:'STORE_OUT_OF_STOCK',last_error_message:'Insufficient digital code inventory.',updated_at:new Date().toISOString()}).eq('id',job.id);throw new Error('STORE_OUT_OF_STOCK');}
   const {data:delivered,error:deliveryError}=await db.rpc('deliver_store_digital_codes',{p_order_item_id:item.id});
   if(deliveryError||!delivered||delivered.length<item.quantity) throw new Error('STORE_CODE_DELIVERY_FAILED');
-  await db.from('store_entitlements').upsert({user_id:order.user_id,order_item_id:item.id,entitlement_type:'VOUCHER',status:'ACTIVE',delivery_payload:{codes:delivered.map((x:any)=>x.code_ciphertext)},starts_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'order_item_id'});
+  await db.from('store_entitlements').upsert({user_id:order.user_id,order_item_id:item.id,entitlement_type:'VOUCHER',status:'ACTIVE',delivery_payload:{code_ids:delivered.map((x:any)=>x.code_id)},starts_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'order_item_id'});
   await db.from('store_fulfillment_jobs').update({status:'SUCCEEDED',external_reference:`codes:${item.id}`,completed_at:new Date().toISOString(),last_error_code:null,last_error_message:null,updated_at:new Date().toISOString()}).eq('id',job.id);
   processed++;
  }
