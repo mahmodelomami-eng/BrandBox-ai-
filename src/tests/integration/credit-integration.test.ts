@@ -5,21 +5,24 @@ export async function runStagingCreditIntegrationTests(): Promise<{
   results: { testName: string; passed: boolean; details?: string }[];
 }> {
   const results: { testName: string; passed: boolean; details?: string }[] = [];
-  const testUserId = 'usr_test_staging_credit_01';
+  const testUserId = process.env.STAGING_TEST_USER_ID;
+  if (!testUserId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(testUserId)) {
+    throw new Error('STAGING_TEST_USER_ID must identify a dedicated staging auth user.');
+  }
 
   try {
     const supabase = createStagingTestClient();
 
-    // 1. Setup Staging Test User Profile with 100 Credits
-    await supabase.from('profiles').upsert({
-      id: testUserId,
-      email: 'credit.test.staging@brandbox.ai',
-      first_name: 'Staging',
-      last_name: 'Tester',
-      credit_balance: 100,
-      role: 'USER',
-      status: 'active'
-    });
+    // 1. Use the dedicated staging auth profile; never synthesize a non-auth profile ID.
+    const { data: existingProfile, error: existingProfileError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', testUserId)
+      .single();
+    if (existingProfileError || !existingProfile?.email?.includes('test.staging')) {
+      throw new Error('STAGING_TEST_USER_ID must belong to a dedicated test.staging profile.');
+    }
+    await supabase.from('profiles').update({ credit_balance: 100 }).eq('id', testUserId);
 
     // 2. Concurrency Test: Two Simultaneous Requests for 80 Credits Each
     const req1 = supabase.rpc('deduct_credits_idempotent', {
