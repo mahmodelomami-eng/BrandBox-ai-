@@ -30,6 +30,7 @@ export default function StorePurchasesPage() {
   const [state, setState] = useState({ loading: true, error: '', orders: [], entitlements: [] });
   const [refundBusy, setRefundBusy] = useState('');
   const [paymentNotice, setPaymentNotice] = useState('');
+  const [delivery, setDelivery] = useState({ busy: '', error: '', entitlementId: '', payload: null });
 
   useEffect(() => {
     let mounted = true;
@@ -95,6 +96,21 @@ export default function StorePurchasesPage() {
     void checkPayment();
     return () => { mounted = false; if (paymentTimer) window.clearTimeout(paymentTimer); };
   }, [router]);
+
+  async function revealDelivery(entitlementId) {
+    setDelivery({ busy: entitlementId, error: '', entitlementId: '', payload: null });
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return router.replace('/auth?next=%2Fstore%2Fpurchases');
+      const response = await fetch(`/api/v1/store/delivery?entitlement=${encodeURIComponent(entitlementId)}`, { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' });
+      const payload = await response.json();
+      if (!response.ok) throw new Error('تعذر فتح بيانات التسليم.');
+      setDelivery({ busy: '', error: '', entitlementId, payload: payload.entitlement?.delivery || {} });
+    } catch (error) {
+      setDelivery({ busy: '', error: error instanceof Error ? error.message : 'تعذر فتح بيانات التسليم.', entitlementId: '', payload: null });
+    }
+  }
 
   async function requestRefund(orderId) {
     const reason = window.prompt('اكتب سبب طلب الاسترداد:');
@@ -195,9 +211,12 @@ export default function StorePurchasesPage() {
                     <div>البداية: {formatDate(item.starts_at)}</div>
                     <div>الانتهاء: {formatDate(item.expires_at)}</div>
                   </div>
+                  {item.status === 'ACTIVE' && ['VOUCHER','CREDITS'].includes(item.entitlement_type) && <button onClick={() => void revealDelivery(item.id)} disabled={delivery.busy === item.id} className="mt-3 rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-[11px] font-bold text-red-200 disabled:opacity-50">{delivery.busy === item.id ? 'جاري الفتح...' : item.entitlement_type === 'VOUCHER' ? 'عرض بيانات التسليم' : 'عرض تفاصيل الرصيد'}</button>}
+                  {delivery.entitlementId === item.id && delivery.payload && <div className="mt-3 rounded-xl border border-zinc-700 bg-black/40 p-3 text-xs text-zinc-200">{Array.isArray(delivery.payload.codes) && delivery.payload.codes.map((code, index) => <div key={index} dir="ltr" className="break-all font-mono">{String(code)}</div>)}{delivery.payload.credits_granted != null && <div>تمت إضافة {String(delivery.payload.credits_granted)} نقطة — الرصيد الجديد {String(delivery.payload.new_balance ?? '—')}</div>}</div>}
                 </div>
               ))}
             </div>
+          {delivery.error && <div className="mt-3 text-xs text-red-300">{delivery.error}</div>}
           </section>
         )}
       </section>
