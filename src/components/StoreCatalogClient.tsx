@@ -27,6 +27,7 @@ function checkoutErrorMessage(message: string) {
   if (message.includes('STORE_CUSTOMER_IDENTIFIER_REQUIRED')) return 'أدخل معرف الحساب المطلوب لتفعيل هذه الخدمة.';
   if (message.includes('STORE_PRODUCT_NOT_FOR_SALE')) return 'هذا المنتج غير متاح للبيع حاليًا.';
   if (message.includes('STORE_SKU_UNAVAILABLE')) return 'هذه الخطة غير متاحة حاليًا.';
+  if (message.includes('STORE_OUT_OF_STOCK')) return 'نفد مخزون هذه الخطة حاليًا. ستعود للشراء بعد إضافة مخزون جديد.';
   if (message.includes('UNAUTHORIZED')) return 'يجب تسجيل الدخول قبل الشراء.';
   return 'تعذر بدء عملية الشراء. حاول مرة أخرى لاحقًا.';
 }
