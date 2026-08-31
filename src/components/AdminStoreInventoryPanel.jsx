@@ -123,7 +123,7 @@ export default function AdminStoreInventoryPanel() {
           <input value={supplierBatch} onChange={(e) => setSupplierBatch(e.target.value)} placeholder="Supplier Batch (اختياري)" className="rounded-xl border border-white/10 bg-[#090b10] p-3 text-xs outline-none"/>
           <input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="rounded-xl border border-white/10 bg-[#090b10] p-3 text-xs outline-none"/>
         </div>
-        <button onClick={() => void importBatch()} disabled={busy || !selectedSkuId} className="mt-4 flex items-center gap-2 rounded-xl bg-[#f31325] px-5 py-3 text-xs font-black disabled:opacity-50">{busy && <Loader2 size={14} className="animate-spin"/> استيراد وتشفير الدفعة</button>
+        <button onClick={() => void importBatch()} disabled={busy || !selectedSkuId} className="mt-4 flex items-center gap-2 rounded-xl bg-[#f31325] px-5 py-3 text-xs font-black disabled:opacity-50">{busy && <Loader2 size={14} className="animate-spin"/>} استيراد وتشفير الدفعة</button>
       </div>}
     </div>
   </section>;
