@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, PackageCheck, RefreshCw, RotateCcw, ShoppingBag } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import AdminStoreInventoryPanel from './AdminStoreInventoryPanel';
+import AdminStoreLaunchReadinessPanel from './AdminStoreLaunchReadinessPanel';
 
 function tone(status) {
   if (['FULFILLED', 'SUCCEEDED', 'PAID', 'ACTIVE_FOR_SALE'].includes(status)) return 'text-emerald-300';
@@ -172,6 +173,8 @@ export default function AdminStoreOperationsPanel() {
 
   return <div className="space-y-5">
     {error && <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-xs text-red-200">{error}</div>}
+
+    <AdminStoreLaunchReadinessPanel />
 
     <section className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-[#0d1016] p-5 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
       <div><div className="text-[10px] font-black tracking-[.2em] text-[#ff3344]">STORE OPERATIONS</div><h2 className="mt-2 text-xl font-black">تشغيل ومتابعة Brand Box Store</h2><p className="mt-2 text-xs leading-6 text-gray-500">متابعة الطلبات ووظائف التفعيل وإعادة محاولة التفعيل الآمن للرصيد المملوك لـ Brand Box فقط.</p></div>
