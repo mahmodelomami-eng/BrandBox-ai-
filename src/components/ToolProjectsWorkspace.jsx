@@ -181,8 +181,8 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
     const uniqueIds = [...new Set(ids)].filter(Boolean);
     if (!uniqueIds.length) return;
     const confirmation = uniqueIds.length === 1
-      ? 'هل تريد حذف هذا المشروع؟ لا يمكن التراجع عن الحذف.'
-      : `هل تريد حذف ${uniqueIds.length} مشاريع؟ لا يمكن التراجع عن الحذف.`;
+      ? 'هل تريد نقل هذا المشروع إلى سلة المحذوفات؟ يمكنك استعادته خلال 30 يومًا.'
+      : `هل تريد نقل ${uniqueIds.length} مشاريع إلى سلة المحذوفات؟ يمكنك استعادتها خلال 30 يومًا.`;
     if (!window.confirm(confirmation)) return;
 
     setDeletingIds((current) => new Set([...current, ...uniqueIds]));
@@ -203,9 +203,9 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
         deleted.forEach((id) => delete next[id]);
         return next;
       });
-      if (failed) setError(`تم حذف ${deleted.length} مشروع، وتعذر حذف ${failed}.`);
+      if (failed) setError(`تم نقل ${deleted.length} مشروع إلى السلة، وتعذر نقل ${failed}.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر حذف المشروع.');
+      setError(err instanceof Error ? err.message : 'تعذر نقل المشروع إلى سلة المحذوفات.');
     } finally {
       setDeletingIds((current) => {
         const next = new Set(current);
@@ -291,7 +291,7 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
             {selectedCount > 0 && (
               <div className="flex items-center gap-3">
                 <span className="text-xs font-black text-[#ff3344]">تم تحديد {selectedCount}</span>
-                <button type="button" onClick={() => deleteProjects([...selectedIds])} className="flex items-center gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2 text-xs font-black text-red-300 transition hover:bg-red-500/20"><Trash2 size={15} /> حذف المحدد</button>
+                <button type="button" onClick={() => deleteProjects([...selectedIds])} className="flex items-center gap-2 rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2 text-xs font-black text-red-300 transition hover:bg-red-500/20"><Trash2 size={15} /> نقل المحدد للسلة</button>
               </div>
             )}
           </div>
@@ -320,7 +320,7 @@ export default function ToolProjectsWorkspace({ tool = 'images' }) {
                     <button type="button" onClick={() => toggleFavorite(project)} disabled={isFavoriting} title={project.isFavorite ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'} className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${project.isFavorite ? 'border-[#f31325]/40 bg-[#f31325] text-white' : 'border-white/10 bg-black/85 text-gray-400 hover:text-[#ff3344]'}`}>
                       {isFavoriting ? <Loader2 size={15} className="animate-spin" /> : <Heart size={17} fill={project.isFavorite ? 'currentColor' : 'none'} />}
                     </button>
-                    <button type="button" onClick={() => deleteProjects([project.id])} title="حذف المشروع" className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-500/20 bg-black/85 text-red-300 transition hover:bg-red-500/20"><Trash2 size={16} /></button>
+                    <button type="button" onClick={() => deleteProjects([project.id])} title="نقل المشروع إلى سلة المحذوفات" className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-500/20 bg-black/85 text-red-300 transition hover:bg-red-500/20"><Trash2 size={16} /></button>
                   </div>
 
                   <label className="absolute right-3 top-3 z-20 flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-black/85">

@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
       .select('id,type')
       .eq('id', body.projectId)
       .eq('owner_id', user.id)
+      .is('deleted_at', null)
       .maybeSingle();
     if (projectError || !project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
 
