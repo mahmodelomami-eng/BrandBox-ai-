@@ -8,21 +8,30 @@ const engine = readFileSync(join(root, 'src/lib/generations/generation-engine.ts
 const client = readFileSync(join(root, 'src/lib/ai/openrouter-client.ts'), 'utf8');
 const workspace = readFileSync(join(root, 'src/components/ChatProjectWorkspace.jsx'), 'utf8');
 
-const catalogCheck = route.indexOf(".from('ai_model_catalog')");
-const generationExecution = route.indexOf('GenerationEngine.executeGeneration');
-assert.ok(catalogCheck >= 0, 'chat generation must consult ai_model_catalog');
-assert.ok(generationExecution > catalogCheck, 'model catalog authorization must occur before GenerationEngine/credit deduction');
-assert.ok(route.includes(".eq('provider', 'openrouter')"));
-assert.ok(route.includes(".eq('generation_type', 'chat')"));
-assert.ok(route.includes(".eq('is_enabled', true)"));
-assert.ok(route.includes(".eq('is_visible_to_users', true)"));
-assert.ok(route.includes("error: 'CHAT_MODEL_NOT_AVAILABLE'"));
-assert.ok(route.includes("error: 'CHAT_MODEL_PRICING_UNAVAILABLE'"));
-assert.ok(route.includes('minimum_credits'));
-assert.ok(route.includes('projectChatSystemPrompt(project)'));
-assert.ok(route.includes(".eq('owner_id', user.id)"));
-assert.ok(route.includes(".is('deleted_at', null)"));
-assert.ok(route.includes('{ unitCredits, chatSystemPrompt }'));
+const postRoute = route.slice(route.indexOf('export async function POST'));
+const postCatalogCheck = postRoute.indexOf(".from('ai_model_catalog')");
+const generationExecution = postRoute.indexOf('GenerationEngine.executeGeneration');
+assert.ok(postCatalogCheck >= 0, 'chat POST must consult ai_model_catalog');
+assert.ok(generationExecution > postCatalogCheck, 'POST model catalog authorization must occur before GenerationEngine/credit deduction');
+assert.ok(postRoute.includes(".eq('provider', 'openrouter')"));
+assert.ok(postRoute.includes(".eq('generation_type', 'chat')"));
+assert.ok(postRoute.includes(".eq('is_enabled', true)"));
+assert.ok(postRoute.includes(".eq('is_visible_to_users', true)"));
+assert.ok(postRoute.includes("error: 'CHAT_MODEL_NOT_AVAILABLE'"));
+assert.ok(postRoute.includes("error: 'CHAT_MODEL_PRICING_UNAVAILABLE'"));
+assert.ok(postRoute.includes('minimum_credits'));
+assert.ok(postRoute.includes('projectChatSystemPrompt(project)'));
+assert.ok(postRoute.includes(".eq('owner_id', user.id)"));
+assert.ok(postRoute.includes(".is('deleted_at', null)"));
+assert.ok(postRoute.includes('{ unitCredits, chatSystemPrompt }'));
+
+const getRoute = route.slice(route.indexOf('export async function GET'), route.indexOf('export async function POST'));
+assert.ok(getRoute.includes("searchParams.get('projectId')"));
+assert.ok(getRoute.includes("searchParams.get('generationType')"));
+assert.ok(getRoute.includes("generationQuery.eq('project_id', projectId)"));
+assert.ok(getRoute.includes("generationQuery.eq('generation_type', requestedGenerationType)"));
+assert.ok(getRoute.includes(".eq('owner_id', user.id)"), 'scoped history must validate project ownership before returning rows');
+assert.ok(getRoute.includes("error: 'INVALID_HISTORY_FILTER'"));
 
 assert.ok(engine.includes('executionContext.unitCredits'));
 assert.ok(engine.includes('systemPrompt: executionContext.chatSystemPrompt'));
@@ -42,7 +51,9 @@ assert.ok(!chatClient.includes('error?.message'), 'chat client must not expose r
 
 assert.ok(workspace.includes('payload.chatModels'));
 assert.ok(workspace.includes('payload.chatModelsAvailable'));
+assert.ok(workspace.includes("new URLSearchParams({ projectId, generationType: 'chat' })"));
 assert.ok(workspace.includes('النماذج المفعّلة من لوحة الإدارة'));
 assert.ok(!workspace.includes('const MODELS = ['), 'chat model list must no longer be hardcoded in the browser');
+assert.ok(!workspace.includes(".filter((item) => item.project_id === projectId"), 'chat history filtering must happen on the server');
 
 console.log('Chat/OpenRouter launch guard passed.');
