@@ -93,6 +93,7 @@ function verifyNavigationCommerceContract() {
 function verifyPublicServicesContract() {
   const repoRoot = process.cwd();
   const templatesPath = join(repoRoot, 'src/app/templates/page.jsx');
+  const templatesComponentPath = join(repoRoot, 'src/components/TemplatesLivingLibrary.jsx');
   const marketingPath = join(repoRoot, 'src/app/marketing-plans/page.jsx');
   const printPath = join(repoRoot, 'src/app/print/page.jsx');
   const aboutPath = join(repoRoot, 'src/app/about/page.jsx');
@@ -107,6 +108,7 @@ function verifyPublicServicesContract() {
 
   const requiredPaths = [
     templatesPath,
+    templatesComponentPath,
     marketingPath,
     printPath,
     aboutPath,
@@ -120,7 +122,9 @@ function verifyPublicServicesContract() {
   ];
   if (!requiredPaths.every((path) => existsSync(path))) return false;
 
-  const templatesSource = readFileSync(templatesPath, 'utf8');
+  const templatesRouteSource = readFileSync(templatesPath, 'utf8');
+  const templatesComponentSource = readFileSync(templatesComponentPath, 'utf8');
+  const templatesSource = `${templatesRouteSource}\n${templatesComponentSource}`;
   const marketingSource = readFileSync(marketingPath, 'utf8');
   const printSource = readFileSync(printPath, 'utf8');
   const aboutSource = readFileSync(aboutPath, 'utf8');
@@ -134,10 +138,20 @@ function verifyPublicServicesContract() {
     !existsSync(obsoleteSectionLandingPath) &&
     ![templatesSource, marketingSource, printSource, aboutSource, contactSource].some((source) => source.includes('SectionLanding'));
 
-  const templatesUseImageProjects =
-    templatesSource.includes("type: 'صورة'") &&
-    templatesSource.includes('/projects/images/workspace?project=') &&
-    !templatesSource.includes("type: 'صورة + نص'");
+  const templatesUseCanonicalToolProjects =
+    templatesRouteSource.includes('TemplatesLivingLibrary') &&
+    [
+      "projectType: 'صورة'",
+      "projectType: 'محادثة'",
+      "projectType: 'فيديو'",
+      "projectType: 'صوت'",
+      "path: '/projects/images/workspace'",
+      "path: '/projects/chat/workspace'",
+      "path: '/projects/video/workspace'",
+      "path: '/projects/audio/workspace'",
+      'type: tool.projectType',
+    ].every((token) => templatesComponentSource.includes(token)) &&
+    !templatesSource.includes("'صورة + نص'");
 
   const defaultProjectTypeIsCanonical =
     projectServiceSource.includes("type: input.type || 'صورة'") &&
@@ -171,7 +185,7 @@ function verifyPublicServicesContract() {
 
   return (
     placeholdersRemoved &&
-    templatesUseImageProjects &&
+    templatesUseCanonicalToolProjects &&
     defaultProjectTypeIsCanonical &&
     marketingCreatesChatProject &&
     printRoutesToRealWorkflows &&

@@ -1,0 +1,79 @@
+name: Local UI Preview
+
+on:
+  push:
+    branches:
+      - feat/templates-living-library
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Generate lockfile metadata
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Install dependencies
+        run: npm ci
+      - name: Install browser
+        run: npx --yes playwright@1.55.0 install --with-deps chromium
+      - name: Build application
+        run: npm run build
+      - name: Start local Next.js server
+        run: |
+          npm start -- --hostname 127.0.0.1 --port 3000 > /tmp/brandbox-next.log 2>&1 &
+          echo $! > /tmp/brandbox-next.pid
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/templates >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/brandbox-next.log
+          exit 1
+      - name: Capture desktop preview
+        run: npx --yes playwright@1.55.0 screenshot --browser chromium --viewport-size="1440,1200" --full-page http://127.0.0.1:3000/templates local-preview/templates-desktop.png
+      - name: Capture mobile preview
+        run: npx --yes playwright@1.55.0 screenshot --browser chromium --viewport-size="390,844" --full-page http://127.0.0.1:3000/templates local-preview/templates-mobile.png
+      - name: Capture smart quick preview
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.55.0
+          node - <<'NODE'
+          const { chromium } = require('playwright');
+          async function capture(viewport, path, fillValue) {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport });
+            await page.goto('http://127.0.0.1:3000/templates', { waitUntil: 'networkidle' });
+            const button = page.getByRole('button', { name: /سجّل الدخول للتجربة|جرّب الآن/ }).first();
+            await button.click();
+            const input = page.getByPlaceholder('مثال: عطر Noir');
+            await input.fill(fillValue);
+            await page.waitForTimeout(250);
+            await page.screenshot({ path, fullPage: false });
+            await browser.close();
+          }
+          (async () => {
+            await capture({ width: 1200, height: 900 }, 'local-preview/templates-quick-preview.png', 'عطر Noir');
+            await capture({ width: 390, height: 844 }, 'local-preview/templates-quick-preview-mobile.png', 'عطر Noir');
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+      - name: Upload local preview screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: brandbox-local-ui-preview
+          path: local-preview/*.png
+          if-no-files-found: error
+          retention-days: 7
