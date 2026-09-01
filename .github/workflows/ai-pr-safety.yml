@@ -1,0 +1,50 @@
+name: AI PR Safety Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Protected-operation policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Block tracked production secret files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+          printf '%s\n' "$changed"
+
+          if printf '%s\n' "$changed" | grep -E '(^|/)(\.env|\.env\.local|\.env\.production|\.env\.prod)$' >/dev/null; then
+            echo "Blocked: production/local environment secret file changed. Use platform secret storage instead."
+            exit 1
+          fi
+
+      - name: Block clearly destructive migration operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_files="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD | grep -E '(^|/)(supabase/)?migrations/.*\.sql$' || true)"
+          [ -z "$migration_files" ] && exit 0
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            patch="$(git diff --unified=0 "origin/${{ github.base_ref }}"...HEAD -- "$file" | grep '^+' | grep -v '^+++' || true)"
+            if printf '%s\n' "$patch" | grep -Eiq '\b(DROP[[:space:]]+(TABLE|SCHEMA|DATABASE)|TRUNCATE([[:space:]]+TABLE)?|DISABLE[[:space:]]+ROW[[:space:]]+LEVEL[[:space:]]+SECURITY)\b'; then
+              echo "Blocked protected operation in $file. Destructive production database operations require explicit owner/platform authorization and a separately reviewed migration plan."
+              exit 1
+            fi
+          done <<< "$migration_files"
+
+      - name: Policy summary
+        run: echo "AI PR protected-operation policy passed. Normal CI still decides code readiness."

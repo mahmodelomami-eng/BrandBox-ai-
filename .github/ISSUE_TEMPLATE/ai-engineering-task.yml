@@ -1,0 +1,69 @@
+name: AI Engineering Task
+description: Structured work item for an autonomous Brand Box AI coding agent.
+title: "[AI Task] "
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Outcome
+      description: What business/product result must be achieved?
+      placeholder: Describe the result, not just the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete conditions that prove the task is complete.
+      placeholder: |
+        - [ ] Core behavior works
+        - [ ] Regression test added
+        - [ ] RTL/mobile checked if relevant
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk level
+      options:
+        - LOW
+        - MEDIUM
+        - HIGH
+        - PROTECTED
+    validations:
+      required: true
+  - type: checkboxes
+    id: systems
+    attributes:
+      label: Systems touched
+      options:
+        - label: Frontend / Next.js UI
+        - label: Backend / API / server actions
+        - label: Supabase schema, RLS or RPC
+        - label: Authentication / RBAC
+        - label: Credits / billing
+        - label: Payments / Ezone Pay
+        - label: AI / OpenRouter / provider integration
+        - label: Store / fulfillment / code inventory
+        - label: CI/CD / Vercel
+  - type: textarea
+    id: tests
+    attributes:
+      label: Required verification
+      description: Focused tests or manual checks known at task creation time.
+      placeholder: npm run test:... / npm run lint / npm test / npm run build
+  - type: textarea
+    id: external
+    attributes:
+      label: External gates
+      description: Credentials, contracts, supplier authorization, production activation, DNS, or other protected dependencies. Write "None" if there are none.
+      value: None
+    validations:
+      required: true
+  - type: checkboxes
+    id: agent_contract
+    attributes:
+      label: Agent contract
+      options:
+        - label: I confirm this task must follow AGENTS.md and must not bypass protected-operation gates.
+          required: true
