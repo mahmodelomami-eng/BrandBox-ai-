@@ -11,9 +11,9 @@ begin
     order by created_at for update skip locked limit p_quantity
   ), reserved as (
     update public.store_digital_codes c set status='RESERVED',reserved_for_order_item_id=p_order_item_id,reserved_at=now(),updated_at=now()
-    from candidates x where c.id=x.id returning c.id,c.code_ciphertext as encrypted_code
+    from candidates x where c.id=x.id returning c.id,c.code_ciphertext
   )
-  select r.id,r.encrypted_code from reserved r;
+  select r.id,r.code_ciphertext from reserved r;
   if (select count(*) from public.store_digital_codes where reserved_for_order_item_id=p_order_item_id and status in ('RESERVED','DELIVERED')) < p_quantity then
     raise exception 'STORE_OUT_OF_STOCK';
   end if;
@@ -23,7 +23,7 @@ returns table(code_id uuid, code_ciphertext text)
 language plpgsql security definer set search_path=public as $$
 begin
  return query update public.store_digital_codes set status='DELIVERED',delivered_at=coalesce(delivered_at,now()),updated_at=now()
- where reserved_for_order_item_id=p_order_item_id and status in ('RESERVED','DELIVERED') returning store_digital_codes.id,store_digital_codes.code_ciphertext;
+ where reserved_for_order_item_id=p_order_item_id and status in ('RESERVED','DELIVERED') returning id,code_ciphertext;
 end $$;
 revoke all on function public.reserve_store_digital_codes(uuid,uuid,integer) from public,anon,authenticated;
 revoke all on function public.deliver_store_digital_codes(uuid) from public,anon,authenticated;
