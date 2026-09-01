@@ -2,6 +2,7 @@ import { runStagingCreditIntegrationTests } from './integration/credit-integrati
 import { runStagingEzonePayIntegrationTests } from './integration/ezonepay-integration.test';
 import { resetStagingTestData } from '../lib/supabase/test-db-reset';
 import { createStagingTestClient } from '../lib/supabase/test-client';
+import { runStoreCodeStockE2EStagingTest } from './integration/store-code-stock-e2e.test';
 
 async function runStoreStagingReadinessChecks() {
   const supabase = createStagingTestClient();
@@ -54,6 +55,7 @@ export async function main() {
     const creditRes = await runStagingCreditIntegrationTests();
     const payRes = await runStagingEzonePayIntegrationTests();
     const storeRes = await runStoreStagingReadinessChecks();
+    const storeE2E = await runStoreCodeStockE2EStagingTest();
 
     console.log('\n--- CREDIT INTEGRATION RESULTS ---');
     console.table(creditRes.results);
@@ -64,7 +66,10 @@ export async function main() {
     console.log('\n--- STORE STAGING READINESS RESULTS ---');
     console.table(storeRes.results);
 
-    if (!creditRes.allPassed || !payRes.allPassed || !storeRes.allPassed) {
+    console.log('\n--- STORE CODE_STOCK E2E RESULTS ---');
+    console.table(storeE2E.results);
+
+    if (!creditRes.allPassed || !payRes.allPassed || !storeRes.allPassed || !storeE2E.allPassed) {
       throw new Error('One or more staging integration checks failed.');
     }
 
