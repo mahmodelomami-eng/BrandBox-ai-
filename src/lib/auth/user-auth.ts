@@ -1,8 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 import type { NextRequest } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
-
-export const ACTIVE_PROFILE_STATUS = 'active' as const;
+import { isActiveProfileStatus } from '@/lib/auth/user-status';
 
 export type ActiveUserProfile = {
   id: string;
@@ -14,10 +13,6 @@ export type ActiveUserAuth = {
   user: User;
   profile: ActiveUserProfile;
 };
-
-export function isActiveProfileStatus(status: unknown): status is typeof ACTIVE_PROFILE_STATUS {
-  return status === ACTIVE_PROFILE_STATUS;
-}
 
 export async function authenticateActiveUser(request: NextRequest): Promise<ActiveUserAuth | null> {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
