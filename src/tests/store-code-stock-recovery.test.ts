@@ -5,6 +5,8 @@ const route=readFileSync(join(root,'src/app/api/v1/admin/store/operations/route.
 const panel=readFileSync(join(root,'src/components/AdminStoreOperationsPanel.jsx'),'utf8');
 assert.ok(fulfillment.includes("status:'REVIEW_REQUIRED'"));
 assert.ok(fulfillment.includes("last_error_code:'STORE_OUT_OF_STOCK'"));
+assert.ok(fulfillment.includes("last_error_code:'STORE_CODE_DELIVERY_FAILED'"));
+assert.ok(fulfillment.includes("attempt_count:Number(job.attempt_count||0)+1"));
 assert.ok(fulfillment.includes("status:'FULFILLED'"));
 assert.ok(route.includes("processDigitalCodeFulfillmentForOrder"));
 assert.ok(route.includes("['FAILED','REVIEW_REQUIRED']"));
