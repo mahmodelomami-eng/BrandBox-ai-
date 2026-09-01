@@ -15,6 +15,7 @@ const OPENROUTER_IMAGE_ASPECT_RATIOS = new Set([
 export interface OpenRouterChatRequest {
   model: string;
   prompt: string;
+  systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
 }
@@ -53,6 +54,18 @@ export interface OpenRouterImageResult {
   completionTokens?: number;
   totalTokens?: number;
   costUsd?: number;
+}
+
+function chatHttpErrorCode(status: number): string {
+  if (status === 408) return 'OPENROUTER_TIMEOUT';
+  if (status === 429) return 'OPENROUTER_RATE_LIMITED';
+  if (status === 401 || status === 403) return 'OPENROUTER_AUTH_FAILED';
+  if (status >= 500) return 'OPENROUTER_PROVIDER_UNAVAILABLE';
+  return 'OPENROUTER_REQUEST_REJECTED';
+}
+
+function finiteUsageNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 export async function createOpenRouterImageGeneration(
@@ -122,7 +135,21 @@ export async function createOpenRouterChatCompletion(
 ): Promise<OpenRouterChatResult> {
   const apiKey = options.apiKey || process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY_MISSING');
-  if (!request.model || !request.prompt.trim()) throw new Error('OPENROUTER_INVALID_REQUEST');
+
+  const prompt = request.prompt?.trim();
+  if (!request.model || !prompt) throw new Error('OPENROUTER_INVALID_REQUEST');
+
+  const systemPrompt = request.systemPrompt?.trim().slice(0, 6000);
+  const temperature = typeof request.temperature === 'number' && Number.isFinite(request.temperature)
+    ? Math.max(0, Math.min(2, request.temperature))
+    : 0.7;
+  const maxTokens = typeof request.maxTokens === 'number' && Number.isFinite(request.maxTokens)
+    ? Math.max(1, Math.min(4000, Math.trunc(request.maxTokens)))
+    : 1200;
+  const messages = [
+    ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+    { role: 'user', content: prompt },
+  ];
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 45_000);
@@ -139,30 +166,34 @@ export async function createOpenRouterChatCompletion(
       },
       body: JSON.stringify({
         model: request.model,
-        messages: [{ role: 'user', content: request.prompt.trim() }],
-        temperature: request.temperature ?? 0.7,
-        max_tokens: request.maxTokens ?? 1200,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
       }),
     });
 
-    const payload = await response.json() as Record<string, unknown>;
-    if (!response.ok) {
-      const error = payload.error as { message?: string } | undefined;
-      throw new Error(`OPENROUTER_HTTP_${response.status}: ${error?.message || 'Request failed'}`);
+    let payload: Record<string, unknown>;
+    try {
+      payload = await response.json() as Record<string, unknown>;
+    } catch {
+      if (!response.ok) throw new Error(chatHttpErrorCode(response.status));
+      throw new Error('OPENROUTER_INVALID_RESPONSE');
     }
 
-    const choices = payload.choices as Array<{ message?: { content?: string } }> | undefined;
+    if (!response.ok) throw new Error(chatHttpErrorCode(response.status));
+
+    const choices = payload.choices as Array<{ message?: { content?: unknown } }> | undefined;
     const content = choices?.[0]?.message?.content;
-    if (!content) throw new Error('OPENROUTER_EMPTY_RESPONSE');
-    const usage = payload.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number } | undefined;
+    if (typeof content !== 'string' || !content.trim()) throw new Error('OPENROUTER_EMPTY_RESPONSE');
+    const usage = payload.usage as { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown; cost?: unknown } | undefined;
 
     return {
-      content,
+      content: content.trim(),
       requestId: typeof payload.id === 'string' ? payload.id : undefined,
-      promptTokens: usage?.prompt_tokens,
-      completionTokens: usage?.completion_tokens,
-      totalTokens: usage?.total_tokens,
-      costUsd: usage?.cost,
+      promptTokens: finiteUsageNumber(usage?.prompt_tokens),
+      completionTokens: finiteUsageNumber(usage?.completion_tokens),
+      totalTokens: finiteUsageNumber(usage?.total_tokens),
+      costUsd: finiteUsageNumber(usage?.cost),
     };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw new Error('OPENROUTER_TIMEOUT');

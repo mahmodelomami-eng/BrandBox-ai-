@@ -33,7 +33,9 @@ assert.equal(projectTypeMatchesTool('محادثة', 'chat'), true);
 assert.equal(projectTypeMatchesTool('محادثة', 'images'), false);
 
 assert.ok(generationRoute.includes("generationType !== 'chat' && generationType !== 'image'"));
-assert.ok(generationRoute.includes(".select('id,type')"));
+const generationProjectSelect = generationRoute.match(/\.from\('projects'\)[\s\S]{0,250}?\.select\('([^']+)'\)/)?.[1]?.split(',') || [];
+assert.ok(generationProjectSelect.includes('id'), 'Generation project lookup must include project id.');
+assert.ok(generationProjectSelect.includes('type'), 'Generation project lookup must include project type for tool-scope validation.');
 assert.ok(generationRoute.includes("error: 'PROJECT_TOOL_MISMATCH'"));
 assert.ok(generationRoute.includes('generationTypeToProjectTool(generationType)'));
 assert.ok(generationRoute.includes('projectTypeMatchesTool(project.type, expectedTool)'));

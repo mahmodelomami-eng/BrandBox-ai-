@@ -7,13 +7,19 @@ async function run() {
     calls.push({ url: String(input), init });
     return new Response(JSON.stringify({
       id: 'gen-test',
-      choices: [{ message: { content: 'BrandBox response' } }],
+      choices: [{ message: { content: ' BrandBox response ' } }],
       usage: { prompt_tokens: 4, completion_tokens: 3, total_tokens: 7, cost: 0.00001 },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
 
   const result = await createOpenRouterChatCompletion(
-    { model: 'openai/gpt-4o-mini', prompt: '  hello  ' },
+    {
+      model: 'openai/gpt-4o-mini',
+      prompt: '  hello  ',
+      systemPrompt: '  authenticated project context  ',
+      temperature: 99,
+      maxTokens: 99999,
+    },
     { apiKey: 'test-key', fetchImpl }
   );
   assert.equal(result.content, 'BrandBox response');
@@ -23,14 +29,53 @@ async function run() {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://openrouter.ai/api/v1/chat/completions');
   assert.equal((calls[0].init?.headers as Record<string, string>).Authorization, 'Bearer test-key');
-  assert.equal(JSON.parse(String(calls[0].init?.body)).messages[0].content, 'hello');
+  const chatBody = JSON.parse(String(calls[0].init?.body));
+  assert.deepEqual(chatBody.messages, [
+    { role: 'system', content: 'authenticated project context' },
+    { role: 'user', content: 'hello' },
+  ]);
+  assert.equal(chatBody.temperature, 2);
+  assert.equal(chatBody.max_tokens, 4000);
 
   await assert.rejects(
-    () => createOpenRouterChatCompletion({ model: 'x', prompt: 'hello' }, {
+    () => createOpenRouterChatCompletion({ model: 'openai/gpt-4o-mini', prompt: 'hello' }, {
       apiKey: 'test-key',
-      fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'denied' } }), { status: 401 }),
+      fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'internal quota detail' } }), { status: 429 }),
     }),
-    /OPENROUTER_HTTP_401: denied/
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_RATE_LIMITED'
+  );
+
+  await assert.rejects(
+    () => createOpenRouterChatCompletion({ model: 'openai/gpt-4o-mini', prompt: 'hello' }, {
+      apiKey: 'test-key',
+      fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'provider stack detail' } }), { status: 503 }),
+    }),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_PROVIDER_UNAVAILABLE'
+  );
+
+  await assert.rejects(
+    () => createOpenRouterChatCompletion({ model: 'openai/gpt-4o-mini', prompt: 'hello' }, {
+      apiKey: 'test-key',
+      fetchImpl: async () => new Response('not-json', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    }),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_RESPONSE'
+  );
+
+  const timeoutFetch: typeof fetch = async (_input, init) => new Promise((_resolve, reject) => {
+    const abort = () => {
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      reject(error);
+    };
+    if (init?.signal?.aborted) abort();
+    else init?.signal?.addEventListener('abort', abort, { once: true });
+  });
+  await assert.rejects(
+    () => createOpenRouterChatCompletion(
+      { model: 'openai/gpt-4o-mini', prompt: 'hello' },
+      { apiKey: 'test-key', fetchImpl: timeoutFetch, timeoutMs: 1 }
+    ),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_TIMEOUT'
   );
 
   const imageCalls: Array<{ url: string; init?: RequestInit }> = [];
