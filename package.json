@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "tsx src/tests/production-hardening.test.ts",
+    "verify:agent": "npm run lint && npm test && npm run test:store-readiness && cross-env NEXT_PUBLIC_SUPABASE_URL=https://ci-placeholder.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-placeholder-anon-key npm run build",
     "test:focused": "node src/tests/run-focused.cjs",
     "test:rbac": "tsx src/tests/rbac-foundation.test.ts",
     "test:admin-policy": "tsx src/tests/admin-user-policy.test.ts",
