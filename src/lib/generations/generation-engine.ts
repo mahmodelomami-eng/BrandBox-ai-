@@ -12,6 +12,11 @@ export interface GenerationRequest {
   simulateFailure?: boolean;
 }
 
+export interface GenerationExecutionContext {
+  unitCredits?: number;
+  chatSystemPrompt?: string;
+}
+
 export interface GenerationResponse {
   success: boolean;
   generationId: string;
@@ -25,10 +30,36 @@ export interface GenerationResponse {
   wasRefunded?: boolean;
 }
 
+type NormalizedFailure = { code: string; userMessage: string };
+
+function normalizeGenerationFailure(error: unknown): NormalizedFailure {
+  const raw = error instanceof Error ? error.message : '';
+  if (raw.startsWith('OPENROUTER_TIMEOUT')) {
+    return { code: 'AI_PROVIDER_TIMEOUT', userMessage: 'انتهت مهلة الاتصال بمزود الذكاء الاصطناعي.' };
+  }
+  if (raw.startsWith('OPENROUTER_RATE_LIMITED')) {
+    return { code: 'AI_PROVIDER_RATE_LIMITED', userMessage: 'المزود مشغول حاليًا. حاول مرة أخرى بعد قليل.' };
+  }
+  if (raw.startsWith('OPENROUTER_PROVIDER_UNAVAILABLE')) {
+    return { code: 'AI_PROVIDER_UNAVAILABLE', userMessage: 'خدمة الذكاء الاصطناعي غير متاحة مؤقتًا.' };
+  }
+  if (raw.startsWith('OPENROUTER_AUTH_FAILED') || raw.startsWith('OPENROUTER_API_KEY_MISSING')) {
+    return { code: 'AI_PROVIDER_CONFIGURATION', userMessage: 'تكامل مزود الذكاء الاصطناعي يحتاج مراجعة إدارية.' };
+  }
+  if (raw.startsWith('OPENROUTER_REQUEST_REJECTED')) {
+    return { code: 'AI_PROVIDER_REQUEST_REJECTED', userMessage: 'تعذر قبول الطلب من مزود الذكاء الاصطناعي.' };
+  }
+  if (raw.startsWith('OPENROUTER_EMPTY_RESPONSE') || raw.startsWith('OPENROUTER_INVALID_RESPONSE')) {
+    return { code: 'AI_PROVIDER_INVALID_RESPONSE', userMessage: 'وصل رد غير صالح من مزود الذكاء الاصطناعي.' };
+  }
+  return { code: 'GENERATION_FAILED', userMessage: 'تعذر إكمال عملية التوليد.' };
+}
+
 export class GenerationEngine {
   public static async executeGeneration(
     actor: AuthContext,
-    request: GenerationRequest
+    request: GenerationRequest,
+    executionContext: GenerationExecutionContext = {}
   ): Promise<GenerationResponse> {
     if (!actor || !actor.userId) {
       throw new Error('UNAUTHORIZED: Authentication required for AI generation.');
@@ -38,7 +69,11 @@ export class GenerationEngine {
     const requestedCount = request.generationType === 'image'
       ? Math.max(1, Math.min(4, Math.trunc(Number(request.settings?.count) || 1)))
       : 1;
-    const requiredCredits = CreditEngine.calculateRequiredCredits(request.modelId, request.generationType) * requestedCount;
+    const trustedUnitCredits = Number(executionContext.unitCredits);
+    const unitCredits = Number.isFinite(trustedUnitCredits) && trustedUnitCredits >= 1
+      ? Math.trunc(trustedUnitCredits)
+      : CreditEngine.calculateRequiredCredits(request.modelId, request.generationType);
+    const requiredCredits = unitCredits * requestedCount;
 
     const currentBalance = await CreditEngine.getBalance(actor.userId);
     if (currentBalance < requiredCredits) {
@@ -100,6 +135,7 @@ export class GenerationEngine {
         ? await createOpenRouterChatCompletion({
             model: request.modelId,
             prompt: request.prompt,
+            systemPrompt: executionContext.chatSystemPrompt,
             temperature: typeof request.settings?.temperature === 'number' ? request.settings.temperature : undefined,
             maxTokens: typeof request.settings?.maxTokens === 'number' ? request.settings.maxTokens : undefined,
           })
@@ -181,34 +217,52 @@ export class GenerationEngine {
           await cleanupDatabase.storage.from('generation-assets').remove(uploadedPaths);
         } catch { /* best-effort cleanup */ }
       }
+
+      const failure = normalizeGenerationFailure(err);
       const refundDkey = `gen_refund_${generationId}`;
-      const refundRes = await CreditEngine.refundCredits(
+      let refundRes = await CreditEngine.refundCredits(
         actor.userId,
         requiredCredits,
-        `Automatic Refund: AI Provider Failure (${err?.message || 'Unknown Error'})`,
+        `Automatic Refund: ${failure.code}`,
         'generation_failure_refund',
         generationId,
         refundDkey,
         actor.userId
       );
+      if (!refundRes.success) {
+        refundRes = await CreditEngine.refundCredits(
+          actor.userId,
+          requiredCredits,
+          `Automatic Refund Retry: ${failure.code}`,
+          'generation_failure_refund',
+          generationId,
+          refundDkey,
+          actor.userId
+        );
+      }
 
       try {
         await createPrivilegedSupabaseClient().from('generations').update({
           status: 'failed',
           credits_consumed: 0,
-          error_message: err?.message || 'Generation failed',
+          error_message: failure.code,
         }).eq('id', generationId).eq('user_id', actor.userId);
       } catch {
         // The original provider/persistence error remains the authoritative failure.
+      }
+
+      let remainingBalance = refundRes.success ? refundRes.newBalance : deductionRes.newBalance;
+      if (!refundRes.success) {
+        try { remainingBalance = await CreditEngine.getBalance(actor.userId); } catch { /* retain last known balance */ }
       }
 
       return {
         success: false,
         generationId,
         creditsConsumed: 0,
-        remainingBalance: refundRes.newBalance,
-        errorMessage: `AI_PROVIDER_ERROR: ${err?.message || 'Generation failed'}. Credits refunded automatically.`,
-        wasRefunded: true
+        remainingBalance,
+        errorMessage: `${failure.code}: ${failure.userMessage}${refundRes.success ? ' تم إعادة النقاط تلقائيًا.' : ' تعذر تأكيد إعادة النقاط تلقائيًا وتم تسجيل العملية كفاشلة للمراجعة.'}`,
+        wasRefunded: refundRes.success
       };
     }
   }
