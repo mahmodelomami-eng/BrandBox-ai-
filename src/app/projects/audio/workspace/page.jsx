@@ -7,8 +7,8 @@ function stringParam(value) {
 }
 
 export default async function AudioProjectPage({ searchParams }) {
-  const params = await Promise.resolve(searchParams);
-  const projectId = stringParam(params?.project);
+  const params = await searchParams;
+  const projectId = params?.project || '';
   const initialPrompt = stringParam(params?.prompt);
   const templateSettings = {
     voice: stringParam(params?.voice),
