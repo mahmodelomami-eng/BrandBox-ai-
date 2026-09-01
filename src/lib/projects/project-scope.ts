@@ -17,6 +17,8 @@ export function projectTypeMatchesTool(type: string | null | undefined, tool: Pr
   return projectToolFromType(type) === tool;
 }
 
-export function generationTypeToProjectTool(generationType: 'chat' | 'image'): ProjectTool {
-  return generationType === 'chat' ? 'chat' : 'images';
+export function generationTypeToProjectTool(generationType: 'chat' | 'image' | 'video'): ProjectTool {
+  if (generationType === 'chat') return 'chat';
+  if (generationType === 'video') return 'video';
+  return 'images';
 }
