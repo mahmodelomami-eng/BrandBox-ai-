@@ -3,6 +3,7 @@ import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/li
 import { AdminRole, checkPermission } from '@/lib/auth/rbac-engine';
 import { isKnownRole } from '@/lib/admin/admin-user-policy';
 import { processBrandBoxCreditFulfillmentForOrder } from '@/lib/store/store-credit-fulfillment';
+import { processDigitalCodeFulfillmentForOrder } from '@/lib/store/store-code-fulfillment';
 import { decideStoreRefund } from '@/lib/store/store-refund-service';
 
 async function actorFromRequest(request: NextRequest) {
@@ -239,15 +240,18 @@ export async function PATCH(request: NextRequest) {
   const database = createPrivilegedSupabaseClient();
   const { data: job, error } = await database
     .from('store_fulfillment_jobs')
-    .select('id,status,order_item_id,store_order_items!inner(order_id,fulfillment_mode)')
+    .select('id,status,order_item_id,store_order_items!inner(order_id,fulfillment_mode,sku_id,store_skus!inner(inventory_mode))')
     .eq('id', body.jobId)
     .maybeSingle();
 
   if (error || !job) return NextResponse.json({ error: 'JOB_NOT_FOUND' }, { status: 404 });
-  if (job.status !== 'FAILED') return NextResponse.json({ error: 'JOB_NOT_RETRYABLE' }, { status: 409 });
+  if (!['FAILED','REVIEW_REQUIRED'].includes(job.status)) return NextResponse.json({ error: 'JOB_NOT_RETRYABLE' }, { status: 409 });
 
   const item = Array.isArray(job.store_order_items) ? job.store_order_items[0] : job.store_order_items;
-  if (!item || item.fulfillment_mode !== 'BRAND_BOX_CREDITS') {
+  const sku = item ? (Array.isArray(item.store_skus) ? item.store_skus[0] : item.store_skus) : null;
+  const isCredit = item?.fulfillment_mode === 'BRAND_BOX_CREDITS';
+  const isCodeStock = sku?.inventory_mode === 'CODE_STOCK';
+  if (!item || (!isCredit && !isCodeStock)) {
     return NextResponse.json({ error: 'MANUAL_RETRY_NOT_SUPPORTED' }, { status: 400 });
   }
 
@@ -261,7 +265,9 @@ export async function PATCH(request: NextRequest) {
   }).eq('id', job.id);
 
   try {
-    const result = await processBrandBoxCreditFulfillmentForOrder(item.order_id);
+    const result = isCredit
+      ? await processBrandBoxCreditFulfillmentForOrder(item.order_id)
+      : await processDigitalCodeFulfillmentForOrder(item.order_id);
 
     await database.from('audit_logs').insert({
       actor_id: actor.userId,

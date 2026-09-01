@@ -9,6 +9,7 @@ import AdminStoreLaunchReadinessPanel from './AdminStoreLaunchReadinessPanel';
 function tone(status) {
   if (['FULFILLED', 'SUCCEEDED', 'PAID', 'ACTIVE_FOR_SALE'].includes(status)) return 'text-emerald-300';
   if (['FAILED', 'CANCELLED'].includes(status)) return 'text-red-300';
+  if (status === 'REVIEW_REQUIRED') return 'text-orange-300';
   if (['PENDING', 'PROCESSING', 'PAYMENT_PENDING', 'FULFILLMENT_PENDING'].includes(status)) return 'text-amber-300';
   return 'text-gray-400';
 }
@@ -195,8 +196,8 @@ export default function AdminStoreOperationsPanel() {
           <thead className="border-b border-white/10 text-gray-500"><tr><th className="p-3">الخدمة</th><th className="p-3">الحالة</th><th className="p-3">المحاولات</th><th className="p-3">الخطأ</th><th className="p-3">التاريخ</th><th className="p-3">الإجراء</th></tr></thead>
           <tbody className="divide-y divide-white/[.06]">{jobs.map((job) => {
             const item = Array.isArray(job.store_order_items) ? job.store_order_items[0] : job.store_order_items;
-            const retryable = canManage && job.status === 'FAILED' && item?.fulfillment_mode === 'BRAND_BOX_CREDITS';
-            return <tr key={job.id}><td className="p-3"><div className="font-bold">{item?.product_name_snapshot || '—'}</div><div className="text-[10px] text-gray-600">{item?.sku_title_snapshot || '—'}</div></td><td className={`p-3 font-black ${tone(job.status)}`}>{job.status}</td><td className="p-3">{job.attempt_count}</td><td className="p-3 text-red-300">{job.last_error_code || '—'}</td><td className="p-3 text-gray-500">{new Date(job.created_at).toLocaleString('ar-LY')}</td><td className="p-3">{retryable ? <button disabled={busy === job.id} onClick={() => void retry(job.id)} className="rounded-lg border border-amber-500/20 px-3 py-2 text-amber-300 disabled:opacity-50"><RotateCcw size={13} className="ml-1 inline"/>إعادة المحاولة</button> : <span className="text-gray-700">—</span>}</td></tr>;
+            const retryable = canManage && ['FAILED','REVIEW_REQUIRED'].includes(job.status) && (item?.fulfillment_mode === 'BRAND_BOX_CREDITS' || job.last_error_code === 'STORE_OUT_OF_STOCK');
+            return <tr key={job.id}><td className="p-3"><div className="font-bold">{item?.product_name_snapshot || '—'}</div><div className="text-[10px] text-gray-600">{item?.sku_title_snapshot || '—'}</div></td><td className={`p-3 font-black ${tone(job.status)}`}>{job.status}</td><td className="p-3">{job.attempt_count}</td><td className="p-3 text-red-300">{job.last_error_code || '—'}</td><td className="p-3 text-gray-500">{new Date(job.created_at).toLocaleString('ar-LY')}</td><td className="p-3">{retryable ? <button disabled={busy === job.id} onClick={() => void retry(job.id)} className="rounded-lg border border-amber-500/20 px-3 py-2 text-amber-300 disabled:opacity-50"><RotateCcw size={13} className="ml-1 inline"/>إعادة المحاولة بعد المعالجة</button> : <span className="text-gray-700">—</span>}</td></tr>;
           })}</tbody>
         </table>
       </div>

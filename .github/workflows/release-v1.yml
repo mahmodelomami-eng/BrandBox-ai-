@@ -51,6 +51,7 @@ jobs:
           npm run test:store-readiness
           npm run test:store-inventory
           npm run test:store-code-delivery
+          npm run test:store-code-recovery
           npm run test:store-delivery
           npm run test:store-inventory-admin
           npm run test:store-stock-guard

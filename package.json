@@ -37,7 +37,8 @@
     "test:store-launch-readiness": "tsx src/tests/store-launch-readiness.test.ts",
     "test:store-db-performance": "tsx src/tests/store-db-performance.test.ts",
     "test:store-purchases-redaction": "tsx src/tests/store-purchases-redaction.test.ts",
-    "test:staging-user": "cross-env TEST_DATABASE_MODE=staging tsx src/tests/bootstrap-staging-test-user.ts"
+    "test:staging-user": "cross-env TEST_DATABASE_MODE=staging tsx src/tests/bootstrap-staging-test-user.ts",
+    "test:store-code-recovery": "tsx src/tests/store-code-stock-recovery.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
