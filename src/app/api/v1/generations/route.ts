@@ -28,13 +28,52 @@ export async function GET(request: NextRequest) {
   if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   const { user } = auth;
   const database = createPrivilegedSupabaseClient();
+
+  const projectId = request.nextUrl.searchParams.get('projectId')?.trim() || '';
+  const requestedGenerationType = request.nextUrl.searchParams.get('generationType')?.trim() || '';
+  if (requestedGenerationType && requestedGenerationType !== 'chat' && requestedGenerationType !== 'image') {
+    return NextResponse.json({ error: 'INVALID_HISTORY_FILTER' }, { status: 400 });
+  }
+
+  if (projectId) {
+    const { data: project, error: projectError } = await database
+      .from('projects')
+      .select('id,type')
+      .eq('id', projectId)
+      .eq('owner_id', user.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (projectError || !project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
+    if (requestedGenerationType) {
+      const expectedTool = generationTypeToProjectTool(requestedGenerationType);
+      if (!projectTypeMatchesTool(project.type, expectedTool)) {
+        return NextResponse.json({ error: 'PROJECT_TOOL_MISMATCH' }, { status: 409 });
+      }
+    }
+  }
+
+  let generationQuery = database
+    .from('generations')
+    .select('id,project_id,generation_type,provider,model,prompt,settings,status,credits_consumed,result_url,result_content,error_message,duration_ms,created_at')
+    .eq('user_id', user.id);
+  if (projectId) generationQuery = generationQuery.eq('project_id', projectId);
+  if (requestedGenerationType) generationQuery = generationQuery.eq('generation_type', requestedGenerationType);
+  generationQuery = generationQuery.order('created_at', { ascending: false }).limit(projectId ? 250 : 100);
+
+  let assetQuery = database
+    .from('assets')
+    .select('id,project_id,generation_id,name,file_path,mime_type,width,height,created_at')
+    .eq('user_id', user.id);
+  if (projectId) assetQuery = assetQuery.eq('project_id', projectId);
+  assetQuery = assetQuery.order('created_at', { ascending: false }).limit(projectId ? 250 : 200);
+
   const [
     { data: generations, error: generationsError },
     { data: assets, error: assetsError },
     { data: chatModels, error: chatModelsError },
   ] = await Promise.all([
-    database.from('generations').select('id,project_id,generation_type,provider,model,prompt,settings,status,credits_consumed,result_url,result_content,error_message,duration_ms,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
-    database.from('assets').select('id,project_id,generation_id,name,file_path,mime_type,width,height,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(200),
+    generationQuery,
+    assetQuery,
     database.from('ai_model_catalog')
       .select('model_id,display_name_ar,display_name_en,minimum_credits,sort_order')
       .eq('provider', 'openrouter')
