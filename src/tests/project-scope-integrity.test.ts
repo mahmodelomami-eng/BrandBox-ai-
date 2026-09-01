@@ -22,6 +22,7 @@ assert.equal(projectToolFromType('legacy-general-project'), 'images');
 
 assert.equal(generationTypeToProjectTool('image'), 'images');
 assert.equal(generationTypeToProjectTool('chat'), 'chat');
+assert.equal(generationTypeToProjectTool('video'), 'video');
 assert.equal(projectTypeMatchesTool('فيديو', 'video'), true);
 assert.equal(projectTypeMatchesTool('فيديو', 'audio'), false);
 assert.equal(projectTypeMatchesTool('محادثة', 'chat'), true);
