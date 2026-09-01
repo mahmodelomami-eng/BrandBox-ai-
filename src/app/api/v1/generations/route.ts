@@ -3,6 +3,7 @@ import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { GenerationEngine, GenerationRequest } from '@/lib/generations/generation-engine';
 import { OPENROUTER_IMAGE_MODELS } from '@/lib/ai/openrouter-client';
+import { generationTypeToProjectTool, projectTypeMatchesTool } from '@/lib/projects/project-scope';
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateActiveUser(request);
@@ -40,8 +41,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'IMAGE_MODEL_NOT_ALLOWED' }, { status: 400 });
   }
   if (body.projectId) {
-    const { data: project, error: projectError } = await createPrivilegedSupabaseClient().from('projects').select('id').eq('id', body.projectId).eq('owner_id', user.id).maybeSingle();
+    const { data: project, error: projectError } = await createPrivilegedSupabaseClient()
+      .from('projects')
+      .select('id,type')
+      .eq('id', body.projectId)
+      .eq('owner_id', user.id)
+      .maybeSingle();
     if (projectError || !project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
+
+    const expectedTool = generationTypeToProjectTool(body.generationType);
+    if (!projectTypeMatchesTool(project.type, expectedTool)) {
+      return NextResponse.json({ error: 'PROJECT_TOOL_MISMATCH' }, { status: 409 });
+    }
   }
 
   const result = await GenerationEngine.executeGeneration(
