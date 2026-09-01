@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 
 const repoRoot = process.cwd();
 
@@ -40,6 +40,28 @@ assertContract(
   authContext.includes('const [user, setUser] = useState(null)') &&
     authContext.includes('const [profile, setProfile] = useState(null)') &&
     authContext.includes('const [loading, setLoading] = useState(true)'),
+);
+
+assertContract(
+  'auth profile hydration rejects stale async responses across session changes',
+  authContext.includes('const authRevisionRef = useRef(0)') &&
+    authContext.includes('const revision = ++authRevisionRef.current') &&
+    authContext.includes('authRevisionRef.current !== revision') &&
+    authContext.includes('authRevisionRef.current === revision'),
+);
+
+assertContract(
+  'a changed session user cannot temporarily retain a different user profile',
+  authContext.includes('setProfile((currentProfile) => currentProfile?.id === sessionUserId ? currentProfile : null)') &&
+    authContext.includes('setProfile(prof?.id === sessionUserId ? prof : null)') &&
+    authContext.includes('const sessionUserId = session.user.id'),
+);
+
+assertContract(
+  'manual profile refresh cannot overwrite a newer authenticated identity',
+  authContext.includes('const revision = authRevisionRef.current') &&
+    authContext.includes('prof?.id === userId') &&
+    authContext.includes('authRevisionRef.current += 1'),
 );
 
 assertContract(
