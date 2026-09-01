@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import { checkPermission } from '../lib/auth/rbac-engine';
@@ -39,6 +39,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const authRevisionRef = useRef(0);
 
   const fetchProfile = useCallback(async (userId) => {
     try {
@@ -60,31 +61,45 @@ export function AuthProvider({ children }) {
   }, [supabase]);
 
   const refreshProfile = useCallback(async () => {
-    if (!user?.id) return;
-    const prof = await fetchProfile(user.id);
-    if (prof) setProfile(prof);
+    const userId = user?.id;
+    if (!userId) return;
+
+    const revision = authRevisionRef.current;
+    const prof = await fetchProfile(userId);
+    if (
+      authRevisionRef.current === revision &&
+      prof?.id === userId
+    ) {
+      setProfile(prof);
+    }
   }, [user, fetchProfile]);
 
   useEffect(() => {
     let mounted = true;
 
     async function initAuth() {
+      const revision = ++authRevisionRef.current;
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
 
         if (session?.user && mounted) {
+          const sessionUserId = session.user.id;
           setUser(session.user);
-          const prof = await fetchProfile(session.user.id);
-          if (mounted) setProfile(prof);
-        } else if (mounted) {
+          setProfile((currentProfile) => currentProfile?.id === sessionUserId ? currentProfile : null);
+
+          const prof = await fetchProfile(sessionUserId);
+          if (mounted && authRevisionRef.current === revision) {
+            setProfile(prof?.id === sessionUserId ? prof : null);
+          }
+        } else if (mounted && authRevisionRef.current === revision) {
           setUser(null);
           setProfile(null);
         }
       } catch (err) {
         console.error('[AuthContext] Session init error:', err);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted && authRevisionRef.current === revision) setLoading(false);
       }
     }
 
@@ -92,25 +107,34 @@ export function AuthProvider({ children }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return;
+
+      const revision = ++authRevisionRef.current;
       if (session?.user) {
+        const sessionUserId = session.user.id;
         setUser(session.user);
-        const prof = await fetchProfile(session.user.id);
-        if (mounted) setProfile(prof);
+        setProfile((currentProfile) => currentProfile?.id === sessionUserId ? currentProfile : null);
+
+        const prof = await fetchProfile(sessionUserId);
+        if (!mounted || authRevisionRef.current !== revision) return;
+        setProfile(prof?.id === sessionUserId ? prof : null);
       } else {
         setUser(null);
         setProfile(null);
       }
-      setLoading(false);
+
+      if (mounted && authRevisionRef.current === revision) setLoading(false);
     });
 
     return () => {
       mounted = false;
+      authRevisionRef.current += 1;
       subscription.unsubscribe();
     };
   }, [supabase, fetchProfile]);
 
   const signOut = useCallback(async () => {
     try {
+      authRevisionRef.current += 1;
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
