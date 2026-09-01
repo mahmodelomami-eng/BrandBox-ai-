@@ -100,6 +100,7 @@ export async function runStagingCreditIntegrationTests(): Promise<{
 
   try {
     const supabase = createStagingTestClient();
+    const retryRunId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const refundRunId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const rkey = `idemp_staging_refund_retry_202_${refundRunId}`;
 
