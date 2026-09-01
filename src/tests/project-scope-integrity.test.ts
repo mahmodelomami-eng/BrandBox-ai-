@@ -27,9 +27,10 @@ assert.equal(projectTypeMatchesTool('فيديو', 'audio'), false);
 assert.equal(projectTypeMatchesTool('محادثة', 'chat'), true);
 assert.equal(projectTypeMatchesTool('محادثة', 'images'), false);
 
+assert.ok(generationRoute.includes("generationType !== 'chat' && generationType !== 'image'"));
 assert.ok(generationRoute.includes(".select('id,type')"));
 assert.ok(generationRoute.includes("error: 'PROJECT_TOOL_MISMATCH'"));
-assert.ok(generationRoute.includes('generationTypeToProjectTool(body.generationType)'));
+assert.ok(generationRoute.includes('generationTypeToProjectTool(generationType)'));
 assert.ok(generationRoute.includes('projectTypeMatchesTool(project.type, expectedTool)'));
 const generationMismatch = generationRoute.indexOf("error: 'PROJECT_TOOL_MISMATCH'");
 const generationExecution = generationRoute.indexOf('GenerationEngine.executeGeneration');
