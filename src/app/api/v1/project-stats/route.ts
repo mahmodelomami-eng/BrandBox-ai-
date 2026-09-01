@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
-
-async function authenticate(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-  const { data, error } = await createServerSupabaseClient().auth.getUser(token);
-  return error ? null : data.user;
-}
+import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
+import { authenticateActiveUser } from '@/lib/auth/user-auth';
 
 const TOOL_TO_GENERATION: Record<string, string> = {
   images: 'image',
@@ -15,8 +9,9 @@ const TOOL_TO_GENERATION: Record<string, string> = {
 };
 
 export async function GET(request: NextRequest) {
-  const user = await authenticate(request);
-  if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const auth = await authenticateActiveUser(request);
+  if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const { user } = auth;
 
   const tool = request.nextUrl.searchParams.get('tool') || 'images';
   if (!['images', 'video', 'chat', 'audio'].includes(tool)) {
