@@ -2,10 +2,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { GenerationEngine, GenerationRequest } from '@/lib/generations/generation-engine';
-import { OPENROUTER_IMAGE_MODELS } from '@/lib/ai/openrouter-client';
+import {
+  OPENROUTER_IMAGE_ASPECT_RATIOS,
+  OPENROUTER_IMAGE_MODELS,
+  OPENROUTER_IMAGE_RESOLUTIONS,
+} from '@/lib/ai/openrouter-client';
 import { generationTypeToProjectTool, projectTypeMatchesTool } from '@/lib/projects/project-scope';
 
 type HistoryGenerationType = 'chat' | 'image';
+
+const imageAspectRatios = new Set<string>(OPENROUTER_IMAGE_ASPECT_RATIOS);
+const imageResolutions = new Set<string>(OPENROUTER_IMAGE_RESOLUTIONS);
+const imageStyleIds = new Set(['none', 'photo', 'cinematic', 'minimal', 'formal']);
+
+function validImageSettings(settings: Record<string, unknown> | undefined): boolean {
+  const aspectRatio = typeof settings?.aspectRatio === 'string' ? settings.aspectRatio : '1:1';
+  const resolution = typeof settings?.resolution === 'string' ? settings.resolution : '1K';
+  const count = Number(settings?.count ?? 1);
+  const style = settings?.style;
+  const useBrandKit = settings?.useBrandKit;
+
+  if (!imageAspectRatios.has(aspectRatio)) return false;
+  if (!imageResolutions.has(resolution)) return false;
+  if (!Number.isInteger(count) || count < 1 || count > 4) return false;
+  if (style !== undefined && (typeof style !== 'string' || !imageStyleIds.has(style))) return false;
+  if (useBrandKit !== undefined && typeof useBrandKit !== 'boolean') return false;
+  return true;
+}
 
 function projectChatSystemPrompt(
   project: Record<string, unknown>,
@@ -90,6 +113,7 @@ export async function GET(request: NextRequest) {
     { data: generations, error: generationsError },
     { data: assets, error: assetsError },
     { data: chatModels, error: chatModelsError },
+    { data: imageModels, error: imageModelsError },
   ] = await Promise.all([
     generationQuery,
     assetQuery,
@@ -100,17 +124,31 @@ export async function GET(request: NextRequest) {
       .eq('is_enabled', true)
       .eq('is_visible_to_users', true)
       .order('sort_order', { ascending: true }),
+    database.from('ai_model_catalog')
+      .select('model_id,display_name_ar,display_name_en,vendor_name,minimum_credits,sort_order,metadata')
+      .eq('provider', 'openrouter')
+      .eq('generation_type', 'image')
+      .eq('is_enabled', true)
+      .eq('is_visible_to_users', true)
+      .order('sort_order', { ascending: true }),
   ]);
   if (generationsError || assetsError) return NextResponse.json({ error: 'GENERATION_HISTORY_UNAVAILABLE' }, { status: 503 });
+
   const signedAssets = await Promise.all((assets || []).map(async (asset) => {
     const { data, error } = await database.storage.from('generation-assets').createSignedUrl(asset.file_path, 3600);
     return { ...asset, signed_url: error ? null : data?.signedUrl || null };
   }));
+  const supportedImageModels = (imageModels || []).filter((model) =>
+    OPENROUTER_IMAGE_MODELS.includes(model.model_id as typeof OPENROUTER_IMAGE_MODELS[number])
+  );
+
   return NextResponse.json({
     generations: generations || [],
     assets: signedAssets,
     chatModels: chatModelsError ? [] : (chatModels || []),
     chatModelsAvailable: !chatModelsError,
+    imageModels: imageModelsError ? [] : supportedImageModels,
+    imageModelsAvailable: !imageModelsError,
   });
 }
 
@@ -131,11 +169,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'INVALID_GENERATION_REQUEST' }, { status: 400 });
   }
   if (generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
-    return NextResponse.json({ error: 'IMAGE_MODEL_NOT_ALLOWED' }, { status: 400 });
+    return NextResponse.json({ error: 'IMAGE_MODEL_NOT_SUPPORTED' }, { status: 400 });
+  }
+  if (generationType === 'image' && !validImageSettings(body.settings)) {
+    return NextResponse.json({ error: 'INVALID_IMAGE_SETTINGS' }, { status: 400 });
   }
 
   const database = createPrivilegedSupabaseClient();
   let unitCredits: number | undefined;
+
   if (generationType === 'chat') {
     const { data: model, error: modelError } = await database
       .from('ai_model_catalog')
@@ -153,6 +195,27 @@ export async function POST(request: NextRequest) {
     const minimumCredits = Number(model.minimum_credits);
     if (!Number.isFinite(minimumCredits) || minimumCredits < 1) {
       return NextResponse.json({ error: 'CHAT_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
+    }
+    unitCredits = Math.max(1, Math.trunc(minimumCredits));
+  }
+
+  if (generationType === 'image') {
+    const { data: model, error: modelError } = await database
+      .from('ai_model_catalog')
+      .select('model_id,minimum_credits')
+      .eq('model_id', body.modelId)
+      .eq('provider', 'openrouter')
+      .eq('generation_type', 'image')
+      .eq('is_enabled', true)
+      .eq('is_visible_to_users', true)
+      .maybeSingle();
+
+    if (modelError) return NextResponse.json({ error: 'IMAGE_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
+    if (!model) return NextResponse.json({ error: 'IMAGE_MODEL_NOT_AVAILABLE' }, { status: 400 });
+
+    const minimumCredits = Number(model.minimum_credits);
+    if (!Number.isFinite(minimumCredits) || minimumCredits < 1) {
+      return NextResponse.json({ error: 'IMAGE_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
     }
     unitCredits = Math.max(1, Math.trunc(minimumCredits));
   }
