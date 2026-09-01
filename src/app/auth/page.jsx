@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, LockKeyhole, LogIn, Mail, UserPlus, X } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../../lib/supabase/client';
+import { isActiveProfileStatus } from '../../lib/auth/user-status';
 
 function safeNextPath() {
   if (typeof window === 'undefined') return '/dashboard';
@@ -11,6 +12,12 @@ function safeNextPath() {
   const stored = localStorage.getItem('brandbox.oauth.next');
   const value = fromUrl || stored || '/dashboard';
   return value.startsWith('/') && !value.startsWith('//') ? value : '/dashboard';
+}
+
+function accountAccessMessage(status) {
+  if (status === 'suspended') return 'تم إيقاف هذا الحساب مؤقتًا. تواصل مع الدعم إذا كنت تعتقد أن ذلك حدث بالخطأ.';
+  if (status === 'pending') return 'هذا الحساب قيد المراجعة حاليًا. ستتمكن من الدخول بعد تفعيله.';
+  return 'تعذر التحقق من أن الحساب مفعّل. أعد المحاولة لاحقًا أو تواصل مع الدعم.';
 }
 
 export default function AuthPage() {
@@ -34,18 +41,30 @@ export default function AuthPage() {
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     let active = true;
+    const initialParams = new URLSearchParams(window.location.search);
+    const accountReason = initialParams.get('account');
+    if (accountReason) window.setTimeout(() => active && setError(accountAccessMessage(accountReason)), 0);
 
     const resolveSession = async (session) => {
       if (!active || !session?.user) return;
       const params = new URLSearchParams(window.location.search);
       const socialRequested = localStorage.getItem('brandbox.oauth.onboarding') === '1' || params.get('social') === '1';
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('phone,whatsapp_phone,onboarding_completed_at')
+        .select('status,phone,whatsapp_phone,onboarding_completed_at')
         .eq('id', session.user.id)
         .maybeSingle();
 
       if (!active) return;
+      if (profileError || !isActiveProfileStatus(profile?.status)) {
+        localStorage.removeItem('brandbox.oauth.onboarding');
+        setOnboardingOpen(false);
+        await supabase.auth.signOut();
+        if (!active) return;
+        setError(accountAccessMessage(profile?.status));
+        return;
+      }
+
       if (socialRequested && (!profile?.phone || !profile?.onboarding_completed_at)) {
         setOnboardingPhone(profile?.phone || '');
         setOnboardingWhatsapp(profile?.whatsapp_phone || '');
@@ -81,11 +100,25 @@ export default function AuthPage() {
       }
 
       if (mode === 'login') {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
         if (signInError) throw signInError;
+        if (!signInData.session?.user) throw new Error('تعذر إنشاء جلسة تسجيل الدخول.');
+
+        const { data: loginProfile, error: profileError } = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('id', signInData.session.user.id)
+          .maybeSingle();
+
+        if (profileError || !isActiveProfileStatus(loginProfile?.status)) {
+          await supabase.auth.signOut();
+          setError(accountAccessMessage(loginProfile?.status));
+          return;
+        }
+
         router.replace(safeNextPath());
         return;
       }

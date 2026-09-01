@@ -25,19 +25,46 @@ assertContract('active is the only allowed protected profile status',
 
 const authContext = source('src/context/AuthContext.jsx');
 const authGate = source('src/components/AuthGate.jsx');
+const authPage = source('src/app/auth/page.jsx');
 const userAuth = source('src/lib/auth/user-auth.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
   authContext.includes('isActiveProfileStatus(profile?.status)') &&
-  authGate.includes('!profileResolved || !activeProfile') &&
-  authGate.includes("accountStatus === 'suspended' ? 'suspended' : 'unavailable'"),
+  authGate.includes('!profileResolved || activeProfile') &&
+  authGate.includes("accountStatus === 'suspended'") &&
+  authGate.includes("accountStatus === 'pending'") &&
+  authGate.includes("? 'pending'") &&
+  authGate.includes("void signOut(`/auth?account=${accountReason}`)"),
 );
 
 assertContract('non-active client profiles cannot carry role or credit authority',
   authContext.includes("const activeProfile = isActiveProfileStatus(profile?.status) ? profile : null") &&
   authContext.includes("const role = activeProfile?.role || 'USER'") &&
   authContext.includes('const creditBalance = activeProfile?.credit_balance ?? 0'),
+);
+
+assertContract('sign-in verifies an active profile before redirecting',
+  authPage.includes("from '../../lib/auth/user-status'") &&
+  authPage.includes(".select('status')") &&
+  authPage.includes('!isActiveProfileStatus(loginProfile?.status)') &&
+  authPage.includes('await supabase.auth.signOut()') &&
+  authPage.includes('accountAccessMessage(loginProfile?.status)'),
+);
+
+assertContract('restored and social sessions fail closed before onboarding or redirect',
+  authPage.includes(".select('status,phone,whatsapp_phone,onboarding_completed_at')") &&
+  authPage.includes('profileError || !isActiveProfileStatus(profile?.status)') &&
+  authPage.includes("localStorage.removeItem('brandbox.oauth.onboarding')") &&
+  authPage.includes('setOnboardingOpen(false)') &&
+  authPage.includes('setError(accountAccessMessage(profile?.status))'),
+);
+
+assertContract('account status reasons render explicit sign-in guidance',
+  authPage.includes("status === 'suspended'") &&
+  authPage.includes("status === 'pending'") &&
+  authPage.includes("initialParams.get('account')") &&
+  authPage.includes('setError(accountAccessMessage(accountReason))'),
 );
 
 assertContract('server bearer authentication requires a matching active profile',
