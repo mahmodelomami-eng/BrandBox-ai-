@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
+import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
+import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { createStoreOrder } from '@/lib/store/store-service';
 import { createStorePaymentReference } from '@/lib/store/store-payment-reference';
 import { EzonePayClient } from '@/lib/payments/ezonepay-client';
-
-async function authenticate(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-  const { data, error } = await createServerSupabaseClient().auth.getUser(token);
-  return error ? null : data.user;
-}
 
 function appOrigin(request: NextRequest) {
   const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
@@ -23,8 +17,9 @@ function appOrigin(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await authenticate(request);
-    if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+    const auth = await authenticateActiveUser(request);
+    if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+    const { user } = auth;
 
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body || typeof body.skuId !== 'string' || typeof body.idempotencyKey !== 'string') {
