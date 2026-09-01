@@ -34,23 +34,45 @@ type NormalizedFailure = { code: string; userMessage: string };
 
 function normalizeGenerationFailure(error: unknown): NormalizedFailure {
   const raw = error instanceof Error ? error.message : '';
-  if (raw.startsWith('OPENROUTER_TIMEOUT')) {
+  if (
+    raw.startsWith('OPENROUTER_TIMEOUT') ||
+    raw.startsWith('OPENROUTER_IMAGE_TIMEOUT') ||
+    raw.startsWith('SIMULATED_AI_PROVIDER_TIMEOUT')
+  ) {
     return { code: 'AI_PROVIDER_TIMEOUT', userMessage: 'انتهت مهلة الاتصال بمزود الذكاء الاصطناعي.' };
   }
-  if (raw.startsWith('OPENROUTER_RATE_LIMITED')) {
+  if (raw.startsWith('OPENROUTER_RATE_LIMITED') || raw.startsWith('OPENROUTER_IMAGE_RATE_LIMITED')) {
     return { code: 'AI_PROVIDER_RATE_LIMITED', userMessage: 'المزود مشغول حاليًا. حاول مرة أخرى بعد قليل.' };
   }
-  if (raw.startsWith('OPENROUTER_PROVIDER_UNAVAILABLE')) {
+  if (raw.startsWith('OPENROUTER_PROVIDER_UNAVAILABLE') || raw.startsWith('OPENROUTER_IMAGE_PROVIDER_UNAVAILABLE')) {
     return { code: 'AI_PROVIDER_UNAVAILABLE', userMessage: 'خدمة الذكاء الاصطناعي غير متاحة مؤقتًا.' };
   }
-  if (raw.startsWith('OPENROUTER_AUTH_FAILED') || raw.startsWith('OPENROUTER_API_KEY_MISSING')) {
+  if (
+    raw.startsWith('OPENROUTER_AUTH_FAILED') ||
+    raw.startsWith('OPENROUTER_IMAGE_AUTH_FAILED') ||
+    raw.startsWith('OPENROUTER_API_KEY_MISSING')
+  ) {
     return { code: 'AI_PROVIDER_CONFIGURATION', userMessage: 'تكامل مزود الذكاء الاصطناعي يحتاج مراجعة إدارية.' };
   }
-  if (raw.startsWith('OPENROUTER_REQUEST_REJECTED')) {
+  if (raw.startsWith('OPENROUTER_REQUEST_REJECTED') || raw.startsWith('OPENROUTER_IMAGE_REQUEST_REJECTED')) {
     return { code: 'AI_PROVIDER_REQUEST_REJECTED', userMessage: 'تعذر قبول الطلب من مزود الذكاء الاصطناعي.' };
   }
-  if (raw.startsWith('OPENROUTER_EMPTY_RESPONSE') || raw.startsWith('OPENROUTER_INVALID_RESPONSE')) {
+  if (
+    raw.startsWith('OPENROUTER_EMPTY_RESPONSE') ||
+    raw.startsWith('OPENROUTER_INVALID_RESPONSE') ||
+    raw.startsWith('OPENROUTER_IMAGE_EMPTY_RESPONSE') ||
+    raw.startsWith('OPENROUTER_IMAGE_INVALID_RESPONSE')
+  ) {
     return { code: 'AI_PROVIDER_INVALID_RESPONSE', userMessage: 'وصل رد غير صالح من مزود الذكاء الاصطناعي.' };
+  }
+  if (
+    raw.startsWith('OPENROUTER_IMAGE_MODEL_NOT_ALLOWED') ||
+    raw.startsWith('OPENROUTER_INVALID_IMAGE_REQUEST') ||
+    raw.startsWith('OPENROUTER_INVALID_ASPECT_RATIO') ||
+    raw.startsWith('OPENROUTER_INVALID_IMAGE_RESOLUTION') ||
+    raw.startsWith('OPENROUTER_INVALID_IMAGE_COUNT')
+  ) {
+    return { code: 'AI_IMAGE_REQUEST_INVALID', userMessage: 'إعدادات توليد الصورة غير مدعومة.' };
   }
   return { code: 'GENERATION_FAILED', userMessage: 'تعذر إكمال عملية التوليد.' };
 }
@@ -140,13 +162,16 @@ export class GenerationEngine {
             maxTokens: typeof request.settings?.maxTokens === 'number' ? request.settings.maxTokens : undefined,
           })
         : undefined;
+      const imageResolution = ['512', '1K', '2K', '4K'].includes(String(request.settings?.resolution))
+        ? request.settings?.resolution as '512' | '1K' | '2K' | '4K'
+        : '1K';
       const imageResult = request.generationType === 'image'
         ? await createOpenRouterImageGeneration({
             model: request.modelId,
             prompt: request.prompt,
             aspectRatio: typeof request.settings?.aspectRatio === 'string' ? request.settings.aspectRatio : '1:1',
             count: requestedCount,
-            resolution: request.settings?.resolution === '2K' ? '2K' : '1K',
+            resolution: imageResolution,
           })
         : undefined;
       const responseContent = chatResult?.content;
