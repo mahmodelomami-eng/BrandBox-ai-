@@ -34,10 +34,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'INVALID_JSON' }, { status: 400 });
   }
 
-  if (!['chat', 'image'].includes(body.generationType) || !body.modelId || !body.prompt?.trim() || body.prompt.trim().length > 4000) {
+  const generationType = body.generationType;
+  if ((generationType !== 'chat' && generationType !== 'image') || !body.modelId || !body.prompt?.trim() || body.prompt.trim().length > 4000) {
     return NextResponse.json({ error: 'INVALID_GENERATION_REQUEST' }, { status: 400 });
   }
-  if (body.generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
+  if (generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
     return NextResponse.json({ error: 'IMAGE_MODEL_NOT_ALLOWED' }, { status: 400 });
   }
   if (body.projectId) {
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (projectError || !project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
 
-    const expectedTool = generationTypeToProjectTool(body.generationType);
+    const expectedTool = generationTypeToProjectTool(generationType);
     if (!projectTypeMatchesTool(project.type, expectedTool)) {
       return NextResponse.json({ error: 'PROJECT_TOOL_MISMATCH' }, { status: 409 });
     }
