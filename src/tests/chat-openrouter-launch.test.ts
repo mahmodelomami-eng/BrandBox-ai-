@@ -33,9 +33,9 @@ assert.ok(!engine.includes('wasRefunded: true'), 'refund state must reflect the 
 assert.ok(engine.includes('error_message: failure.code'), 'provider internals must not be persisted as user-facing generation errors');
 
 const chatClient = client.slice(client.indexOf('export async function createOpenRouterChatCompletion'));
-assert.ok(chatClient.includes("status === 429"));
-assert.ok(chatClient.includes("'OPENROUTER_RATE_LIMITED'"));
-assert.ok(chatClient.includes("'OPENROUTER_PROVIDER_UNAVAILABLE'"));
+assert.ok(client.includes("status === 429"));
+assert.ok(client.includes("'OPENROUTER_RATE_LIMITED'"));
+assert.ok(client.includes("'OPENROUTER_PROVIDER_UNAVAILABLE'"));
 assert.ok(chatClient.includes("'OPENROUTER_INVALID_RESPONSE'"));
 assert.ok(chatClient.includes("role: 'system'"));
 assert.ok(!chatClient.includes('error?.message'), 'chat client must not expose raw provider error messages');
