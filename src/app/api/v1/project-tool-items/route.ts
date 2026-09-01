@@ -11,6 +11,7 @@ async function getOwnedProject(userId: string, projectId: string) {
     .select('id,type')
     .eq('id', projectId)
     .eq('owner_id', userId)
+    .is('deleted_at', null)
     .maybeSingle();
   if (error) return null;
   return data;

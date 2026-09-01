@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, Image as ImageIcon, MessageSquare, Mic2, Video } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, MessageSquare, Mic2, Trash2, Video } from 'lucide-react';
 
 const TOOLS = [
   {
@@ -40,7 +40,7 @@ export default function ProjectsToolHub() {
           <p className="text-xs font-black tracking-[0.18em] text-[#ff3344]">مساحة المشاريع</p>
           <h1 className="mt-2 text-2xl font-black sm:text-3xl">اختر الأداة للبدء</h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-gray-500">
-            كل أداة لها مشاريعها الخاصة. اختر الأداة أولاً، ثم افتح مشروعًا سابقًا أو أنشئ مشروعًا جديدًا.
+            كل أداة لها مشاريعها الخاصة. المشاريع النشطة تبقى محفوظة، ويمكن استعادة المشروع المحذوف من السلة خلال 30 يومًا.
           </p>
         </div>
 
@@ -63,6 +63,17 @@ export default function ProjectsToolHub() {
             </Link>
           ))}
         </div>
+
+        <Link href="/projects/trash" className="mt-6 flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#0d0f14] p-5 transition hover:border-[#f31325]/35 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#181b22] text-[#ff3344]"><Trash2 size={20} /></span>
+            <div>
+              <div className="text-sm font-black">سلة المحذوفات</div>
+              <p className="mt-1 text-xs leading-6 text-gray-500">استعد المشاريع التي حذفتها خلال نافذة 30 يومًا.</p>
+            </div>
+          </div>
+          <span className="flex items-center gap-2 text-xs font-black text-[#ff3344]">فتح السلة <ArrowLeft size={15} /></span>
+        </Link>
       </section>
     </main>
   );

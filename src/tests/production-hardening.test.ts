@@ -181,6 +181,54 @@ function verifyPublicServicesContract() {
   );
 }
 
+function verifyProjectRetentionContract() {
+  const repoRoot = process.cwd();
+  const projectServicePath = join(repoRoot, 'src/lib/projects/projects-service.js');
+  const projectTrashPath = join(repoRoot, 'src/components/ProjectTrashWorkspace.jsx');
+  const projectTrashRoutePath = join(repoRoot, 'src/app/projects/trash/page.jsx');
+  const projectHubPath = join(repoRoot, 'src/components/ProjectsToolHub.jsx');
+  const retentionMigrationPath = join(repoRoot, 'supabase/migrations/20260901160129_project_retention_and_trash.sql');
+
+  const requiredPaths = [projectServicePath, projectTrashPath, projectTrashRoutePath, projectHubPath, retentionMigrationPath];
+  if (!requiredPaths.every((path) => existsSync(path))) return false;
+
+  const serviceSource = readFileSync(projectServicePath, 'utf8');
+  const trashSource = readFileSync(projectTrashPath, 'utf8');
+  const trashRouteSource = readFileSync(projectTrashRoutePath, 'utf8');
+  const hubSource = readFileSync(projectHubPath, 'utf8');
+  const migrationSource = readFileSync(retentionMigrationPath, 'utf8');
+
+  const activeProjectsAreRetainedAndTrashFiltered =
+    serviceSource.includes(".is('deleted_at', null)") &&
+    serviceSource.includes('listDeletedUserProjects');
+
+  const userDeleteIsRecoverable =
+    serviceSource.includes('.update({ deleted_at: deletedAt, updated_at: deletedAt })') &&
+    serviceSource.includes('restoreUserProject') &&
+    serviceSource.includes(".update({ deleted_at: null, purge_after: null, updated_at: restoredAt })") &&
+    !serviceSource.includes('.delete()');
+
+  const databaseEnforcesThirtyDayWindow =
+    migrationSource.includes("INTERVAL '30 days'") &&
+    migrationSource.includes('SECURITY INVOKER') &&
+    migrationSource.includes('trg_project_retention_window') &&
+    migrationSource.includes('Admins can permanently delete projects');
+
+  const trashUiIsReachableAndRestorable =
+    trashSource.includes('listDeletedUserProjects') &&
+    trashSource.includes('restoreUserProject') &&
+    trashSource.includes('30 يومًا') &&
+    trashRouteSource.includes('<ProjectTrashWorkspace />') &&
+    hubSource.includes('href="/projects/trash"');
+
+  return (
+    activeProjectsAreRetainedAndTrashFiltered &&
+    userDeleteIsRecoverable &&
+    databaseEnforcesThirtyDayWindow &&
+    trashUiIsReachableAndRestorable
+  );
+}
+
 export async function runProductionHardeningTests() {
   const health = await HealthCheckEngine.runFullHealthCheck();
   const databaseConfigured = Boolean(
@@ -195,6 +243,7 @@ export async function runProductionHardeningTests() {
   const adminControlCenterContract = verifyAdminControlCenterContract();
   const navigationCommerceContract = verifyNavigationCommerceContract();
   const publicServicesContract = verifyPublicServicesContract();
+  const projectRetentionContract = verifyProjectRetentionContract();
 
   return {
     allPassed:
@@ -203,11 +252,13 @@ export async function runProductionHardeningTests() {
       (!databaseConfigured || health.readiness === true) &&
       adminControlCenterContract &&
       navigationCommerceContract &&
-      publicServicesContract,
+      publicServicesContract &&
+      projectRetentionContract,
     databaseConfigured,
     adminControlCenterContract,
     navigationCommerceContract,
     publicServicesContract,
+    projectRetentionContract,
     health,
   };
 }
@@ -218,12 +269,14 @@ runProductionHardeningTests()
       if (!result.adminControlCenterContract) throw new Error('Admin control center regression guard failed.');
       if (!result.navigationCommerceContract) throw new Error('Navigation and commerce regression guard failed.');
       if (!result.publicServicesContract) throw new Error('Public services regression guard failed.');
+      if (!result.projectRetentionContract) throw new Error('Project retention regression guard failed.');
       throw new Error('Production hardening health check failed.');
     }
 
     console.log('Admin control center regression guard passed.');
     console.log('Navigation and commerce regression guard passed.');
     console.log('Public services regression guard passed.');
+    console.log('Project retention regression guard passed.');
     console.log(
       result.databaseConfigured
         ? 'Production hardening health check passed with database readiness.'

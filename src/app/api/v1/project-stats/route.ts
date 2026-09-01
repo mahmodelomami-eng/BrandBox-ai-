@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
   const { data: projects, error: projectsError } = await database
     .from('projects')
     .select('id')
-    .eq('owner_id', user.id);
+    .eq('owner_id', user.id)
+    .is('deleted_at', null);
 
   if (projectsError) return NextResponse.json({ error: 'PROJECT_STATS_UNAVAILABLE' }, { status: 503 });
 
