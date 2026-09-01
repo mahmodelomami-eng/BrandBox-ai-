@@ -43,7 +43,7 @@ export default function AuthPage() {
     let active = true;
     const initialParams = new URLSearchParams(window.location.search);
     const accountReason = initialParams.get('account');
-    if (accountReason) setError(accountAccessMessage(accountReason));
+    if (accountReason) window.setTimeout(() => active && setError(accountAccessMessage(accountReason)), 0);
 
     const resolveSession = async (session) => {
       if (!active || !session?.user) return;
