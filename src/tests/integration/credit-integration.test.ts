@@ -24,14 +24,15 @@ export async function runStagingCreditIntegrationTests(): Promise<{
     }
     await supabase.from('profiles').update({ credit_balance: 100 }).eq('id', testUserId);
 
-    // 2. Concurrency Test: Two Simultaneous Requests for 80 Credits Each
+    // 2. Use per-run identifiers so this real staging test is safely rerunnable.
+    const runId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const req1 = supabase.rpc('deduct_credits_idempotent', {
       p_user_id: testUserId,
       p_amount: 80,
       p_description: 'Staging Concurrency Req 1',
       p_reference_type: 'generation',
-      p_reference_id: 'gen_test_conc_1',
-      p_idempotency_key: 'idemp_staging_conc_1'
+      p_reference_id: `gen_test_conc_1_${runId}`,
+      p_idempotency_key: `idemp_staging_conc_1_${runId}`
     });
 
     const req2 = supabase.rpc('deduct_credits_idempotent', {
@@ -39,8 +40,8 @@ export async function runStagingCreditIntegrationTests(): Promise<{
       p_amount: 80,
       p_description: 'Staging Concurrency Req 2',
       p_reference_type: 'generation',
-      p_reference_id: 'gen_test_conc_2',
-      p_idempotency_key: 'idemp_staging_conc_2'
+      p_reference_id: `gen_test_conc_2_${runId}`,
+      p_idempotency_key: `idemp_staging_conc_2_${runId}`
     });
 
     const [res1, res2] = await Promise.all([req1, req2]);
@@ -63,7 +64,8 @@ export async function runStagingCreditIntegrationTests(): Promise<{
 
   try {
     const supabase = createStagingTestClient();
-    const dkey = 'idemp_staging_deduct_retry_101';
+    const retryRunId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const dkey = `idemp_staging_deduct_retry_101_${retryRunId}`;
 
     // 1. Initial Deduction
     const { data: d1 } = await supabase.rpc('deduct_credits_idempotent', {
@@ -71,7 +73,7 @@ export async function runStagingCreditIntegrationTests(): Promise<{
       p_amount: 10,
       p_description: 'Staging Deduct Retry',
       p_reference_type: 'generation',
-      p_reference_id: 'gen_test_retry_101',
+      p_reference_id: `gen_test_retry_101_${retryRunId}`,
       p_idempotency_key: dkey
     });
 
@@ -81,7 +83,7 @@ export async function runStagingCreditIntegrationTests(): Promise<{
       p_amount: 10,
       p_description: 'Staging Deduct Retry',
       p_reference_type: 'generation',
-      p_reference_id: 'gen_test_retry_101',
+      p_reference_id: `gen_test_retry_101_${retryRunId}`,
       p_idempotency_key: dkey
     });
 
@@ -98,7 +100,8 @@ export async function runStagingCreditIntegrationTests(): Promise<{
 
   try {
     const supabase = createStagingTestClient();
-    const rkey = 'idemp_staging_refund_retry_202';
+    const refundRunId = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    const rkey = `idemp_staging_refund_retry_202_${refundRunId}`;
 
     // 1. Initial Refund
     const { data: r1 } = await supabase.rpc('refund_credits_idempotent', {
@@ -106,7 +109,7 @@ export async function runStagingCreditIntegrationTests(): Promise<{
       p_amount: 10,
       p_description: 'Staging Refund Retry',
       p_reference_type: 'generation_failure',
-      p_reference_id: 'gen_test_retry_101',
+      p_reference_id: `gen_test_retry_101_${retryRunId}`,
       p_idempotency_key: rkey
     });
 
@@ -116,7 +119,7 @@ export async function runStagingCreditIntegrationTests(): Promise<{
       p_amount: 10,
       p_description: 'Staging Refund Retry',
       p_reference_type: 'generation_failure',
-      p_reference_id: 'gen_test_retry_101',
+      p_reference_id: `gen_test_retry_101_${retryRunId}`,
       p_idempotency_key: rkey
     });
 
