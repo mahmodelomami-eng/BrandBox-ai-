@@ -40,18 +40,24 @@ const CONFIG = {
   },
 };
 
-export default function MediaProjectWorkspace({ tool = 'video', projectId }) {
+function resolveTemplateSettings(config, templateSettings = {}) {
+  return Object.fromEntries(config.settings.map((field) => {
+    const requested = templateSettings?.[field.key];
+    return [field.key, field.values.includes(requested) ? requested : field.values[0]];
+  }));
+}
+
+export default function MediaProjectWorkspace({ tool = 'video', projectId, initialPrompt = '', templateSettings = {} }) {
   const config = CONFIG[tool] || CONFIG.video;
   const Icon = config.icon;
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const initialSettings = useMemo(() => Object.fromEntries(config.settings.map((item) => [item.key, item.values[0]])), [config]);
   const [project, setProject] = useState(null);
   const [items, setItems] = useState([]);
-  const [prompt, setPrompt] = useState('');
-  const [settings, setSettings] = useState(initialSettings);
+  const [prompt, setPrompt] = useState(initialPrompt);
+  const [settings, setSettings] = useState(() => resolveTemplateSettings(config, templateSettings));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(initialPrompt ? 'تم تحميل قالب جاهز. عدّل البرومبت والإعدادات ثم احفظه داخل المشروع.' : '');
 
   async function getToken() {
     const { data } = await supabase.auth.getSession();

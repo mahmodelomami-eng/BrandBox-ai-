@@ -106,14 +106,19 @@ export default function ImageStudioWorkspace() {
   const { creditBalance, refreshProfile } = useAuth();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const projectFromUrl = searchParams.get('project') || '';
+  const promptFromUrl = searchParams.get('prompt') || '';
+  const styleFromUrl = searchParams.get('style') || '';
+  const aspectFromUrl = searchParams.get('aspect') || '';
+  const initialStyleId = STYLE_OPTIONS.some((style) => style.id === styleFromUrl) ? styleFromUrl : 'photo';
+  const initialAspectRatio = ASPECTS.some((aspect) => aspect.value === aspectFromUrl) ? aspectFromUrl : '16:9';
 
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(projectFromUrl);
   const [gallery, setGallery] = useState([]);
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(promptFromUrl.slice(0, 1000));
   const [selectedModelId, setSelectedModelId] = useState(IMAGE_MODELS[0].id);
-  const [styleId, setStyleId] = useState('photo');
-  const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [styleId, setStyleId] = useState(initialStyleId);
+  const [aspectRatio, setAspectRatio] = useState(initialAspectRatio);
   const [resolution, setResolution] = useState('2K');
   const [count, setCount] = useState(1);
   const [useBrandKit, setUseBrandKit] = useState(true);
@@ -124,7 +129,7 @@ export default function ImageStudioWorkspace() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [message, setMessage] = useState(null);
+  const [message, setMessage] = useState(promptFromUrl ? { type: 'success', text: 'تم تحميل برومبت القالب وإعداداته. عدّله إذا أردت ثم ابدأ التوليد.' } : null);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,

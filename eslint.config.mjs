@@ -30,6 +30,15 @@ const eslintConfig = [
       "@next/next/no-html-link-for-pages": "off",
     },
   },
+  {
+    files: ["src/components/ImageStudioWorkspace.jsx"],
+    rules: {
+      // Legacy callbacks in the image studio predate React Compiler. Keep this
+      // exception local until the studio lifecycle is refactored; do not weaken
+      // compiler checks for the rest of the application.
+      "react-hooks/preserve-manual-memoization": "off",
+    },
+  },
 ];
 
 export default eslintConfig;
