@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
 
   const result = await GenerationEngine.executeGeneration(
-    { userId: user.id, email: user.email || '', role: auth.profile.role as never },
+    { userId: user.id, email: user.email || '', role: auth.profile.role },
     body
   );
   return NextResponse.json(result, { status: result.success ? 200 : 502 });
