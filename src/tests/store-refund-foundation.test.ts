@@ -11,7 +11,10 @@ const purchases = readFileSync(join(root, 'src/app/store/purchases/page.jsx'), '
 assert.ok(service.includes("payment_status !== 'PAID'"));
 assert.ok(service.includes("payment_refund_executed: false"));
 assert.ok(service.includes("['REQUESTED', 'REVIEWING', 'APPROVED', 'PROCESSING']"));
-assert.ok(api.includes('requestStoreRefund(data.user.id'));
+assert.ok(api.includes("from '@/lib/auth/user-auth'"));
+assert.ok(api.includes('authenticateActiveUser(request)'));
+assert.ok(api.includes('if (!auth)'));
+assert.ok(api.includes('requestStoreRefund(auth.user.id'));
 assert.ok(admin.includes("body.action === 'approve_refund'"));
 assert.ok(admin.includes("body.action === 'reject_refund'"));
 assert.ok(purchases.includes("'طلب استرداد'"));
