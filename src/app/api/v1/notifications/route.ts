@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
-
-async function authenticate(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-  const { data, error } = await createServerSupabaseClient().auth.getUser(token);
-  return error ? null : data.user;
-}
+import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
+import { authenticateActiveUser } from '@/lib/auth/user-auth';
 
 export async function GET(request: NextRequest) {
-  const user = await authenticate(request);
-  if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const auth = await authenticateActiveUser(request);
+  if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const { user } = auth;
 
   const database = createPrivilegedSupabaseClient();
   const { data: existingNotifications, error } = await database
@@ -44,8 +39,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = await authenticate(request);
-  if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const auth = await authenticateActiveUser(request);
+  if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const { user } = auth;
 
   let body: { id?: string; markAllRead?: boolean };
   try {

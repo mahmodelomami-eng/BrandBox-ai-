@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
+import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
+import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { GenerationEngine, GenerationRequest } from '@/lib/generations/generation-engine';
 import { OPENROUTER_IMAGE_MODELS } from '@/lib/ai/openrouter-client';
 
-async function authenticate(request: NextRequest) {
-  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-  const { data, error } = await createServerSupabaseClient().auth.getUser(token);
-  return error ? null : data.user;
-}
-
 export async function GET(request: NextRequest) {
-  const user = await authenticate(request);
-  if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const auth = await authenticateActiveUser(request);
+  if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const { user } = auth;
   const database = createPrivilegedSupabaseClient();
   const [{ data: generations, error: generationsError }, { data: assets, error: assetsError }] = await Promise.all([
     database.from('generations').select('id,project_id,generation_type,provider,model,prompt,settings,status,credits_consumed,result_url,result_content,error_message,duration_ms,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
@@ -27,8 +22,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await authenticate(request);
-  if (!user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const auth = await authenticateActiveUser(request);
+  if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const { user } = auth;
 
   let body: GenerationRequest;
   try {
@@ -49,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
 
   const result = await GenerationEngine.executeGeneration(
-    { userId: user.id, email: user.email || '', role: 'USER' },
+    { userId: user.id, email: user.email || '', role: auth.profile.role },
     body
   );
   return NextResponse.json(result, { status: result.success ? 200 : 502 });

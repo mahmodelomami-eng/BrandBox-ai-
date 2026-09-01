@@ -65,8 +65,10 @@ assertContract(
 );
 
 assertContract(
-  'AuthGate waits for auth resolution and preserves pathname plus search',
-  authGate.includes('if (loading || user) return;') &&
+  'AuthGate waits for session and profile resolution while preserving pathname plus search',
+  authGate.includes('if (loading) return;') &&
+    authGate.includes('if (!user) {') &&
+    authGate.includes('!profileResolved || activeProfile') &&
     authGate.includes('window.location.pathname') &&
     authGate.includes('window.location.search') &&
     authGate.includes('router.replace(`/auth?next=${encodeURIComponent(nextPath)}`)'),

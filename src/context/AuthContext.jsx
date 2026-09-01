@@ -4,10 +4,13 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import { checkPermission } from '../lib/auth/rbac-engine';
+import { isActiveProfileStatus } from '../lib/auth/user-status';
 
 const AuthContext = createContext({
   user: null,
   profile: null,
+  profileResolved: false,
+  accountStatus: null,
   role: 'USER',
   roleLabel: 'مستخدم',
   creditBalance: 0,
@@ -37,6 +40,7 @@ export function AuthProvider({ children }) {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [profileResolved, setProfileResolved] = useState(false);
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const authRevisionRef = useRef(0);
@@ -66,12 +70,10 @@ export function AuthProvider({ children }) {
 
     const revision = authRevisionRef.current;
     const prof = await fetchProfile(userId);
-    if (
-      authRevisionRef.current === revision &&
-      prof?.id === userId
-    ) {
-      setProfile(prof);
-    }
+    if (authRevisionRef.current !== revision) return;
+
+    setProfile(prof?.id === userId ? prof : null);
+    setProfileResolved(true);
   }, [user, fetchProfile]);
 
   useEffect(() => {
@@ -86,18 +88,26 @@ export function AuthProvider({ children }) {
         if (session?.user && mounted) {
           const sessionUserId = session.user.id;
           setUser(session.user);
+          setProfileResolved(false);
           setProfile((currentProfile) => currentProfile?.id === sessionUserId ? currentProfile : null);
 
           const prof = await fetchProfile(sessionUserId);
           if (mounted && authRevisionRef.current === revision) {
             setProfile(prof?.id === sessionUserId ? prof : null);
+            setProfileResolved(true);
           }
         } else if (mounted && authRevisionRef.current === revision) {
           setUser(null);
           setProfile(null);
+          setProfileResolved(true);
         }
       } catch (err) {
         console.error('[AuthContext] Session init error:', err);
+        if (mounted && authRevisionRef.current === revision) {
+          setUser(null);
+          setProfile(null);
+          setProfileResolved(true);
+        }
       } finally {
         if (mounted && authRevisionRef.current === revision) setLoading(false);
       }
@@ -112,14 +122,17 @@ export function AuthProvider({ children }) {
       if (session?.user) {
         const sessionUserId = session.user.id;
         setUser(session.user);
+        setProfileResolved(false);
         setProfile((currentProfile) => currentProfile?.id === sessionUserId ? currentProfile : null);
 
         const prof = await fetchProfile(sessionUserId);
         if (!mounted || authRevisionRef.current !== revision) return;
         setProfile(prof?.id === sessionUserId ? prof : null);
+        setProfileResolved(true);
       } else {
         setUser(null);
         setProfile(null);
+        setProfileResolved(true);
       }
 
       if (mounted && authRevisionRef.current === revision) setLoading(false);
@@ -132,22 +145,25 @@ export function AuthProvider({ children }) {
     };
   }, [supabase, fetchProfile]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (redirectTo = '/') => {
     try {
       authRevisionRef.current += 1;
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
-      router.replace('/');
+      setProfileResolved(true);
+      router.replace(redirectTo);
       router.refresh();
     } catch (err) {
       console.error('[AuthContext] Sign out error:', err);
     }
   }, [supabase, router]);
 
-  const role = profile?.role || 'USER';
+  const activeProfile = isActiveProfileStatus(profile?.status) ? profile : null;
+  const accountStatus = profileResolved ? profile?.status || 'unavailable' : null;
+  const role = activeProfile?.role || 'USER';
   const roleLabel = ROLE_LABELS[role] || 'مستخدم';
-  const creditBalance = profile?.credit_balance ?? 0;
+  const creditBalance = activeProfile?.credit_balance ?? 0;
 
   const checkPerm = useCallback((permission) => {
     return checkPermission(role, permission);
@@ -158,6 +174,8 @@ export function AuthProvider({ children }) {
       value={{
         user,
         profile,
+        profileResolved,
+        accountStatus,
         role,
         roleLabel,
         creditBalance,
