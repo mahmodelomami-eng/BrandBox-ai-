@@ -8,7 +8,9 @@ const panel = readFileSync(join(root, 'src/components/AdminStoreOperationsPanel.
 const center = readFileSync(join(root, 'src/components/AdminControlCenter.jsx'), 'utf8');
 
 assert.ok(api.includes("action !== 'retry_fulfillment'"));
-assert.ok(api.includes("fulfillment_mode !== 'BRAND_BOX_CREDITS'"));
+assert.ok(api.includes("const isCredit = item?.fulfillment_mode === 'BRAND_BOX_CREDITS'"));
+assert.ok(api.includes("const isCodeStock = sku?.inventory_mode === 'CODE_STOCK'"));
+assert.ok(api.includes("processDigitalCodeFulfillmentForOrder"));
 assert.ok(api.includes('processBrandBoxCreditFulfillmentForOrder(item.order_id)'));
 assert.ok(api.includes('ADMIN_RETRIED_STORE_FULFILLMENT'));
 assert.ok(panel.includes('إعادة المحاولة'));
