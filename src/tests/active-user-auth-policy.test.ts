@@ -54,6 +54,13 @@ const protectedApiRoutes = [
   'src/app/api/v1/notifications/route.ts',
   'src/app/api/v1/profile/onboarding/route.ts',
   'src/app/api/v1/profile/avatar/route.ts',
+  'src/app/api/v1/ezonepay/payment-links/route.ts',
+  'src/app/api/v1/ezonepay/status/route.ts',
+  'src/app/api/v1/store/checkout/route.ts',
+  'src/app/api/v1/store/purchases/route.ts',
+  'src/app/api/v1/store/refunds/route.ts',
+  'src/app/api/v1/store/payment-status/route.ts',
+  'src/app/api/v1/store/delivery/route.ts',
 ];
 
 for (const routePath of protectedApiRoutes) {
