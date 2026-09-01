@@ -37,13 +37,23 @@ export async function runStagingEzonePayIntegrationTests(): Promise<{
 
   process.env.EZONEPAY_ORDER_SIGNING_SECRET = 'staging-order-reference-test-secret';
   const initialBalance = Number(profile.credit_balance);
-  const orderReference = createEzonePayOrderReference({ userId: testUserId, itemType: 'purchase', itemId: 'pkg_100' });
+  const { data: testPackage, error: packageError } = await supabase
+    .from('credit_packages')
+    .select('id,credits,price_lyd')
+    .eq('is_active', true)
+    .order('price_lyd', { ascending: true })
+    .limit(1)
+    .single();
+  if (packageError || !testPackage) {
+    throw new Error('Staging requires at least one active credit package for Ezone Pay integration testing.');
+  }
+  const orderReference = createEzonePayOrderReference({ userId: testUserId, itemType: 'purchase', itemId: testPackage.id });
   const transactionId = Number(String(Date.now()).slice(-9));
   const webhook = signedWebhook(orderReference, transactionId);
   EzonePayFulfillmentService.setTransactionFetcherForTesting(async id => ({
     id,
     orderReference,
-    amount: 10,
+    amount: Number(testPackage.price_lyd),
     status: 2,
     statusName: 'Paid',
     paidUtc: new Date().toISOString(),
@@ -55,7 +65,7 @@ export async function runStagingEzonePayIntegrationTests(): Promise<{
     const { data: updated } = await supabase.from('profiles').select('credit_balance').eq('id', testUserId).single();
     const { count } = await supabase.from('payment_idempotency').select('*', { count: 'exact', head: true }).eq('order_reference', orderReference);
     const passed = first.success && !first.isDuplicate && duplicate.success && duplicate.isDuplicate
-      && count === 1 && Number(updated?.credit_balance) === initialBalance + 100;
+      && count === 1 && Number(updated?.credit_balance) === initialBalance + Number(testPackage.credits);
     results.push({ testName: 'Staging durable webhook fulfillment and duplicate guard', passed });
   } catch (error) {
     results.push({ testName: 'Staging durable webhook fulfillment and duplicate guard', passed: false, details: error instanceof Error ? error.message : String(error) });
