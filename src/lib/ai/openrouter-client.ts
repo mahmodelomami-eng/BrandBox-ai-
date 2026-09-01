@@ -7,10 +7,15 @@ export const OPENROUTER_IMAGE_MODELS = [
   'google/gemini-3.1-flash-lite-image',
 ] as const;
 
-const OPENROUTER_IMAGE_ASPECT_RATIOS = new Set([
+export const OPENROUTER_IMAGE_ASPECT_RATIOS = [
   'auto', '4:1', '3:1', '21:9', '2:1', '17:9', '16:9', '3:2', '4:3',
   '5:4', '1:1', '4:5', '3:4', '2:3', '9:16',
-]);
+] as const;
+
+export const OPENROUTER_IMAGE_RESOLUTIONS = ['512', '1K', '2K', '4K'] as const;
+
+const IMAGE_ASPECT_RATIO_SET = new Set<string>(OPENROUTER_IMAGE_ASPECT_RATIOS);
+const IMAGE_RESOLUTION_SET = new Set<string>(OPENROUTER_IMAGE_RESOLUTIONS);
 
 export interface OpenRouterChatRequest {
   model: string;
@@ -64,6 +69,14 @@ function chatHttpErrorCode(status: number): string {
   return 'OPENROUTER_REQUEST_REJECTED';
 }
 
+function imageHttpErrorCode(status: number): string {
+  if (status === 408) return 'OPENROUTER_IMAGE_TIMEOUT';
+  if (status === 429) return 'OPENROUTER_IMAGE_RATE_LIMITED';
+  if (status === 401 || status === 403) return 'OPENROUTER_IMAGE_AUTH_FAILED';
+  if (status >= 500) return 'OPENROUTER_IMAGE_PROVIDER_UNAVAILABLE';
+  return 'OPENROUTER_IMAGE_REQUEST_REJECTED';
+}
+
 function finiteUsageNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
@@ -77,11 +90,19 @@ export async function createOpenRouterImageGeneration(
   if (!OPENROUTER_IMAGE_MODELS.includes(request.model as typeof OPENROUTER_IMAGE_MODELS[number])) {
     throw new Error('OPENROUTER_IMAGE_MODEL_NOT_ALLOWED');
   }
+
   const prompt = request.prompt.trim();
   if (!prompt) throw new Error('OPENROUTER_INVALID_IMAGE_REQUEST');
+
   const aspectRatio = (request.aspectRatio || '1:1').toLowerCase();
-  if (!OPENROUTER_IMAGE_ASPECT_RATIOS.has(aspectRatio)) throw new Error('OPENROUTER_INVALID_ASPECT_RATIO');
-  const count = Math.max(1, Math.min(4, Math.trunc(request.count || 1)));
+  if (!IMAGE_ASPECT_RATIO_SET.has(aspectRatio)) throw new Error('OPENROUTER_INVALID_ASPECT_RATIO');
+
+  const resolution = request.resolution || '1K';
+  if (!IMAGE_RESOLUTION_SET.has(resolution)) throw new Error('OPENROUTER_INVALID_IMAGE_RESOLUTION');
+
+  const count = Math.trunc(Number(request.count ?? 1));
+  if (!Number.isFinite(count) || count < 1 || count > 4) throw new Error('OPENROUTER_INVALID_IMAGE_COUNT');
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 120_000);
 
@@ -99,28 +120,40 @@ export async function createOpenRouterImageGeneration(
         model: request.model,
         prompt,
         aspect_ratio: aspectRatio,
-        resolution: request.resolution || '1K',
+        resolution,
         n: count,
       }),
     });
 
-    const payload = await response.json() as Record<string, unknown>;
-    if (!response.ok) {
-      const error = payload.error as { message?: string } | undefined;
-      throw new Error(`OPENROUTER_IMAGE_HTTP_${response.status}: ${error?.message || 'Request failed'}`);
+    let payload: Record<string, unknown>;
+    try {
+      payload = await response.json() as Record<string, unknown>;
+    } catch {
+      if (!response.ok) throw new Error(imageHttpErrorCode(response.status));
+      throw new Error('OPENROUTER_IMAGE_INVALID_RESPONSE');
     }
+
+    if (!response.ok) throw new Error(imageHttpErrorCode(response.status));
+
     const data = Array.isArray(payload.data) ? payload.data : [];
     const images = data.map((item) => {
       const row = item as { b64_json?: unknown; media_type?: unknown };
       const mediaType = row.media_type || 'image/png';
       if (typeof row.b64_json !== 'string' || !['image/png', 'image/jpeg', 'image/webp'].includes(String(mediaType))) {
-        throw new Error('OPENROUTER_INVALID_IMAGE_RESPONSE');
+        throw new Error('OPENROUTER_IMAGE_INVALID_RESPONSE');
       }
       return { base64: row.b64_json, mediaType: mediaType as OpenRouterGeneratedImage['mediaType'] };
     });
-    if (!images.length) throw new Error('OPENROUTER_EMPTY_IMAGE_RESPONSE');
-    const usage = payload.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number } | undefined;
-    return { images, promptTokens: usage?.prompt_tokens, completionTokens: usage?.completion_tokens, totalTokens: usage?.total_tokens, costUsd: usage?.cost };
+    if (!images.length) throw new Error('OPENROUTER_IMAGE_EMPTY_RESPONSE');
+
+    const usage = payload.usage as { prompt_tokens?: unknown; completion_tokens?: unknown; total_tokens?: unknown; cost?: unknown } | undefined;
+    return {
+      images,
+      promptTokens: finiteUsageNumber(usage?.prompt_tokens),
+      completionTokens: finiteUsageNumber(usage?.completion_tokens),
+      totalTokens: finiteUsageNumber(usage?.total_tokens),
+      costUsd: finiteUsageNumber(usage?.cost),
+    };
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw new Error('OPENROUTER_IMAGE_TIMEOUT');
     throw error;
