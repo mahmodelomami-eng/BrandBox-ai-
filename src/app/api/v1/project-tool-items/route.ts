@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { authenticateActiveUser } from '@/lib/auth/user-auth';
+import { ProjectTool, projectTypeMatchesTool } from '@/lib/projects/project-scope';
 
-const ALLOWED_TOOLS = new Set(['video', 'audio']);
+const ALLOWED_TOOLS = new Set<ProjectTool>(['video', 'audio']);
 
-async function ownsProject(userId: string, projectId: string) {
+async function getOwnedProject(userId: string, projectId: string) {
   const { data, error } = await createPrivilegedSupabaseClient()
     .from('projects')
-    .select('id')
+    .select('id,type')
     .eq('id', projectId)
     .eq('owner_id', userId)
     .maybeSingle();
-  return !error && Boolean(data);
+  if (error) return null;
+  return data;
 }
 
 export async function GET(request: NextRequest) {
@@ -21,11 +23,16 @@ export async function GET(request: NextRequest) {
 
   const projectId = request.nextUrl.searchParams.get('projectId') || '';
   const tool = request.nextUrl.searchParams.get('tool') || '';
-  if (!projectId || !ALLOWED_TOOLS.has(tool)) {
+  if (!projectId || !ALLOWED_TOOLS.has(tool as ProjectTool)) {
     return NextResponse.json({ error: 'INVALID_QUERY' }, { status: 400 });
   }
-  if (!(await ownsProject(user.id, projectId))) {
+
+  const project = await getOwnedProject(user.id, projectId);
+  if (!project) {
     return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
+  }
+  if (!projectTypeMatchesTool(project.type, tool as ProjectTool)) {
+    return NextResponse.json({ error: 'PROJECT_TOOL_MISMATCH' }, { status: 409 });
   }
 
   const { data, error } = await createPrivilegedSupabaseClient()
@@ -63,11 +70,16 @@ export async function POST(request: NextRequest) {
   const projectId = body.projectId?.trim() || '';
   const tool = body.tool?.trim() || '';
   const prompt = body.prompt?.trim() || '';
-  if (!projectId || !ALLOWED_TOOLS.has(tool) || !prompt || prompt.length > 4000) {
+  if (!projectId || !ALLOWED_TOOLS.has(tool as ProjectTool) || !prompt || prompt.length > 4000) {
     return NextResponse.json({ error: 'INVALID_TOOL_ITEM' }, { status: 400 });
   }
-  if (!(await ownsProject(user.id, projectId))) {
+
+  const project = await getOwnedProject(user.id, projectId);
+  if (!project) {
     return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
+  }
+  if (!projectTypeMatchesTool(project.type, tool as ProjectTool)) {
+    return NextResponse.json({ error: 'PROJECT_TOOL_MISMATCH' }, { status: 409 });
   }
 
   const allowedStatuses = new Set(['draft', 'queued', 'processing', 'completed', 'failed']);
