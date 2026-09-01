@@ -1,0 +1,35 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import assert from 'node:assert/strict';
+
+const root = process.cwd();
+const route = readFileSync(join(root, 'src/app/api/v1/admin/ai-team/route.ts'), 'utf8');
+const component = readFileSync(join(root, 'src/components/AdminAITeamControlCenter.jsx'), 'utf8');
+const page = readFileSync(join(root, 'src/app/admin/ai-team/page.jsx'), 'utf8');
+const adminPage = readFileSync(join(root, 'src/app/admin/page.jsx'), 'utf8');
+
+assert.ok(route.includes("from '@/lib/auth/user-auth'"));
+assert.ok(route.includes('authenticateActiveUser(request)'));
+assert.ok(route.includes("checkPermission(role, 'audit.read')"));
+assert.ok(route.includes("checkPermission(role, 'settings.read')"));
+assert.ok(route.includes("if (!canView) return NextResponse.json({ error: 'FORBIDDEN' }"));
+assert.ok(route.includes("/pulls?state=open"));
+assert.ok(route.includes("/issues?state=all"));
+assert.ok(route.includes("/actions/runs?per_page=30"));
+assert.ok(route.includes("/commits/${currentPull.head.sha}/status"));
+assert.ok(route.includes("statusSource: 'GitHub activity inference'"));
+assert.ok(route.includes('CACHE_SECONDS = 300'));
+assert.ok(!route.includes('GITHUB_TOKEN'));
+assert.ok(!route.includes('process.env.'));
+
+assert.ok(page.includes('<AuthGate>'));
+assert.ok(page.includes('<AdminAITeamControlCenter />'));
+assert.ok(adminPage.includes('href="/admin/ai-team"'));
+assert.ok(component.includes("fetch(`/api/v1/admin/ai-team${fresh ? '?fresh=1' : ''}`"));
+assert.ok(component.includes('window.setInterval'));
+assert.ok(component.includes('GitHub activity inference') === false, 'The status source should come from the server payload, not a client-side hardcoded GitHub fetch.');
+assert.ok(!component.includes('api.github.com'));
+assert.ok(component.includes('الحالة مستنتجة من GitHub Issues وPull Requests وActions وVercel'));
+assert.ok(component.includes('AI TEAM CONTROL CENTER'));
+
+console.log('AI Team Control Center regression guard passed.');
