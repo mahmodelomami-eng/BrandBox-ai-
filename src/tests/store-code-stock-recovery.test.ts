@@ -1,0 +1,14 @@
+import { readFileSync } from 'node:fs'; import { join } from 'node:path'; import assert from 'node:assert/strict';
+const root=process.cwd();
+const fulfillment=readFileSync(join(root,'src/lib/store/store-code-fulfillment.ts'),'utf8');
+const route=readFileSync(join(root,'src/app/api/v1/admin/store/operations/route.ts'),'utf8');
+const panel=readFileSync(join(root,'src/components/AdminStoreOperationsPanel.jsx'),'utf8');
+assert.ok(fulfillment.includes("status:'REVIEW_REQUIRED'"));
+assert.ok(fulfillment.includes("last_error_code:'STORE_OUT_OF_STOCK'"));
+assert.ok(fulfillment.includes("status:'FULFILLED'"));
+assert.ok(route.includes("processDigitalCodeFulfillmentForOrder"));
+assert.ok(route.includes("['FAILED','REVIEW_REQUIRED']"));
+assert.ok(route.includes("sku?.inventory_mode === 'CODE_STOCK'"));
+assert.ok(panel.includes("STORE_OUT_OF_STOCK"));
+assert.ok(panel.includes("إعادة المحاولة بعد المعالجة"));
+console.log('Store CODE_STOCK recovery guard tests passed.');
