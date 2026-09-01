@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
+import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
+import { authenticateActiveUser } from '@/lib/auth/user-auth';
 
-async function authenticate(request: NextRequest) {
-  const token=request.headers.get('authorization')?.replace(/^Bearer\s+/i,'');
-  if(!token) return null;
-  const {data,error}=await createServerSupabaseClient().auth.getUser(token);
-  return error?null:data.user;
-}
 export async function GET(request: NextRequest){
-  const user=await authenticate(request); if(!user) return NextResponse.json({error:'UNAUTHORIZED'},{status:401});
+  const auth=await authenticateActiveUser(request); if(!auth) return NextResponse.json({error:'UNAUTHORIZED'},{status:401});
+  const { user } = auth;
   const orderId=request.nextUrl.searchParams.get('order')||'';
   if(!orderId) return NextResponse.json({error:'INVALID_ORDER'},{status:400});
   const db=createPrivilegedSupabaseClient();
