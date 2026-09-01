@@ -24,7 +24,11 @@ export default function AuthGate({ children }) {
 
     if (!profileResolved || activeProfile) return;
 
-    const accountReason = accountStatus === 'suspended' ? 'suspended' : 'unavailable';
+    const accountReason = accountStatus === 'suspended'
+      ? 'suspended'
+      : accountStatus === 'pending'
+        ? 'pending'
+        : 'unavailable';
     void signOut(`/auth?account=${accountReason}`);
   }, [loading, user, profileResolved, activeProfile, accountStatus, signOut, router]);
 
