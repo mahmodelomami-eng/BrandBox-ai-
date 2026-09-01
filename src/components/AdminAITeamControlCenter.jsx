@@ -109,9 +109,12 @@ export default function AdminAITeamControlCenter() {
   }
 
   useEffect(() => {
-    void load(false);
+    const initial = window.setTimeout(() => { void load(false); }, 0);
     const interval = window.setInterval(() => { void load(false); }, 60_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
     // The Supabase client is stable for the component lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
