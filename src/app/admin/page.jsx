@@ -2,7 +2,7 @@
 
 import React, { Suspense } from 'react';
 import Link from 'next/link';
-import { Headphones } from 'lucide-react';
+import { Bot, Headphones } from 'lucide-react';
 import AuthGate from '../../components/AuthGate';
 import AdminControlCenter from '../../components/AdminControlCenter';
 
@@ -22,6 +22,9 @@ export default function AdminPage() {
     <AuthGate>
       <Suspense fallback={<AdminLoadingState />}>
         <AdminControlCenter />
+        <Link href="/admin/ai-team" className="fixed bottom-20 left-5 z-[80] flex items-center gap-2 rounded-2xl border border-cyan-500/30 bg-[#11131a] px-4 py-3 text-xs font-black text-white shadow-2xl transition hover:border-cyan-400 hover:bg-cyan-500/10" title="مراقبة فريق البرمجة الآلي">
+          <Bot size={17} /> فريق AI
+        </Link>
         <Link href="/admin/support" className="fixed bottom-5 left-5 z-[80] flex items-center gap-2 rounded-2xl border border-[#f31325]/35 bg-[#11131a] px-4 py-3 text-xs font-black text-white shadow-2xl transition hover:border-[#f31325] hover:bg-[#f31325]" title="فتح طلبات الدعم">
           <Headphones size={17} /> طلبات الدعم
         </Link>
