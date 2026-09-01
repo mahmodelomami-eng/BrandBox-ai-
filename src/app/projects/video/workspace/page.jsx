@@ -7,8 +7,8 @@ function stringParam(value) {
 }
 
 export default async function VideoProjectPage({ searchParams }) {
-  const params = await Promise.resolve(searchParams);
-  const projectId = stringParam(params?.project);
+  const params = await searchParams;
+  const projectId = params?.project || '';
   const initialPrompt = stringParam(params?.prompt);
   const templateSettings = {
     ratio: stringParam(params?.ratio),
