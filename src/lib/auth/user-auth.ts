@@ -1,11 +1,12 @@
 import type { User } from '@supabase/supabase-js';
 import type { NextRequest } from 'next/server';
+import type { AdminRole } from '@/lib/auth/rbac-engine';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { isActiveProfileStatus } from '@/lib/auth/user-status';
 
 export type ActiveUserProfile = {
   id: string;
-  role: string;
+  role: AdminRole;
   status: string;
 };
 
@@ -40,7 +41,7 @@ export async function authenticateActiveUser(request: NextRequest): Promise<Acti
     user: data.user,
     profile: {
       id: profile.id,
-      role: profile.role || 'USER',
+      role: (profile.role || 'USER') as AdminRole,
       status: profile.status,
     },
   };
