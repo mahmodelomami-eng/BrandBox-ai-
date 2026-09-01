@@ -77,7 +77,9 @@ assert.ok(mediaWorkspace.includes('resolveTemplateSettings(config, templateSetti
 assert.ok(mediaWorkspace.includes('useState(initialPrompt)'));
 
 for (const route of [chatPage, videoPage, audioPage]) {
-  assert.ok(route.includes('await Promise.resolve(searchParams)'), 'workspace route must resolve Next.js searchParams before template handoff');
+  assert.ok(route.includes('const params = await searchParams;'), 'workspace route must resolve Next.js searchParams before template handoff');
+  assert.ok(route.includes('ProjectWorkspaceGate'), 'template handoff must preserve the authenticated project workspace guard');
+  assert.ok(route.includes("const projectId = params?.project || '';"), 'template handoff must preserve the canonical project id input');
 }
 assert.ok(videoPage.includes('initialPrompt={initialPrompt}'));
 assert.ok(videoPage.includes('templateSettings={templateSettings}'));
