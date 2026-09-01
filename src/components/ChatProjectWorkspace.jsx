@@ -37,12 +37,11 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
   async function loadHistory() {
     const token = await getToken();
     if (!token) return;
-    const response = await fetch('/api/v1/generations', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+    const params = new URLSearchParams({ projectId, generationType: 'chat' });
+    const response = await fetch(`/api/v1/generations?${params.toString()}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
     if (!response.ok) return;
     const payload = await response.json();
-    const rows = (Array.isArray(payload.generations) ? payload.generations : [])
-      .filter((item) => item.project_id === projectId && item.generation_type === 'chat')
-      .reverse();
+    const rows = (Array.isArray(payload.generations) ? payload.generations : []).reverse();
     const availableModels = (Array.isArray(payload.chatModels) ? payload.chatModels : [])
       .filter((item) => typeof item?.model_id === 'string' && item.model_id)
       .map((item) => ({
