@@ -1,7 +1,16 @@
 import AuthGate from '../../../../components/AuthGate';
 import MediaProjectWorkspace from '../../../../components/MediaProjectWorkspace';
+import ProjectWorkspaceGate from '../../../../components/ProjectWorkspaceGate';
 
-export default function AudioProjectPage({ searchParams }) {
-  const projectId = searchParams?.project || '';
-  return <AuthGate><MediaProjectWorkspace tool="audio" projectId={projectId} /></AuthGate>;
+export default async function AudioProjectPage({ searchParams }) {
+  const params = await searchParams;
+  const projectId = params?.project || '';
+
+  return (
+    <AuthGate>
+      <ProjectWorkspaceGate tool="audio" projectId={projectId}>
+        <MediaProjectWorkspace tool="audio" projectId={projectId} />
+      </ProjectWorkspaceGate>
+    </AuthGate>
+  );
 }
