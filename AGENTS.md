@@ -59,13 +59,12 @@ Owns CI/CD configuration, preview deployment health, build reliability, and roll
 4. Implement the smallest safe change.
 5. Add or update regression tests.
 6. Run the relevant focused tests first.
-7. Run `npm run lint`.
-8. Run `npm test` unless the issue explicitly identifies a narrower approved suite.
-9. Run `npm run build` with safe non-secret placeholders when real environment values are not required.
-10. Review the diff for secrets, destructive SQL, client-side authority, tenant leaks, and unrelated edits.
-11. Open a PR using the repository template.
-12. If CI fails, diagnose and repair the branch; do not merge around a failure.
-13. Merge only after required checks pass and no protected-operation gate is triggered.
+7. Run `npm run verify:agent` for the standard non-destructive gate (lint, production-hardening tests, Store readiness, and production build with safe CI placeholders).
+8. If verification fails, diagnose and repair the branch; do not bypass or weaken the failing check.
+9. Review the diff for secrets, destructive SQL, client-side authority, tenant leaks, and unrelated edits.
+10. Open a PR using the repository template.
+11. If CI fails, diagnose and repair the branch; do not merge around a failure.
+12. Merge only after required checks pass and no protected-operation gate is triggered.
 
 ## Architecture invariants
 - Prices, credits, roles, entitlement, payment status, and fulfillment authority remain server-side.
@@ -99,8 +98,7 @@ Every database PR must state migration impact, rollback strategy, RLS impact, an
 A task is complete only when:
 - acceptance criteria are satisfied;
 - focused regression tests pass;
-- lint passes;
-- build passes;
+- `npm run verify:agent` passes;
 - no secrets are introduced;
 - no production safety invariant is weakened;
 - the PR contains risk and rollback notes;
