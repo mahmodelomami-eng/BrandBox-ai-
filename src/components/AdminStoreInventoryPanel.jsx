@@ -87,43 +87,43 @@ export default function AdminStoreInventoryPanel() {
 
   const lowStock = payload.skus.filter((sku) => sku.inventory?.lowStock);
 
-  return <section className="rounded-3xl border border-white/10 bg-[#0d1016] p-5">
+  return <section className="bb-panel rounded-3xl border p-5">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <div className="text-[10px] font-black tracking-[.2em] text-[#ff3344]">DIGITAL INVENTORY</div>
+        <div className="bb-text-accent text-[10px] font-black tracking-[.2em]">DIGITAL INVENTORY</div>
         <h3 className="mt-2 font-black">مخزون الأكواد الرقمية</h3>
-        <p className="mt-1 text-[10px] leading-5 text-gray-500">الأكواد الجديدة تُشفّر على الخادم قبل الحفظ. لا يتم عرض الأكواد الخام في لوحة الإدارة بعد الاستيراد.</p>
+        <p className="bb-text-tertiary mt-1 text-[10px] leading-5">الأكواد الجديدة تُشفّر على الخادم قبل الحفظ. لا يتم عرض الأكواد الخام في لوحة الإدارة بعد الاستيراد.</p>
       </div>
-      <button onClick={() => void load()} disabled={loading} className="rounded-xl border border-white/10 p-3"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/></button>
+      <button onClick={() => void load()} disabled={loading} className="bb-button-secondary rounded-xl border p-3 disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/></button>
     </div>
 
-    {error && <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">{error}</div>}
-    {message && <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-200">{message}</div>}
+    {error && <div className="bb-danger-surface mt-4 rounded-xl border p-3 text-xs">{error}</div>}
+    {message && <div className="mt-4 rounded-xl border p-3 text-xs" style={{ background: 'var(--bb-success-soft)', color: 'var(--bb-success)', borderColor: 'color-mix(in srgb, var(--bb-success) 25%, transparent)' }}>{message}</div>}
 
-    {lowStock.length > 0 && <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-      <div className="flex items-center gap-2 text-xs font-black text-amber-300"><AlertTriangle size={15}/> تنبيه مخزون منخفض</div>
-      <div className="mt-2 flex flex-wrap gap-2">{lowStock.map((sku) => <span key={sku.id} className="rounded-full border border-amber-500/20 px-2.5 py-1 text-[10px] text-amber-200">{sku.title}: {sku.inventory?.available || 0}</span>)}</div>
+    {lowStock.length > 0 && <div className="bb-warning-surface mt-4 rounded-2xl border p-4">
+      <div className="flex items-center gap-2 text-xs font-black"><AlertTriangle size={15}/> تنبيه مخزون منخفض</div>
+      <div className="mt-2 flex flex-wrap gap-2">{lowStock.map((sku) => <span key={sku.id} className="rounded-full border px-2.5 py-1 text-[10px]" style={{ borderColor: 'color-mix(in srgb, var(--bb-warning) 25%, transparent)' }}>{sku.title}: {sku.inventory?.available || 0}</span>)}</div>
     </div>}
 
     <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_1.4fr]">
       <div className="space-y-3">
-        {payload.skus.map((sku) => <button key={sku.id} onClick={() => setSelectedSkuId(sku.id)} className={`w-full rounded-2xl border p-4 text-right ${selectedSkuId === sku.id ? 'border-[#ff3344]/40 bg-[#ff3344]/5' : 'border-white/[.06] bg-[#10131a]'}`}>
+        {payload.skus.map((sku) => <button key={sku.id} onClick={() => setSelectedSkuId(sku.id)} className={`w-full rounded-2xl border p-4 text-right ${selectedSkuId === sku.id ? 'bb-accent-soft' : 'bb-card bb-hoverable'}`}>
           <div className="flex items-center justify-between gap-3">
-            <div><div className="font-black">{sku.title}</div><div className="mt-1 text-[10px] text-gray-500">{sku.sku_code}</div></div>
-            <div className="text-left text-[10px]"><div className="text-emerald-300">متاح {sku.inventory?.available || 0}</div><div className="text-amber-300">محجوز {sku.inventory?.reserved || 0}</div><div className="text-gray-500">مُسلّم {sku.inventory?.delivered || 0}</div></div>
+            <div><div className="font-black">{sku.title}</div><div className="bb-text-tertiary mt-1 text-[10px]">{sku.sku_code}</div></div>
+            <div className="text-left text-[10px]"><div style={{ color: 'var(--bb-success)' }}>متاح {sku.inventory?.available || 0}</div><div className="bb-text-warning">محجوز {sku.inventory?.reserved || 0}</div><div className="bb-text-tertiary">مُسلّم {sku.inventory?.delivered || 0}</div></div>
           </div>
         </button>)}
-        {!loading && !payload.skus.length && <div className="rounded-2xl border border-white/[.06] p-5 text-center text-xs text-gray-500">لا توجد SKU بنمط CODE_STOCK.</div>}
+        {!loading && !payload.skus.length && <div className="bb-card bb-text-tertiary rounded-2xl border p-5 text-center text-xs">لا توجد SKU بنمط CODE_STOCK.</div>}
       </div>
 
-      {payload.capabilities?.canManage && <div className="rounded-2xl border border-white/[.06] bg-[#10131a] p-4">
-        <div className="flex items-center gap-2 font-black"><PackagePlus size={17} className="text-[#ff3344]"/> إضافة دفعة أكواد</div>
-        <textarea value={codesText} onChange={(e) => setCodesText(e.target.value)} rows={9} placeholder={"كود واحد في كل سطر\nCODE-001\nCODE-002"} className="mt-4 w-full rounded-xl border border-white/10 bg-[#090b10] p-3 font-mono text-xs outline-none"/>
+      {payload.capabilities?.canManage && <div className="bb-card rounded-2xl border p-4">
+        <div className="flex items-center gap-2 font-black"><PackagePlus size={17} className="bb-text-accent"/> إضافة دفعة أكواد</div>
+        <textarea value={codesText} onChange={(e) => setCodesText(e.target.value)} rows={9} placeholder={"كود واحد في كل سطر\nCODE-001\nCODE-002"} className="bb-input mt-4 w-full rounded-xl border p-3 font-mono text-xs outline-none"/>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <input value={supplierBatch} onChange={(e) => setSupplierBatch(e.target.value)} placeholder="Supplier Batch (اختياري)" className="rounded-xl border border-white/10 bg-[#090b10] p-3 text-xs outline-none"/>
-          <input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="rounded-xl border border-white/10 bg-[#090b10] p-3 text-xs outline-none"/>
+          <input value={supplierBatch} onChange={(e) => setSupplierBatch(e.target.value)} placeholder="Supplier Batch (اختياري)" className="bb-input rounded-xl border p-3 text-xs outline-none"/>
+          <input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="bb-input rounded-xl border p-3 text-xs outline-none"/>
         </div>
-        <button onClick={() => void importBatch()} disabled={busy || !selectedSkuId} className="mt-4 flex items-center gap-2 rounded-xl bg-[#f31325] px-5 py-3 text-xs font-black disabled:opacity-50">{busy && <Loader2 size={14} className="animate-spin"/>} استيراد وتشفير الدفعة</button>
+        <button onClick={() => void importBatch()} disabled={busy || !selectedSkuId} className="bb-button-primary mt-4 flex items-center gap-2 rounded-xl px-5 py-3 text-xs font-black disabled:opacity-50">{busy && <Loader2 size={14} className="animate-spin"/>} استيراد وتشفير الدفعة</button>
       </div>}
     </div>
   </section>;
