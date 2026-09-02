@@ -117,6 +117,9 @@ function deriveAgents(params: {
   const backendActive = /api|backend|auth|store|project|server|scope|payment|credit|route/.test(text);
   const aiActive = [88, 89, 90].includes(issueNumber) || /openrouter|generation|\bchat\b|image|video|model|provider/.test(text);
   const databaseActive = /database|migration|\bdb\b|rls|supabase|schema|index/.test(text);
+  const productActive = /product|business|pricing|plan|subscription|onboarding|conversion|growth|analytics|store|launch|revenue|customer|market|package/.test(text);
+  const monitoringActive = /observability|monitor|runtime|health|incident|error|log|maintenance|uptime|regression|performance|alert|reliability/.test(text);
+  const platformFailure = releaseState === 'failed' || vercelState === 'failed';
 
   return [
     {
@@ -126,6 +129,16 @@ function deriveAgents(params: {
       status: currentIssue || currentPull ? 'working' : 'waiting',
       task,
       note: currentIssue ? `يتابع تسلسل الإطلاق من المهمة #${currentIssue.number}` : 'بانتظار مهمة إطلاق جديدة',
+    },
+    {
+      id: 'product-business',
+      name: 'Product & Business Agent',
+      specialty: 'Product Strategy · Pricing · Growth · Customer Value',
+      status: currentPull && productActive ? 'reviewing' : 'waiting',
+      task: currentPull && productActive ? task : 'بانتظار مهمة منتج أو نمو أو تسعير',
+      note: currentPull && productActive
+        ? 'يراجع أثر التغيير على قيمة المنتج والتسعير والتبني وتجربة العميل'
+        : 'يحافظ على اتساق قرارات المنتج مع نموذج الأعمال وأهداف الإطلاق',
     },
     {
       id: 'visual-designer',
@@ -186,6 +199,20 @@ function deriveAgents(params: {
       status: safetyState === 'failed' ? 'blocked' : safetyState === 'running' ? 'reviewing' : safetyState === 'success' ? 'completed' : 'waiting',
       task: currentPull ? `Safety Gate · PR #${currentPull.number}` : 'بانتظار PR للمراجعة',
       note: safetyState === 'success' ? 'Safety Gate ناجح' : 'يراجع حدود الأمان قبل الدمج',
+    },
+    {
+      id: 'monitoring-maintenance',
+      name: 'Monitoring & Maintenance Agent',
+      specialty: 'Reliability · Runtime Health · Incidents · Maintenance',
+      status: platformFailure ? 'working' : currentPull && monitoringActive ? 'reviewing' : 'waiting',
+      task: platformFailure
+        ? 'تحليل فشل البوابات أو النشر وتحديد سبب التراجع'
+        : currentPull && monitoringActive
+          ? task
+          : 'مراقبة صحة المنصة والاستعداد للصيانة',
+      note: platformFailure
+        ? 'يركز على الاستعادة ومنع تكرار الأعطال قبل مواصلة الإطلاق'
+        : 'يتابع الاعتمادية والأخطاء والأداء والصيانة الوقائية',
     },
     {
       id: 'devops',
