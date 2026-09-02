@@ -9,12 +9,14 @@ const navigation = readFileSync(join(root, 'src/components/GlobalNavigation.jsx'
 // Monitoring & Maintenance: stale-user and degraded-state protection.
 assert.ok(dashboard.includes('const [businessLoading, setBusinessLoading]'));
 assert.ok(dashboard.includes('const [dataOwnerId, setDataOwnerId]'));
+assert.ok(dashboard.includes('const [errorOwnerId, setErrorOwnerId]'));
 assert.ok(dashboard.includes('dataOwnerId === authUser.id'));
-assert.ok(dashboard.includes('setProjects([])'));
-assert.ok(dashboard.includes('setGenerations([])'));
+assert.ok(dashboard.includes('errorOwnerId === authUser.id'));
+assert.ok(dashboard.includes('setDataOwnerId(targetUserId)'));
 assert.ok(dashboard.includes(".is('deleted_at', null)"), 'deleted projects must not appear in the active dashboard');
 assert.ok(dashboard.includes(".eq('status', 'active')"), 'dashboard must only treat active subscriptions as current');
 assert.ok(dashboard.includes('hasPartialFailure'));
+assert.ok(dashboard.includes('retryBusinessData'));
 assert.ok(dashboard.includes('إعادة المحاولة'));
 assert.ok(dashboard.includes('function LoadingRows'));
 assert.ok(dashboard.includes('aria-busy={!businessReady}'));
