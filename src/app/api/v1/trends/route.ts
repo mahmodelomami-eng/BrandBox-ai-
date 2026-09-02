@@ -6,6 +6,8 @@ const ALLOWED_EVENT_TYPES = new Set(['open', 'use', 'share']);
 const ALLOWED_TOOLS = new Set(['images', 'video']);
 const ALLOWED_LIFECYCLES = new Set(['trending', 'evergreen']);
 
+type SafeMetadataValue = string | number | boolean | null;
+
 function publicTrend(row: Record<string, unknown>) {
   return {
     id: row.id,
@@ -33,6 +35,19 @@ function publicTrend(row: Record<string, unknown>) {
     publishedAt: row.published_at,
     expiresAt: row.expires_at,
   };
+}
+
+function sanitizeMetadata(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries: Array<[string, SafeMetadataValue]> = [];
+  for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>).slice(0, 12)) {
+    const key = rawKey.slice(0, 60);
+    if (!key) continue;
+    if (typeof rawValue === 'string') entries.push([key, rawValue.slice(0, 300)]);
+    else if (typeof rawValue === 'number' && Number.isFinite(rawValue)) entries.push([key, rawValue]);
+    else if (typeof rawValue === 'boolean' || rawValue === null) entries.push([key, rawValue]);
+  }
+  return Object.fromEntries(entries);
 }
 
 export async function GET(request: NextRequest) {
@@ -115,16 +130,12 @@ export async function POST(request: NextRequest) {
     if (!project) return NextResponse.json({ error: 'PROJECT_NOT_OWNED' }, { status: 403 });
   }
 
-  const safeMetadata = body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
-    ? Object.fromEntries(Object.entries(body.metadata).slice(0, 12).map(([key, value]) => [String(key).slice(0, 60), typeof value === 'string' ? value.slice(0, 300) : value]))
-    : {};
-
   const { error: usageError } = await database.from('trend_usage_events').insert({
     trend_id: body.trendId,
     user_id: auth.user.id,
     project_id: body.projectId || null,
     event_type: eventType,
-    metadata: safeMetadata,
+    metadata: sanitizeMetadata(body.metadata),
   });
   if (usageError) return NextResponse.json({ error: 'TREND_USAGE_NOT_RECORDED' }, { status: 503 });
 
