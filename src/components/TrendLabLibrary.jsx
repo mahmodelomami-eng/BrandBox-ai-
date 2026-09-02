@@ -79,7 +79,10 @@ export default function TrendLabLibrary() {
     }
   }, []);
 
-  useEffect(() => { void loadTrends(); }, [loadTrends]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadTrends(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadTrends]);
 
   useEffect(() => {
     const onEscape = (event) => {
@@ -113,7 +116,7 @@ export default function TrendLabLibrary() {
     }).catch(() => {});
   }
 
-  async function useTrend() {
+  async function applyTrend() {
     if (!selected || busy) return;
     if (selected.readiness !== 'live') {
       setNotice('هذا الترند محفوظ وجاهز داخل Trend Lab، لكنه يحتاج مسار صورة/فيديو مرجعي قبل تفعيله للمستخدمين. لن نظهر زرًا وهميًا حتى يصبح المسار مدعومًا فعليًا.');
@@ -237,7 +240,7 @@ export default function TrendLabLibrary() {
 
             <div className="mt-4 flex flex-wrap gap-2">{(selected.tags || []).map((tag) => <span key={tag} className="bb-card bb-text-tertiary rounded-full border px-2.5 py-1 text-[9px] font-bold">#{tag}</span>)}</div>
             {notice && <div className="bb-accent-soft mt-4 rounded-xl border px-4 py-3 text-xs font-bold">{notice}</div>}
-            <button type="button" disabled={busy || selected.readiness === 'draft'} onClick={() => void useTrend()} className={`mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-black ${selected.readiness === 'live' ? 'bb-button-primary' : 'bb-button-secondary border'}`}>{busy ? <Loader2 size={17} className="animate-spin" /> : <WandSparkles size={17} />}{selected.readiness === 'live' ? (busy ? 'جاري تجهيز المشروع...' : 'جرّب هذا الترند الآن') : 'محفوظ — ينتظر دعم الصورة المرجعية'}</button>
+            <button type="button" disabled={busy || selected.readiness === 'draft'} onClick={() => void applyTrend()} className={`mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-black ${selected.readiness === 'live' ? 'bb-button-primary' : 'bb-button-secondary border'}`}>{busy ? <Loader2 size={17} className="animate-spin" /> : <WandSparkles size={17} />}{selected.readiness === 'live' ? (busy ? 'جاري تجهيز المشروع...' : 'جرّب هذا الترند الآن') : 'محفوظ — ينتظر دعم الصورة المرجعية'}</button>
           </div>
         </div>
       )}
