@@ -139,9 +139,9 @@ export default function AccountSettingsPage() {
 
   if (loading) {
     return (
-      <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050608] text-white">
+      <main dir="rtl" className="bb-app-canvas min-h-[calc(100vh-5rem)]">
         <div className="flex min-h-[65vh] items-center justify-center">
-          <span className="h-7 w-7 animate-spin rounded-full border-2 border-[#FF2E4C] border-t-transparent" />
+          <span className="h-7 w-7 animate-spin rounded-full border-2 border-[var(--bb-accent)] border-t-transparent" />
         </div>
       </main>
     );
@@ -155,119 +155,126 @@ export default function AccountSettingsPage() {
     : null;
 
   return (
-    <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050608] text-gray-100 font-sans selection:bg-[#FF2E4C] selection:text-white">
+    <main dir="rtl" className="bb-app-canvas min-h-[calc(100vh-5rem)] font-sans selection:bg-[var(--bb-accent)] selection:text-[var(--bb-text-inverse)]">
       <div className="mx-auto max-w-[1720px] p-4 sm:p-6 lg:p-8">
         <div className="mx-auto max-w-4xl space-y-6">
           {toast && (
-            <div className={`fixed top-20 left-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md border ${toast.type === 'error' ? 'bg-[#121520] border-red-500/50 text-red-200' : 'bg-[#121520] border-emerald-500/50 text-emerald-200'}`}>
+            <div
+              role="status"
+              className={`fixed left-6 top-20 z-50 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-[var(--bb-shadow-lg)] backdrop-blur-md ${toast.type === 'error' ? 'bb-danger-surface' : 'bg-[var(--bb-success-soft)] text-[var(--bb-success)] border-[var(--bb-success)]'}`}
+            >
               <span>{toast.text}</span>
             </div>
           )}
 
-          <div className="text-xs text-gray-500">الرئيسية <span className="px-2">/</span> الحساب <span className="px-2">/</span> إعدادات الحساب</div>
+          <div className="bb-text-tertiary text-xs">الرئيسية <span className="px-2">/</span> الحساب <span className="px-2">/</span> إعدادات الحساب</div>
 
           <div>
-            <h2 className="flex items-center gap-2 text-xl font-extrabold text-white">
-              <User className="h-5 w-5 text-[#FF2E4C]" /> إعدادات الملف الشخصي والحساب
+            <h2 className="bb-text-primary flex items-center gap-2 text-xl font-extrabold">
+              <User className="bb-text-accent h-5 w-5" /> إعدادات الملف الشخصي والحساب
             </h2>
-            <p className="mt-1 text-xs text-gray-400">إدارة معلوماتك الشخصية، ومعرفة خطتك الحالية، ومتابعة الرصيد وسجل حركات النقاط.</p>
+            <p className="bb-text-secondary mt-1 text-xs">إدارة معلوماتك الشخصية، ومعرفة خطتك الحالية، ومتابعة الرصيد وسجل حركات النقاط.</p>
           </div>
 
-          <section className="overflow-hidden rounded-[24px] border border-[#2a2e38] bg-[radial-gradient(circle_at_10%_15%,rgba(255,46,76,.14),transparent_35%),#11131a] p-5 sm:p-6">
+          <section className="bb-dashboard-hero overflow-hidden rounded-[24px] border p-5 sm:p-6">
             {loadingPlan ? (
-              <div className="py-8 text-center text-xs text-gray-500">جاري تحميل الخطة والرصيد...</div>
+              <div className="bb-text-tertiary py-8 text-center text-xs">جاري تحميل الخطة والرصيد...</div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 sm:col-span-1">
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500"><CreditCard className="h-4 w-4 text-[#FF2E4C]" /> الخطة الحالية</div>
-                  <div className="mt-3 text-xl font-black text-white">{planName}</div>
-                  <div className="mt-1 text-[10px] text-gray-500">{subscription ? 'اشتراك نشط' : 'الحساب يعمل بالخطة المجانية'}</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500"><Wallet className="h-4 w-4 text-emerald-400" /> الرصيد المتاح</div>
-                  <div className="mt-3 text-xl font-black text-white">{Number(creditBalance || 0).toLocaleString('ar-LY')} <span className="text-xs text-gray-500">نقطة</span></div>
-                  <div className="mt-1 text-[10px] text-gray-500">رصيد موحد لجميع أدوات الذكاء الاصطناعي</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500"><CalendarDays className="h-4 w-4 text-sky-400" /> دورة الخطة</div>
-                  <div className="mt-3 text-sm font-black text-white">{periodEnd || 'لا توجد دورة مدفوعة'}</div>
-                  <div className="mt-1 text-[10px] text-gray-500">{plan ? `${Number(plan.monthly_credits || 0).toLocaleString('ar-LY')} نقطة شهرية · ${Number(plan.max_projects || 0).toLocaleString('ar-LY')} مشاريع` : 'اختر باقة عندما تحتاج موارد إضافية'}</div>
-                </div>
+                <AccountMetric icon={<CreditCard className="bb-text-accent h-4 w-4" />} label="الخطة الحالية" value={planName} note={subscription ? 'اشتراك نشط' : 'الحساب يعمل بالخطة المجانية'} />
+                <AccountMetric icon={<Wallet className="h-4 w-4 text-[var(--bb-success)]" />} label="الرصيد المتاح" value={<>{Number(creditBalance || 0).toLocaleString('ar-LY')} <span className="bb-text-tertiary text-xs">نقطة</span></>} note="رصيد موحد لجميع أدوات الذكاء الاصطناعي" />
+                <AccountMetric icon={<CalendarDays className="h-4 w-4 text-[var(--bb-info)]" />} label="دورة الخطة" value={periodEnd || 'لا توجد دورة مدفوعة'} compact note={plan ? `${Number(plan.monthly_credits || 0).toLocaleString('ar-LY')} نقطة شهرية · ${Number(plan.max_projects || 0).toLocaleString('ar-LY')} مشاريع` : 'اختر باقة عندما تحتاج موارد إضافية'} />
               </div>
             )}
-            <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[11px] leading-5 text-gray-500">يمكنك تغيير الباقة أو شراء رصيد إضافي من صفحة الباقات، والتفعيل المالي لا يتم إلا بعد تأكيد الدفع من الخادم.</p>
-              <Link href="/pricing" className="shrink-0 rounded-xl bg-[#c91a2a] px-5 py-2.5 text-center text-xs font-black text-white transition hover:bg-[#ef2638]">إدارة الباقات والرصيد</Link>
+            <div className="bb-divider mt-4 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="bb-text-tertiary text-[11px] leading-5">يمكنك تغيير الباقة أو شراء رصيد إضافي من صفحة الباقات، والتفعيل المالي لا يتم إلا بعد تأكيد الدفع من الخادم.</p>
+              <Link href="/pricing" className="bb-button-primary shrink-0 rounded-xl px-5 py-2.5 text-center text-xs font-black">إدارة الباقات والرصيد</Link>
             </div>
           </section>
 
-          <form onSubmit={handleSaveProfile} className="space-y-4 rounded-2xl border border-[#2a2e38] bg-[#11131a] p-6 text-xs">
-            <div className="flex items-center justify-between border-b border-[#1F2438] pb-4">
+          <form onSubmit={handleSaveProfile} className="bb-panel space-y-4 rounded-2xl border p-6 text-xs">
+            <div className="bb-divider flex flex-wrap items-center justify-between gap-3 border-b pb-4">
               <div>
-                <h3 className="text-sm font-bold text-white">البيانات الشخصية</h3>
-                <p className="text-[11px] text-gray-400">تُستخدم هذه المعلومات في فواتير ورسائل المنصة.</p>
+                <h3 className="bb-text-primary text-sm font-bold">البيانات الشخصية</h3>
+                <p className="bb-text-secondary text-[11px]">تُستخدم هذه المعلومات في فواتير ورسائل المنصة.</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-400">نوع الحساب:</span>
-                <span className="rounded-full border border-[#FF2E4C]/30 bg-[#FF2E4C]/15 px-3 py-1 font-mono font-bold text-[#FF2E4C]">{roleLabel}</span>
+                <span className="bb-text-secondary text-[10px]">نوع الحساب:</span>
+                <span className="bb-accent-soft rounded-full border px-3 py-1 font-mono font-bold">{roleLabel}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block font-bold text-gray-400">الاسم الأول:</label>
-                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full rounded-xl border border-[#1F2438] bg-[#0D0F17] p-3 text-white outline-none focus:border-[#FF2E4C]" required />
-              </div>
-              <div>
-                <label className="mb-1.5 block font-bold text-gray-400">اسم العائلة:</label>
-                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full rounded-xl border border-[#1F2438] bg-[#0D0F17] p-3 text-white outline-none focus:border-[#FF2E4C]" required />
-              </div>
+              <AccountField label="الاسم الأول:" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+              <AccountField label="اسم العائلة:" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block font-bold text-gray-400">رقم الهاتف:</label>
-                <input type="tel" dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+2189XXXXXXXX" className="w-full rounded-xl border border-[#1F2438] bg-[#0D0F17] p-3 font-mono text-white outline-none focus:border-[#FF2E4C]" />
-              </div>
-              <div>
-                <label className="mb-1.5 block font-bold text-gray-400">البريد الإلكتروني:</label>
-                <input type="email" disabled value={user?.email || ''} className="w-full cursor-not-allowed rounded-xl border border-[#1F2438] bg-[#0D0F17] p-3 font-mono text-gray-500 outline-none" />
-              </div>
+              <AccountField label="رقم الهاتف:" type="tel" dir="ltr" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+2189XXXXXXXX" mono />
+              <AccountField label="البريد الإلكتروني:" type="email" value={user?.email || ''} disabled mono />
             </div>
 
             <div className="flex justify-end pt-3">
-              <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-xl bg-[#FF2E4C] px-6 py-3 text-xs font-bold text-white shadow-lg shadow-[#FF2E4C]/20 transition hover:bg-[#E50914] disabled:opacity-50">
+              <button type="submit" disabled={saving} className="bb-button-primary flex items-center gap-2 rounded-xl px-6 py-3 text-xs font-bold shadow-[var(--bb-shadow-sm)] disabled:opacity-50">
                 <Save className="h-4 w-4" /><span>{saving ? 'جاري الحفظ...' : 'حفظ التعديلات'}</span>
               </button>
             </div>
           </form>
 
-          <div className="space-y-4 rounded-2xl border border-[#2a2e38] bg-[#11131a] p-6">
-            <div className="flex items-center justify-between border-b border-[#1F2438] pb-4">
-              <div className="flex items-center gap-2"><History className="h-4 w-4 text-[#FF2E4C]" /><h3 className="text-sm font-bold text-white">سجل العمليات والنقاط الأخيرة</h3></div>
-              <span className="text-xs text-gray-400">الرصيد الحالي: <strong className="text-white">{creditBalance.toLocaleString('ar-LY')}</strong> نقطة</span>
+          <section className="bb-panel space-y-4 rounded-2xl border p-6">
+            <div className="bb-divider flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+              <div className="flex items-center gap-2"><History className="bb-text-accent h-4 w-4" /><h3 className="bb-text-primary text-sm font-bold">سجل العمليات والنقاط الأخيرة</h3></div>
+              <span className="bb-text-secondary text-xs">الرصيد الحالي: <strong className="bb-text-primary">{Number(creditBalance || 0).toLocaleString('ar-LY')}</strong> نقطة</span>
             </div>
 
             {loadingTx ? (
-              <div className="py-6 text-center text-xs text-gray-500">جاري تحميل السجل...</div>
+              <div className="bb-text-tertiary py-6 text-center text-xs">جاري تحميل السجل...</div>
             ) : transactions.length === 0 ? (
-              <div className="py-6 text-center text-xs text-gray-500">لا توجد عمليات مسجلة بعد.</div>
+              <div className="bb-text-tertiary py-6 text-center text-xs">لا توجد عمليات مسجلة بعد.</div>
             ) : (
-              <div className="divide-y divide-[#1F2438]">
+              <div className="divide-y divide-[var(--bb-border-subtle)]">
                 {transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between py-3 text-xs">
+                  <div key={tx.id} className="flex items-center justify-between gap-4 py-3 text-xs">
                     <div>
-                      <div className="font-bold text-white">{tx.description}</div>
-                      <div className="mt-0.5 font-mono text-[10px] text-gray-500">{new Date(tx.created_at).toLocaleString('ar-LY')}</div>
+                      <div className="bb-text-primary font-bold">{tx.description}</div>
+                      <div className="bb-text-tertiary mt-0.5 font-mono text-[10px]">{new Date(tx.created_at).toLocaleString('ar-LY')}</div>
                     </div>
-                    <span className={`font-mono font-bold ${tx.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{tx.amount >= 0 ? `+${tx.amount}` : tx.amount} نقطة</span>
+                    <span className={`font-mono font-bold ${tx.amount >= 0 ? 'text-[var(--bb-success)]' : 'text-[var(--bb-danger)]'}`}>{tx.amount >= 0 ? `+${tx.amount}` : tx.amount} نقطة</span>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </section>
         </div>
       </div>
     </main>
+  );
+}
+
+function AccountMetric({ icon, label, value, note, compact = false }) {
+  return (
+    <div className="bb-card rounded-2xl border p-4">
+      <div className="bb-text-tertiary flex items-center gap-2 text-[11px] font-bold">{icon}{label}</div>
+      <div className={`bb-text-primary mt-3 font-black ${compact ? 'text-sm' : 'text-xl'}`}>{value}</div>
+      <div className="bb-text-tertiary mt-1 text-[10px]">{note}</div>
+    </div>
+  );
+}
+
+function AccountField({ label, type = 'text', dir, value, onChange, placeholder, required = false, disabled = false, mono = false }) {
+  return (
+    <label className="block">
+      <span className="bb-text-secondary mb-1.5 block font-bold">{label}</span>
+      <input
+        type={type}
+        dir={dir}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        disabled={disabled}
+        className={`bb-input w-full rounded-xl border p-3 outline-none disabled:cursor-not-allowed disabled:opacity-60 ${mono ? 'font-mono' : ''}`}
+      />
+    </label>
   );
 }
