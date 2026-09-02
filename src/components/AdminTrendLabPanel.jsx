@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
-  BadgeCheck,
   Bot,
   CheckCircle2,
   Eye,
@@ -87,7 +86,10 @@ export default function AdminTrendLabPanel() {
     finally { setLoading(false); }
   }, [api]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   async function createBrief(event) {
     event.preventDefault();
