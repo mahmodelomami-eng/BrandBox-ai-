@@ -106,13 +106,14 @@ function deriveAgents(params: {
     : currentIssue
       ? `#${currentIssue.number} · ${titleWithoutPriority(currentIssue.title)}`
       : 'لا توجد مهمة إطلاق مفتوحة';
-  const text = `${currentPull?.title || ''} ${currentPull?.body || ''}`.toLowerCase();
+  const text = `${currentPull?.title || ''} ${currentPull?.body || ''} ${currentIssue?.title || ''} ${currentIssue?.body || ''}`.toLowerCase();
   const issueNumber = currentIssue?.number || 0;
   const releaseState = workflowState(releaseRun);
   const safetyState = workflowState(safetyRun);
   const vercelState = vercel?.state === 'success' ? 'success' : vercel ? 'failed' : 'unknown';
 
-  const frontendActive = /frontend|\bui\b|\bux\b|mobile|navigation|workspace|dashboard|rtl|screen/.test(text);
+  const frontendActive = /frontend|next\.?js|react|component|responsive|mobile|navigation|workspace|dashboard|rtl|screen|layout|interaction|motion/.test(text);
+  const designActive = /design|designer|visual|\bui\b|\bux\b|interface|layout|typography|icon|color|brand|responsive|mobile|rtl|screen|dashboard|workspace/.test(text);
   const backendActive = /api|backend|auth|store|project|server|scope|payment|credit|route/.test(text);
   const aiActive = [88, 89, 90].includes(issueNumber) || /openrouter|generation|\bchat\b|image|video|model|provider/.test(text);
   const databaseActive = /database|migration|\bdb\b|rls|supabase|schema|index/.test(text);
@@ -127,12 +128,24 @@ function deriveAgents(params: {
       note: currentIssue ? `يتابع تسلسل الإطلاق من المهمة #${currentIssue.number}` : 'بانتظار مهمة إطلاق جديدة',
     },
     {
+      id: 'visual-designer',
+      name: 'UI/UX & Visual Designer Agent',
+      specialty: 'Design System · Layout · Typography · Brand Consistency',
+      status: currentPull && designActive ? 'reviewing' : 'waiting',
+      task: currentPull && designActive ? task : 'بانتظار مهمة مراجعة وتصميم واجهة',
+      note: currentPull && designActive
+        ? 'يراجع جودة التصميم والهوية وتجربة الاستخدام قبل قبول تنفيذ الواجهة'
+        : 'مسؤول عن المراجعة البصرية ومعايير UI/UX وهوية Brand Box',
+    },
+    {
       id: 'frontend',
-      name: 'Frontend Agent',
-      specialty: 'Next.js · RTL · Mobile · UX',
+      name: 'Frontend & UI Engineer Agent',
+      specialty: 'Next.js · React · RTL · Mobile · Motion',
       status: currentPull && frontendActive ? 'working' : 'waiting',
-      task: currentPull && frontendActive ? task : 'بانتظار مهمة واجهة',
-      note: currentPull && frontendActive ? 'تغييرات الواجهة مستنتجة من PR الحالي' : 'لا توجد إشارة لعمل واجهة في PR الحالي',
+      task: currentPull && frontendActive ? task : 'بانتظار مهمة تنفيذ واجهة',
+      note: currentPull && frontendActive
+        ? 'ينفذ متطلبات التصميم كواجهة مستقرة ومتجاوبة ويغلق مشاكل التنقل والـUI'
+        : 'ينفذ مخرجات المصمم مع الحفاظ على RTL وMobile والاختبارات',
     },
     {
       id: 'backend',
