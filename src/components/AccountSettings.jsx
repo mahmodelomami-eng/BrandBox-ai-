@@ -86,12 +86,15 @@ export default function AccountSettings() {
     }
   }
 
-  if (loading) return <div className="rounded-2xl border border-white/10 bg-[#10131a] p-6 text-sm text-gray-400">جاري تحميل إعدادات الحساب...</div>;
+  if (loading) return <div className="bb-panel bb-text-secondary rounded-2xl border p-6 text-sm">جاري تحميل إعدادات الحساب...</div>;
 
   return (
     <form onSubmit={save} className="space-y-6" dir="rtl">
-      <section className="rounded-3xl border border-white/10 bg-[#10131a] p-5 sm:p-6">
-        <div className="mb-5 flex items-center gap-3"><UserRound className="text-[#ff3344]" size={22}/><div><h2 className="text-lg font-black">البيانات الشخصية</h2><p className="mt-1 text-xs text-gray-500">عدّل الاسم وبيانات التواصل وصورة الحساب.</p></div></div>
+      <section className="bb-panel rounded-3xl border p-5 sm:p-6">
+        <div className="mb-5 flex items-center gap-3">
+          <span className="bb-accent-soft grid h-10 w-10 place-items-center rounded-xl border"><UserRound className="bb-text-accent" size={20}/></span>
+          <div><h2 className="bb-text-primary text-lg font-black">البيانات الشخصية</h2><p className="bb-text-tertiary mt-1 text-xs">عدّل الاسم وبيانات التواصل وصورة الحساب.</p></div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="الاسم الأول" value={form.firstName} onChange={set('firstName')} />
           <Field label="اسم العائلة" value={form.lastName} onChange={set('lastName')} />
@@ -100,8 +103,11 @@ export default function AccountSettings() {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-white/10 bg-[#10131a] p-5 sm:p-6">
-        <div className="mb-5 flex items-center gap-3"><LinkIcon className="text-[#ff3344]" size={22}/><div><h2 className="text-lg font-black">الروابط الخاصة بك</h2><p className="mt-1 text-xs text-gray-500">أضف موقعك وحساباتك الاجتماعية المرتبطة بالبروفايل.</p></div></div>
+      <section className="bb-panel rounded-3xl border p-5 sm:p-6">
+        <div className="mb-5 flex items-center gap-3">
+          <span className="bb-accent-soft grid h-10 w-10 place-items-center rounded-xl border"><LinkIcon className="bb-text-accent" size={20}/></span>
+          <div><h2 className="bb-text-primary text-lg font-black">الروابط الخاصة بك</h2><p className="bb-text-tertiary mt-1 text-xs">أضف موقعك وحساباتك الاجتماعية المرتبطة بالبروفايل.</p></div>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="الموقع الإلكتروني" value={form.websiteUrl} onChange={set('websiteUrl')} placeholder="https://example.com" />
           <Field label="Facebook" value={form.facebookUrl} onChange={set('facebookUrl')} placeholder="https://facebook.com/..." />
@@ -112,13 +118,13 @@ export default function AccountSettings() {
       </section>
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-[#f31325] px-5 py-3 text-sm font-black text-white disabled:opacity-50"><Save size={17}/>{saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}</button>
-        {message && <span className="text-sm text-gray-400">{message}</span>}
+        <button type="submit" disabled={saving} className="bb-button-primary inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-black disabled:opacity-50"><Save size={17}/>{saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}</button>
+        {message && <span className="bb-text-secondary text-sm" role="status">{message}</span>}
       </div>
     </form>
   );
 }
 
 function Field({ label, value, onChange, placeholder = '' }) {
-  return <label className="block"><span className="mb-2 block text-xs font-black text-gray-300">{label}</span><input value={value} onChange={onChange} placeholder={placeholder} className="w-full rounded-xl border border-white/10 bg-[#0b0d12] px-4 py-3 text-sm text-white outline-none transition placeholder:text-gray-700 focus:border-[#f31325]/50"/></label>;
+  return <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">{label}</span><input value={value} onChange={onChange} placeholder={placeholder} className="bb-input w-full rounded-xl border px-4 py-3 text-sm outline-none"/></label>;
 }
