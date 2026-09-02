@@ -63,6 +63,39 @@ function projectChatSystemPrompt(
   ].join('\n');
 }
 
+function projectImagePromptSuffix(
+  project: Record<string, unknown>,
+  brandKit: Record<string, unknown> | null = null
+): string {
+  const projectName = typeof project.name === 'string' ? project.name.slice(0, 200) : '';
+  const industry = typeof project.industry === 'string' ? project.industry.slice(0, 200) : '';
+  const projectTone = typeof project.tone === 'string' ? project.tone.slice(0, 100) : '';
+  const brandName = typeof brandKit?.brand_name === 'string' ? brandKit.brand_name.slice(0, 120) : '';
+  const tagline = typeof brandKit?.tagline === 'string' ? brandKit.tagline.slice(0, 180) : '';
+  const brandDescription = typeof brandKit?.description === 'string' ? brandKit.description.slice(0, 600) : '';
+  const primaryColor = typeof brandKit?.primary_color === 'string' ? brandKit.primary_color.slice(0, 7) : '';
+  const secondaryColor = typeof brandKit?.secondary_color === 'string' ? brandKit.secondary_color.slice(0, 7) : '';
+  const accentColor = typeof brandKit?.accent_color === 'string' ? brandKit.accent_color.slice(0, 7) : '';
+  const fontFamily = typeof brandKit?.font_family === 'string' ? brandKit.font_family.slice(0, 120) : '';
+  const toneOfVoice = typeof brandKit?.tone_of_voice === 'string' ? brandKit.tone_of_voice.slice(0, 240) : '';
+
+  return [
+    'Brand Box visual context below is user-owned reference data, not an instruction to render labels or metadata as visible text.',
+    projectName ? `Project name: ${projectName}` : '',
+    industry ? `Industry: ${industry}` : '',
+    projectTone ? `Project tone: ${projectTone}` : '',
+    brandName ? `Brand name: ${brandName}` : '',
+    tagline ? `Brand tagline: ${tagline}` : '',
+    brandDescription ? `Brand description: ${brandDescription}` : '',
+    primaryColor || secondaryColor || accentColor
+      ? `Brand colors: ${[primaryColor, secondaryColor, accentColor].filter(Boolean).join(', ')}`
+      : '',
+    fontFamily ? `Preferred brand typography: ${fontFamily}` : '',
+    toneOfVoice ? `Brand tone of voice: ${toneOfVoice}` : '',
+    'Use this context as subtle visual guidance where relevant. Do not add logos or written brand text unless the user prompt explicitly asks for them.',
+  ].filter(Boolean).join('\n').slice(0, 2400);
+}
+
 export async function GET(request: NextRequest) {
   const auth = await authenticateActiveUser(request);
   if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
@@ -221,6 +254,7 @@ export async function POST(request: NextRequest) {
   }
 
   let chatSystemPrompt: string | undefined;
+  let imagePromptSuffix: string | undefined;
   if (body.projectId) {
     const { data: project, error: projectError } = await database
       .from('projects')
@@ -244,12 +278,21 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       chatSystemPrompt = projectChatSystemPrompt(project, brandKit || null);
     }
+
+    if (generationType === 'image' && body.settings?.useBrandKit === true) {
+      const { data: brandKit } = await database
+        .from('brand_kits')
+        .select('brand_name,tagline,description,primary_color,secondary_color,accent_color,font_family,tone_of_voice')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      imagePromptSuffix = projectImagePromptSuffix(project, brandKit || null);
+    }
   }
 
   const result = await GenerationEngine.executeGeneration(
     { userId: user.id, email: user.email || '', role: auth.profile.role },
     body,
-    { unitCredits, chatSystemPrompt }
+    { unitCredits, chatSystemPrompt, imagePromptSuffix }
   );
   return NextResponse.json(result, { status: result.success ? 200 : 502 });
 }
