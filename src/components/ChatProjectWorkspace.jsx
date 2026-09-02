@@ -85,7 +85,10 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
   }, [loadHistory, projectId, supabase]);
 
   useEffect(() => {
-    void loadWorkspace();
+    const timer = window.setTimeout(() => {
+      void loadWorkspace();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadWorkspace]);
 
   async function sendMessage() {
