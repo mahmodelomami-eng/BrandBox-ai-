@@ -48,6 +48,16 @@ assert.ok(productMonitoringRoles.includes('Review every user-facing interface fo
 assert.ok(productMonitoringRoles.includes('Review user-facing interfaces for loading, empty, error, retry, stale-data'));
 assert.ok(productMonitoringRoles.includes('UI/UX & Visual Designer Agent -> Product & Business Agent -> Frontend & UI Engineer Agent -> Monitoring & Maintenance Agent'));
 
+assert.ok(route.includes('function uiAuditPullMatch'));
+assert.ok(route.includes('const uiAuditIssue = issues.find'));
+assert.ok(route.includes('issue.number === 114'));
+assert.ok(route.includes('const uiAuditPull = openPulls.find(uiAuditPullMatch)'));
+assert.ok(route.includes('uiAuditIssue, uiAuditPull, releaseRun'));
+assert.ok(route.includes('const uiWorkActive = Boolean(uiTask)'));
+assert.ok(route.includes("type: 'ui_audit_issue'"));
+assert.ok(route.includes('uiAudit: {'));
+assert.ok(route.includes('نشط على مسار UI Audit'));
+
 const agentIds = [...route.matchAll(/id: '([a-z-]+)'/g)].map((match) => match[1]);
 assert.equal(new Set(agentIds).size, 11, 'AI Team Control Center must expose exactly 11 unique permanent agents');
 
