@@ -4,6 +4,16 @@ import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/li
 type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'USER';
 type SupportStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 
+type AttachmentRow = {
+  id: string;
+  request_id: string;
+  storage_path: string;
+  file_name: string;
+  content_type: string;
+  byte_size: number;
+  created_at: string;
+};
+
 async function actorFromRequest(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -42,6 +52,7 @@ export async function GET(request: NextRequest) {
   const { data: requests, error } = await query;
   if (error) return NextResponse.json({ error: 'SUPPORT_REQUESTS_UNAVAILABLE' }, { status: 503 });
 
+  const requestIds = (requests || []).map((item) => item.id).filter(Boolean);
   const userIds = [...new Set((requests || []).map((item) => item.user_id).filter(Boolean))];
   const profileById = new Map<string, Record<string, unknown>>();
   if (userIds.length) {
@@ -50,6 +61,38 @@ export async function GET(request: NextRequest) {
       .select('id,email,first_name,last_name,phone')
       .in('id', userIds);
     for (const profile of profiles || []) profileById.set(profile.id, profile as Record<string, unknown>);
+  }
+
+  const attachmentRows: AttachmentRow[] = [];
+  if (requestIds.length) {
+    const { data: attachments } = await database
+      .from('support_request_attachments')
+      .select('id,request_id,storage_path,file_name,content_type,byte_size,created_at')
+      .in('request_id', requestIds)
+      .order('created_at', { ascending: true });
+    for (const attachment of attachments || []) attachmentRows.push(attachment as AttachmentRow);
+  }
+
+  const signedAttachments = await Promise.all(attachmentRows.map(async (attachment) => {
+    const { data } = await database.storage
+      .from('support-attachments')
+      .createSignedUrl(attachment.storage_path, 10 * 60);
+    return {
+      id: attachment.id,
+      requestId: attachment.request_id,
+      fileName: attachment.file_name,
+      contentType: attachment.content_type,
+      byteSize: attachment.byte_size,
+      createdAt: attachment.created_at,
+      url: data?.signedUrl || null,
+    };
+  }));
+
+  const attachmentsByRequest = new Map<string, typeof signedAttachments>();
+  for (const attachment of signedAttachments) {
+    const current = attachmentsByRequest.get(attachment.requestId) || [];
+    current.push(attachment);
+    attachmentsByRequest.set(attachment.requestId, current);
   }
 
   const rows = (requests || []).map((item) => {
@@ -62,6 +105,7 @@ export async function GET(request: NextRequest) {
         lastName: profile.last_name || '',
         phone: profile.phone || null,
       },
+      attachments: attachmentsByRequest.get(item.id) || [],
     };
   });
 
