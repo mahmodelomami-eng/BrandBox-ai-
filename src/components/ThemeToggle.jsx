@@ -11,11 +11,13 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={toggleTheme}
-      className="brandbox-theme-toggle fixed bottom-5 right-5 z-[95] flex min-h-11 items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs font-black shadow-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70"
+      className="brandbox-theme-toggle fixed bottom-5 right-5 z-[95] flex min-h-11 items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs font-black transition focus-visible:outline-none"
       aria-label={label}
       title={label}
     >
-      {isLight ? <Moon size={17} aria-hidden="true" /> : <Sun size={17} aria-hidden="true" />}
+      <span className="bb-accent-soft grid h-7 w-7 place-items-center rounded-lg" aria-hidden="true">
+        {isLight ? <Moon size={15} /> : <Sun size={15} />}
+      </span>
       <span className="hidden sm:inline">{isLight ? 'الوضع الداكن' : 'الوضع الفاتح'}</span>
     </button>
   );
