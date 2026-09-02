@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bot, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { Bot, RefreshCw, Sparkles } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 
 export default function TrendAgentStatusCard() {
