@@ -14,40 +14,47 @@ const channels = [
 
 type SocialPost = { id: string; content: string; target_providers: string[]; status: string; scheduled_at: string | null; created_at: string };
 
+function fetchPosts(accessToken: string) {
+  return apiRequest<{ posts: SocialPost[] }>('/api/v1/social/posts', accessToken);
+}
+
 export default function PlannerScreen() {
   const { session } = useAuth();
+  const accessToken = session?.access_token || '';
   const [content, setContent] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
-  async function load() {
-    if (!session?.access_token) return;
-    try {
-      const data = await apiRequest<{ posts: SocialPost[] }>('/api/v1/social/posts', session.access_token);
-      setPosts(data.posts || []);
-    } catch {
-      setMessage('ميزة المخطط تحتاج تطبيق Migration الخاص بالسوشيال على قاعدة البيانات قبل الاستخدام.');
-    }
-  }
-
-  useEffect(() => { void load(); }, [session?.access_token]);
+  useEffect(() => {
+    if (!accessToken) return;
+    let active = true;
+    void fetchPosts(accessToken)
+      .then((data) => {
+        if (active) setPosts(data.posts || []);
+      })
+      .catch(() => {
+        if (active) setMessage('ميزة المخطط تحتاج تطبيق Migration الخاص بالسوشيال على قاعدة البيانات قبل الاستخدام.');
+      });
+    return () => { active = false; };
+  }, [accessToken]);
 
   function toggle(id: string) {
     setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
   async function saveDraft() {
-    if (!session?.access_token || !content.trim()) return;
+    if (!accessToken || !content.trim()) return;
     setBusy(true); setMessage('');
     try {
-      await apiRequest('/api/v1/social/posts', session.access_token, {
+      await apiRequest('/api/v1/social/posts', accessToken, {
         method: 'POST',
         body: JSON.stringify({ content: content.trim(), targetProviders: selected }),
       });
       setContent(''); setSelected([]); setMessage('تم حفظ المسودة داخل Brand Box.');
-      await load();
+      const data = await fetchPosts(accessToken);
+      setPosts(data.posts || []);
     } catch {
       setMessage('تعذر حفظ المسودة الآن.');
     } finally { setBusy(false); }
