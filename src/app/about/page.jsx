@@ -77,6 +77,7 @@ export default function AboutPage() {
             <div className="mt-7 flex flex-wrap justify-center gap-3 lg:justify-start">
               <Link href="/projects" className="bb-button-primary inline-flex items-center gap-2 rounded-2xl px-7 py-4 text-sm font-black shadow-[0_18px_45px_rgba(243,19,37,.18)]">ابدأ الآن <Sparkles size={15} /></Link>
               <Link href="/" className="bb-button-secondary inline-flex items-center gap-2 rounded-2xl border px-7 py-4 text-sm font-black">استكشف المنصة</Link>
+              <Link href="/pricing" className="bb-text-accent inline-flex items-center gap-2 rounded-2xl px-4 py-4 text-sm font-black">الباقات والأسعار <ArrowLeft size={14} /></Link>
             </div>
           </div>
         </section>
