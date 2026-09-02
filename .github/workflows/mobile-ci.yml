@@ -48,3 +48,5 @@ jobs:
         run: node ../../src/tests/mobile-campaign-composer.guard.cjs
       - name: Social OAuth security guard
         run: node ../../src/tests/mobile-social-oauth.guard.cjs
+      - name: Social lifecycle security guard
+        run: node ../../src/tests/mobile-social-lifecycle.guard.cjs
