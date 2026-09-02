@@ -1,12 +1,22 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react';
 
 const ThemeContext = createContext(null);
+const THEME_EVENT = 'brandbox-theme-change';
 export const THEME_STORAGE_KEY = 'brandbox-theme';
 
 function normalizeTheme(value) {
   return value === 'light' ? 'light' : 'dark';
+}
+
+function readTheme() {
+  if (typeof document === 'undefined') return 'dark';
+  try {
+    return normalizeTheme(document.documentElement.dataset.theme || localStorage.getItem(THEME_STORAGE_KEY));
+  } catch {
+    return normalizeTheme(document.documentElement.dataset.theme);
+  }
 }
 
 function applyTheme(theme) {
@@ -22,30 +32,37 @@ function persistTheme(theme) {
   } catch {}
 }
 
-export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState('dark');
+function subscribeTheme(callback) {
+  if (typeof window === 'undefined') return () => {};
+  const handleThemeChange = () => callback();
+  const handleStorage = (event) => {
+    if (!event.key || event.key === THEME_STORAGE_KEY) callback();
+  };
+  window.addEventListener(THEME_EVENT, handleThemeChange);
+  window.addEventListener('storage', handleStorage);
+  return () => {
+    window.removeEventListener(THEME_EVENT, handleThemeChange);
+    window.removeEventListener('storage', handleStorage);
+  };
+}
 
-  useEffect(() => {
-    const initialTheme = normalizeTheme(document.documentElement.dataset.theme || localStorage.getItem(THEME_STORAGE_KEY));
-    setThemeState(initialTheme);
-    applyTheme(initialTheme);
-  }, []);
+function publishThemeChange() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(THEME_EVENT));
+}
+
+export function ThemeProvider({ children }) {
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, () => 'dark');
 
   const setTheme = useCallback((nextTheme) => {
     const normalized = normalizeTheme(nextTheme);
-    setThemeState(normalized);
     applyTheme(normalized);
     persistTheme(normalized);
+    publishThemeChange();
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((currentTheme) => {
-      const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
-      applyTheme(nextTheme);
-      persistTheme(nextTheme);
-      return nextTheme;
-    });
-  }, []);
+    setTheme(readTheme() === 'light' ? 'dark' : 'light');
+  }, [setTheme]);
 
   const value = useMemo(() => ({
     theme,
