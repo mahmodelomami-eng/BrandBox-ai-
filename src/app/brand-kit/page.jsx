@@ -52,114 +52,52 @@ export default function BrandKitPage() {
 
   return (
     <WorkspaceLayout>
-      <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="mx-auto max-w-4xl space-y-6">
         {toast && (
-          <div className={`fixed top-20 left-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-md border ${toast.type === 'error' ? 'bg-[#121520] border-red-500/50 text-red-200' : 'bg-[#121520] border-emerald-500/50 text-emerald-200'}`}>
+          <div className="bb-surface-elevated fixed left-6 top-20 z-50 flex items-center gap-3 rounded-xl border px-4 py-3 shadow-[var(--bb-shadow-lg)]" style={{ borderColor: toast.type === 'error' ? 'color-mix(in srgb, var(--bb-danger) 45%, transparent)' : 'color-mix(in srgb, var(--bb-success) 45%, transparent)', color: toast.type === 'error' ? 'var(--bb-danger)' : 'var(--bb-success)' }}>
             <span>{toast.text}</span>
           </div>
         )}
 
-        <div className="text-xs text-gray-500">الرئيسية <span className="px-2">/</span> مدير الهوية البصرية</div>
+        <div className="bb-text-tertiary text-xs">الرئيسية <span className="px-2">/</span> مدير الهوية البصرية</div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-              <Palette className="w-5 h-5 text-[#FF2E4C]" /> مدير الهوية البصرية (Brand Kit)
+            <h2 className="bb-text-primary flex items-center gap-2 text-xl font-extrabold">
+              <Palette className="bb-text-accent h-5 w-5" /> مدير الهوية البصرية (Brand Kit)
             </h2>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="bb-text-secondary mt-1 text-xs">
               حقن ألوان ونبرة وشعار علامتك التجارية تلقائياً في جميع تصاميم الذكاء الاصطناعي.
             </p>
           </div>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 bg-[#FF2E4C] hover:bg-[#E50914] text-white font-bold text-xs px-6 py-3 rounded-xl transition shadow-lg shadow-[#FF2E4C]/20"
-          >
-            <Save className="w-4 h-4" />
+          <button onClick={handleSave} disabled={saving} className="bb-button-primary flex items-center gap-2 rounded-xl px-6 py-3 text-xs font-bold shadow-[var(--bb-shadow-sm)] disabled:opacity-50">
+            <Save className="h-4 w-4" />
             <span>{saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-          <div className="p-6 bg-[#11131a] border border-[#2a2e38] rounded-2xl space-y-4">
-            <h3 className="font-bold text-sm text-white">معلومات العلامة</h3>
+        <div className="grid grid-cols-1 gap-6 text-xs md:grid-cols-2">
+          <div className="bb-panel space-y-4 rounded-2xl border p-6">
+            <h3 className="bb-text-primary text-sm font-bold">معلومات العلامة</h3>
+            <BrandInput label="اسم العلامة التجارية:" value={brand.brandName} onChange={(value) => setBrand({ ...brand, brandName: value })} />
+            <BrandInput label="الشعار اللفظي (Slogan):" value={brand.tagline} onChange={(value) => setBrand({ ...brand, tagline: value })} />
             <div>
-              <label className="block text-gray-400 font-bold mb-1.5">اسم العلامة التجارية:</label>
-              <input
-                type="text"
-                value={brand.brandName}
-                onChange={(e) => setBrand({ ...brand, brandName: e.target.value })}
-                className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-3 rounded-xl outline-none focus:border-[#FF2E4C]"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-400 font-bold mb-1.5">الشعار اللفظي (Slogan):</label>
-              <input
-                type="text"
-                value={brand.tagline}
-                onChange={(e) => setBrand({ ...brand, tagline: e.target.value })}
-                className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-3 rounded-xl outline-none focus:border-[#FF2E4C]"
-              />
-            </div>
-            <div>
-              <label className="block text-gray-400 font-bold mb-1.5">وصف النشاط والمنتجات:</label>
-              <textarea
-                value={brand.description}
-                onChange={(e) => setBrand({ ...brand, description: e.target.value })}
-                rows={3}
-                className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-3 rounded-xl outline-none focus:border-[#FF2E4C] resize-none"
-              />
+              <label className="bb-text-secondary mb-1.5 block font-bold">وصف النشاط والمنتجات:</label>
+              <textarea value={brand.description} onChange={(e) => setBrand({ ...brand, description: e.target.value })} rows={3} className="bb-input w-full resize-none rounded-xl border p-3 outline-none" />
             </div>
           </div>
 
-          <div className="p-6 bg-[#11131a] border border-[#2a2e38] rounded-2xl space-y-4">
-            <h3 className="font-bold text-sm text-white">الألوان ونبرة الصوت</h3>
+          <div className="bb-panel space-y-4 rounded-2xl border p-6">
+            <h3 className="bb-text-primary text-sm font-bold">الألوان ونبرة الصوت</h3>
             <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-gray-400 font-bold mb-1.5 text-[10px]">اللون الرئيسي:</label>
-                <div className="flex items-center gap-2 bg-[#0D0F17] border border-[#1F2438] p-2 rounded-xl">
-                  <input
-                    type="color"
-                    value={brand.primaryColor}
-                    onChange={(e) => setBrand({ ...brand, primaryColor: e.target.value })}
-                    className="w-6 h-6 rounded cursor-pointer bg-transparent border-0"
-                  />
-                  <span className="font-mono text-[10px] text-gray-300">{brand.primaryColor}</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-gray-400 font-bold mb-1.5 text-[10px]">اللون الثانوي:</label>
-                <div className="flex items-center gap-2 bg-[#0D0F17] border border-[#1F2438] p-2 rounded-xl">
-                  <input
-                    type="color"
-                    value={brand.secondaryColor}
-                    onChange={(e) => setBrand({ ...brand, secondaryColor: e.target.value })}
-                    className="w-6 h-6 rounded cursor-pointer bg-transparent border-0"
-                  />
-                  <span className="font-mono text-[10px] text-gray-300">{brand.secondaryColor}</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-gray-400 font-bold mb-1.5 text-[10px]">لون التمييز:</label>
-                <div className="flex items-center gap-2 bg-[#0D0F17] border border-[#1F2438] p-2 rounded-xl">
-                  <input
-                    type="color"
-                    value={brand.accentColor}
-                    onChange={(e) => setBrand({ ...brand, accentColor: e.target.value })}
-                    className="w-6 h-6 rounded cursor-pointer bg-transparent border-0"
-                  />
-                  <span className="font-mono text-[10px] text-gray-300">{brand.accentColor}</span>
-                </div>
-              </div>
+              <ColorField label="اللون الرئيسي:" value={brand.primaryColor} onChange={(value) => setBrand({ ...brand, primaryColor: value })} />
+              <ColorField label="اللون الثانوي:" value={brand.secondaryColor} onChange={(value) => setBrand({ ...brand, secondaryColor: value })} />
+              <ColorField label="لون التمييز:" value={brand.accentColor} onChange={(value) => setBrand({ ...brand, accentColor: value })} />
             </div>
 
             <div>
-              <label className="block text-gray-400 font-bold mb-1.5">خط العناوين والمنشورات:</label>
-              <select
-                value={brand.fontFamily}
-                onChange={(e) => setBrand({ ...brand, fontFamily: e.target.value })}
-                className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-3 rounded-xl outline-none"
-              >
+              <label className="bb-text-secondary mb-1.5 block font-bold">خط العناوين والمنشورات:</label>
+              <select value={brand.fontFamily} onChange={(e) => setBrand({ ...brand, fontFamily: e.target.value })} className="bb-input w-full rounded-xl border p-3 outline-none">
                 <option value="Cairo (عربي عصري)">Cairo (عربي عصري)</option>
                 <option value="Tajawal (أنيق وبسيط)">Tajawal (أنيق وبسيط)</option>
                 <option value="Almarai (رسمي للشركات)">Almarai (رسمي للشركات)</option>
@@ -167,18 +105,18 @@ export default function BrandKitPage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-gray-400 font-bold mb-1.5">نبرة الصوت (Tone of Voice):</label>
-              <input
-                type="text"
-                value={brand.toneOfVoice}
-                onChange={(e) => setBrand({ ...brand, toneOfVoice: e.target.value })}
-                className="w-full bg-[#0D0F17] border border-[#1F2438] text-white p-3 rounded-xl outline-none focus:border-[#FF2E4C]"
-              />
-            </div>
+            <BrandInput label="نبرة الصوت (Tone of Voice):" value={brand.toneOfVoice} onChange={(value) => setBrand({ ...brand, toneOfVoice: value })} />
           </div>
         </div>
       </div>
     </WorkspaceLayout>
   );
+}
+
+function BrandInput({ label, value, onChange }) {
+  return <div><label className="bb-text-secondary mb-1.5 block font-bold">{label}</label><input type="text" value={value} onChange={(event) => onChange(event.target.value)} className="bb-input w-full rounded-xl border p-3 outline-none" /></div>;
+}
+
+function ColorField({ label, value, onChange }) {
+  return <div><label className="bb-text-secondary mb-1.5 block text-[10px] font-bold">{label}</label><div className="bb-card flex items-center gap-2 rounded-xl border p-2"><input type="color" value={value} onChange={(event) => onChange(event.target.value)} className="h-6 w-6 cursor-pointer rounded border-0 bg-transparent" /><span className="bb-text-secondary font-mono text-[10px]">{value}</span></div></div>;
 }
