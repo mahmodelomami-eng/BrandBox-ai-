@@ -23,13 +23,14 @@ assert.match(lifecycle, /https:\/\/open\.tiktokapis\.com\/v2\/oauth\/revoke\//, 
 assert.match(lifecycle, /https:\/\/oauth2\.googleapis\.com\/revoke/, 'Google disconnect should use the official revoke endpoint');
 assert.match(lifecycle, /if \(\(count \|\| 0\) <= 1\)/, 'Google grant revoke must be limited to the last YouTube connection');
 assert.match(lifecycle, /\.delete\(\)[\s\S]*\.eq\('id', connectionId\)[\s\S]*\.eq\('user_id', userId\)/, 'local connection must be deleted with owner scope');
-assert.doesNotMatch(refreshRoute, /accessToken|refreshToken|credential_ciphertext/, 'refresh route must never return credentials');
-assert.doesNotMatch(disconnectRoute, /accessToken|refreshToken|credential_ciphertext/, 'disconnect route must never return credentials');
+assert.doesNotMatch(refreshRoute, /refreshToken|credential_ciphertext|clientSecret/, 'refresh route must never return provider credentials');
+assert.doesNotMatch(disconnectRoute, /refreshToken|credential_ciphertext|clientSecret/, 'disconnect route must never return provider credentials');
 assert.match(providersRoute, /credential_ciphertext/, 'provider status may inspect ciphertext only server-side');
-assert.doesNotMatch(providersRoute, /credentialCiphertext/, 'provider response must not expose credential ciphertext');
+assert.doesNotMatch(providersRoute, /credentialCiphertext|refreshToken|clientSecret/, 'provider response must not expose provider credentials');
+assert.match(mobile, /session\?\.access_token/, 'mobile may use only the authenticated Brand Box session token for its own API');
 assert.match(mobile, /\/api\/v1\/social\/connections\/\$\{account\.id\}\/refresh/, 'mobile refresh must go through Brand Box server');
 assert.match(mobile, /method: 'DELETE'/, 'mobile disconnect must go through authenticated server delete route');
 assert.match(mobile, /Alert\.alert/, 'disconnect must require an explicit user confirmation in the app');
-assert.doesNotMatch(mobile, /accessToken|refreshToken|credential_ciphertext/, 'mobile code must not handle provider credentials');
+assert.doesNotMatch(mobile, /refreshToken|credential_ciphertext|clientSecret|providerAccessToken|pageAccessToken/, 'mobile code must not handle social provider credentials');
 
 console.log('Brand Box Mobile Social lifecycle security guard passed.');
