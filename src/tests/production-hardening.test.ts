@@ -67,7 +67,7 @@ function verifyNavigationCommerceContract() {
     !existsSync(obsoleteProjectDeleteEnhancerPath);
 
   const pricingUsesRealBalanceOnly =
-    pricingSource.includes('رصيدك الحالي المتاح') &&
+    (pricingSource.includes('رصيدك الحالي المتاح') || pricingSource.includes('رصيد حسابك الآن')) &&
     !pricingSource.includes('monthlyLimit = 10000') &&
     !pricingSource.includes('الرصيد المستخدم');
 
