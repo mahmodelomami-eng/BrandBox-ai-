@@ -30,6 +30,22 @@ function hasOpenRouterSecret() {
   return Boolean(process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY);
 }
 
+function hasRunwaySecret() {
+  return Boolean(process.env.RUNWAYML_API_SECRET);
+}
+
+function providerConfigured(provider: string) {
+  if (provider === 'openrouter') return hasOpenRouterSecret();
+  if (provider === 'runway') return hasRunwaySecret();
+  return false;
+}
+
+function brandboxCreditsPerSecond(metadata: unknown): number {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return 0;
+  const value = Number((metadata as Record<string, unknown>).brandbox_credits_per_second || 0);
+  return Number.isInteger(value) && value >= 1 ? value : 0;
+}
+
 export async function GET(request: NextRequest) {
   const actor = await actorFromRequest(request);
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
@@ -47,7 +63,7 @@ export async function GET(request: NextRequest) {
     id: provider,
     modelCount: models.filter((model) => model.provider === provider).length,
     enabledModelCount: models.filter((model) => model.provider === provider && model.is_enabled).length,
-    configured: provider === 'openrouter' ? hasOpenRouterSecret() : true,
+    configured: providerConfigured(provider),
   }));
 
   return NextResponse.json({
@@ -62,6 +78,7 @@ export async function GET(request: NextRequest) {
     },
     secretPolicy: {
       openrouterConfigured: hasOpenRouterSecret(),
+      runwayConfigured: hasRunwaySecret(),
       exposedToBrowser: false,
     },
   });
@@ -81,6 +98,19 @@ export async function PATCH(request: NextRequest) {
     if (!checkPermission(actor.role, 'models.manage')) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
     const modelId = String(body.modelId || '');
     if (!modelId) return NextResponse.json({ error: 'MODEL_ID_REQUIRED' }, { status: 400 });
+
+    const { data: existingModel, error: existingError } = await database.from('ai_model_catalog')
+      .select('model_id,provider,generation_type,metadata')
+      .eq('model_id', modelId)
+      .maybeSingle();
+    if (existingError || !existingModel) return NextResponse.json({ error: 'MODEL_NOT_FOUND' }, { status: 404 });
+
+    if (body.isEnabled === true && existingModel.provider === 'runway' && existingModel.generation_type === 'video') {
+      if (!hasRunwaySecret()) return NextResponse.json({ error: 'RUNWAY_SECRET_REQUIRED' }, { status: 409 });
+      if (brandboxCreditsPerSecond(existingModel.metadata) < 1) {
+        return NextResponse.json({ error: 'VIDEO_PRICING_REQUIRED' }, { status: 409 });
+      }
+    }
 
     const allowed: Record<string, unknown> = {};
     if (typeof body.isEnabled === 'boolean') allowed.is_enabled = body.isEnabled;
@@ -165,7 +195,13 @@ export async function PATCH(request: NextRequest) {
     const modelId = String(body.modelId || '');
     if (!modelId) return NextResponse.json({ error: 'MODEL_ID_REQUIRED' }, { status: 400 });
 
-    const patch: Record<string, number | string> = { updated_at: new Date().toISOString() };
+    const currentModel = await database.from('ai_model_catalog')
+      .select('model_id,provider,generation_type,metadata')
+      .eq('model_id', modelId)
+      .maybeSingle();
+    if (currentModel.error || !currentModel.data) return NextResponse.json({ error: 'MODEL_NOT_FOUND' }, { status: 404 });
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     const numericFields = [
       ['inputCostPerMillionUsd', 'input_cost_per_million_usd'],
       ['outputCostPerMillionUsd', 'output_cost_per_million_usd'],
@@ -189,6 +225,21 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    if (body.brandboxCreditsPerSecond !== undefined) {
+      const value = Number(body.brandboxCreditsPerSecond);
+      if (!Number.isInteger(value) || value < 0 || value > 1000000) {
+        return NextResponse.json({ error: 'INVALID_BRANDBOX_CREDITS_PER_SECOND' }, { status: 400 });
+      }
+      if (currentModel.data.provider !== 'runway' || currentModel.data.generation_type !== 'video') {
+        return NextResponse.json({ error: 'VIDEO_PRICING_FIELD_NOT_APPLICABLE' }, { status: 400 });
+      }
+      const metadata = currentModel.data.metadata && typeof currentModel.data.metadata === 'object' && !Array.isArray(currentModel.data.metadata)
+        ? currentModel.data.metadata as Record<string, unknown>
+        : {};
+      patch.metadata = { ...metadata, brandbox_credits_per_second: value };
+    }
+
+    if (Object.keys(patch).length === 1) return NextResponse.json({ error: 'NO_CHANGES' }, { status: 400 });
     const { error } = await database.from('ai_model_catalog').update(patch).eq('model_id', modelId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -198,6 +249,7 @@ export async function PATCH(request: NextRequest) {
       action: 'ADMIN_UPDATED_AI_MODEL_PRICING',
       resource: 'ai_model_catalog',
       resource_id: modelId,
+      before_state: currentModel.data,
       after_state: patch,
       metadata: { source: 'admin-ai-integrations' },
     });
