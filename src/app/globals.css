@@ -4,28 +4,92 @@
 
 :root,
 html[data-theme='dark'] {
-  --brand-bg: #050506;
-  --brand-surface: #0d0f17;
-  --brand-card: #121520;
-  --brand-border: #1f2438;
-  --brand-red: #f31325;
-  --brand-red-hover: #ff2637;
-  --brand-text: #f8fafc;
-  --brand-muted: #9ca3af;
-  --brand-subtle: rgba(255, 255, 255, 0.05);
+  --bb-canvas: #06070a;
+  --bb-surface-1: #0c0e13;
+  --bb-surface-2: #11141b;
+  --bb-surface-elevated: #171b24;
+  --bb-card: #11141b;
+  --bb-popover: #11141b;
+  --bb-border-subtle: #1a1f2a;
+  --bb-border: #252b38;
+  --bb-border-strong: #374151;
+  --bb-text-primary: #f7f8fa;
+  --bb-text-secondary: #bdc4cf;
+  --bb-text-tertiary: #858e9d;
+  --bb-text-disabled: #606978;
+  --bb-text-inverse: #ffffff;
+  --bb-accent: #f31325;
+  --bb-accent-hover: #ff2637;
+  --bb-accent-soft: rgba(243, 19, 37, 0.12);
+  --bb-accent-border: rgba(243, 19, 37, 0.34);
+  --bb-success: #44c987;
+  --bb-success-soft: rgba(68, 201, 135, 0.12);
+  --bb-warning: #f5b942;
+  --bb-warning-soft: rgba(245, 185, 66, 0.12);
+  --bb-danger: #ff6573;
+  --bb-danger-soft: rgba(255, 101, 115, 0.1);
+  --bb-info: #68a7ff;
+  --bb-info-soft: rgba(104, 167, 255, 0.1);
+  --bb-input-bg: #0d1016;
+  --bb-input-border: #2a303d;
+  --bb-placeholder: #707989;
+  --bb-hover: rgba(255, 255, 255, 0.055);
+  --bb-pressed: rgba(255, 255, 255, 0.085);
+  --bb-selected: rgba(243, 19, 37, 0.12);
+  --bb-shadow-sm: 0 8px 22px rgba(0, 0, 0, 0.2);
+  --bb-shadow-md: 0 18px 48px rgba(0, 0, 0, 0.3);
+  --bb-shadow-lg: 0 28px 80px rgba(0, 0, 0, 0.42);
+  --bb-nav-bg: rgba(6, 7, 10, 0.96);
+  --bb-mobile-bg: #090b10;
+  --bb-hero-bg: radial-gradient(circle at 14% 38%, rgba(191, 12, 28, 0.34), transparent 30%), linear-gradient(135deg, #0b0d12 0%, #131722 72%, #10131a 100%);
+  --bb-hero-border: #282e3b;
+  --bb-hero-ornament: linear-gradient(145deg, #151821, #050608);
+  --bb-media-canvas: linear-gradient(135deg, #27191d, #0a0c11);
   color-scheme: dark;
 }
 
 html[data-theme='light'] {
-  --brand-bg: #f5f6f8;
-  --brand-surface: #ffffff;
-  --brand-card: #ffffff;
-  --brand-border: #dde1e8;
-  --brand-red: #e91527;
-  --brand-red-hover: #f31325;
-  --brand-text: #17191f;
-  --brand-muted: #697386;
-  --brand-subtle: rgba(17, 24, 39, 0.055);
+  --bb-canvas: #f3f4f6;
+  --bb-surface-1: #f8f9fb;
+  --bb-surface-2: #ffffff;
+  --bb-surface-elevated: #ffffff;
+  --bb-card: #ffffff;
+  --bb-popover: #ffffff;
+  --bb-border-subtle: #e7e9ee;
+  --bb-border: #d8dde5;
+  --bb-border-strong: #bcc4cf;
+  --bb-text-primary: #181b21;
+  --bb-text-secondary: #475467;
+  --bb-text-tertiary: #667085;
+  --bb-text-disabled: #98a2b3;
+  --bb-text-inverse: #ffffff;
+  --bb-accent: #d91426;
+  --bb-accent-hover: #ef1d31;
+  --bb-accent-soft: rgba(217, 20, 38, 0.085);
+  --bb-accent-border: rgba(217, 20, 38, 0.25);
+  --bb-success: #16794a;
+  --bb-success-soft: rgba(22, 121, 74, 0.09);
+  --bb-warning: #9a6700;
+  --bb-warning-soft: rgba(154, 103, 0, 0.08);
+  --bb-danger: #b42335;
+  --bb-danger-soft: rgba(180, 35, 53, 0.075);
+  --bb-info: #175cd3;
+  --bb-info-soft: rgba(23, 92, 211, 0.075);
+  --bb-input-bg: #ffffff;
+  --bb-input-border: #cfd5df;
+  --bb-placeholder: #8a94a5;
+  --bb-hover: rgba(17, 24, 39, 0.045);
+  --bb-pressed: rgba(17, 24, 39, 0.075);
+  --bb-selected: rgba(217, 20, 38, 0.08);
+  --bb-shadow-sm: 0 5px 16px rgba(15, 23, 42, 0.055);
+  --bb-shadow-md: 0 16px 38px rgba(15, 23, 42, 0.09);
+  --bb-shadow-lg: 0 24px 64px rgba(15, 23, 42, 0.13);
+  --bb-nav-bg: rgba(250, 250, 251, 0.97);
+  --bb-mobile-bg: #f7f8fa;
+  --bb-hero-bg: radial-gradient(circle at 12% 38%, rgba(217, 20, 38, 0.11), transparent 31%), linear-gradient(135deg, #ffffff 0%, #f8f9fb 66%, #f2f4f7 100%);
+  --bb-hero-border: #dde2e9;
+  --bb-hero-ornament: linear-gradient(145deg, #ffffff, #e9edf2);
+  --bb-media-canvas: linear-gradient(135deg, #28191d, #0a0c11);
   color-scheme: light;
 }
 
@@ -39,15 +103,15 @@ body {
 html,
 body,
 .brandbox-theme-scope {
-  background: var(--brand-bg);
-  color: var(--brand-text);
+  background: var(--bb-canvas);
+  color: var(--bb-text-primary);
 }
 
 body,
 .brandbox-global-nav,
 .brandbox-theme-scope,
 .brandbox-theme-toggle {
-  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 * {
@@ -59,39 +123,99 @@ a,
 input,
 select,
 textarea {
-  accent-color: var(--brand-red);
+  accent-color: var(--bb-accent);
 }
 
 :focus-visible {
-  outline: 2px solid var(--brand-red);
+  outline: 2px solid color-mix(in srgb, var(--bb-accent) 80%, transparent);
   outline-offset: 2px;
 }
 
-.brandbox-theme-toggle {
-  border-color: var(--brand-border);
-  background: var(--brand-card);
-  color: var(--brand-text);
+/* Semantic Brand Box theme primitives. New/migrated surfaces must use these rather than raw theme colors. */
+.bb-app-canvas { background: var(--bb-canvas); color: var(--bb-text-primary); }
+.bb-surface-1 { background: var(--bb-surface-1); color: var(--bb-text-primary); }
+.bb-surface-2 { background: var(--bb-surface-2); color: var(--bb-text-primary); }
+.bb-surface-elevated { background: var(--bb-surface-elevated); color: var(--bb-text-primary); box-shadow: var(--bb-shadow-md); }
+.bb-panel { background: var(--bb-surface-2); border-color: var(--bb-border); color: var(--bb-text-primary); box-shadow: var(--bb-shadow-sm); }
+.bb-card { background: var(--bb-card); border-color: var(--bb-border); color: var(--bb-text-primary); box-shadow: var(--bb-shadow-sm); }
+.bb-card:hover { border-color: color-mix(in srgb, var(--bb-accent) 32%, var(--bb-border)); }
+.bb-border { border-color: var(--bb-border); }
+.bb-border-subtle { border-color: var(--bb-border-subtle); }
+.bb-text-primary { color: var(--bb-text-primary); }
+.bb-text-secondary { color: var(--bb-text-secondary); }
+.bb-text-tertiary { color: var(--bb-text-tertiary); }
+.bb-text-disabled { color: var(--bb-text-disabled); }
+.bb-text-inverse { color: var(--bb-text-inverse); }
+.bb-text-accent { color: var(--bb-accent); }
+.bb-text-danger { color: var(--bb-danger); }
+.bb-text-warning { color: var(--bb-warning); }
+.bb-accent-soft { background: var(--bb-accent-soft); border-color: var(--bb-accent-border); color: var(--bb-accent); }
+.bb-hoverable:hover { background: var(--bb-hover); color: var(--bb-text-primary); }
+.bb-divider { border-color: var(--bb-border-subtle); }
+.bb-button-primary { background: var(--bb-accent); color: var(--bb-text-inverse); }
+.bb-button-primary:hover { background: var(--bb-accent-hover); }
+.bb-button-secondary { background: var(--bb-surface-2); border-color: var(--bb-border); color: var(--bb-text-primary); }
+.bb-button-secondary:hover { background: var(--bb-hover); border-color: var(--bb-border-strong); }
+.bb-danger-surface { background: var(--bb-danger-soft); border-color: color-mix(in srgb, var(--bb-danger) 28%, transparent); color: var(--bb-danger); }
+.bb-warning-surface { background: var(--bb-warning-soft); border-color: color-mix(in srgb, var(--bb-warning) 25%, transparent); color: var(--bb-warning); }
+.bb-input { background: var(--bb-input-bg); border-color: var(--bb-input-border); color: var(--bb-text-primary); }
+.bb-input::placeholder { color: var(--bb-placeholder); }
+
+.brandbox-global-nav.bb-nav-shell {
+  background: var(--bb-nav-bg);
+  border-color: var(--bb-border-subtle);
+  color: var(--bb-text-primary);
+  box-shadow: var(--bb-shadow-sm);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
-.brandbox-theme-toggle:hover {
-  border-color: color-mix(in srgb, var(--brand-red) 45%, var(--brand-border));
-  background: var(--brand-surface);
+.bb-brand-logo {
+  border: 1px solid transparent;
 }
 
-html[data-theme='light'] .brandbox-global-nav {
-  border-color: rgba(15, 23, 42, 0.1) !important;
-  background: rgba(255, 255, 255, 0.96) !important;
-  color: var(--brand-text);
-  box-shadow: 0 10px 35px rgba(15, 23, 42, 0.09) !important;
-}
-
-html[data-theme='light'] .brandbox-global-nav a[aria-label='Brand Box'] {
-  border-radius: 0.75rem;
-  background: #0c0d11;
+html[data-theme='light'] .bb-brand-logo {
+  background: #111318;
+  border-color: #222733;
   padding: 0.25rem 0.5rem;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
 }
 
-/* Bridge legacy dark utility colors into the centralized light palette. */
+.bb-nav-link { color: var(--bb-text-secondary); }
+.bb-nav-link:hover { background: var(--bb-hover); color: var(--bb-text-primary); }
+.bb-nav-link-active { background: var(--bb-selected); color: var(--bb-accent); }
+.bb-menu { background: var(--bb-popover); border-color: var(--bb-border); color: var(--bb-text-primary); box-shadow: var(--bb-shadow-lg); }
+.bb-menu-item { color: var(--bb-text-secondary); }
+.bb-menu-item:hover { background: var(--bb-hover); color: var(--bb-text-primary); }
+.bb-menu-item-active { background: var(--bb-selected); color: var(--bb-accent); }
+.bb-mobile-nav { background: var(--bb-mobile-bg); border-color: var(--bb-border-subtle); color: var(--bb-text-primary); }
+.bb-avatar { background: var(--bb-accent); color: var(--bb-text-inverse); box-shadow: 0 0 0 2px var(--bb-accent-border), 0 0 0 4px var(--bb-nav-bg); }
+.bb-notification-badge { background: var(--bb-accent); color: var(--bb-text-inverse); box-shadow: 0 0 0 2px var(--bb-nav-bg); }
+.bb-notification-read { background: var(--bb-surface-1); }
+.bb-notification-unread { background: var(--bb-accent-soft); }
+
+.brandbox-theme-toggle {
+  border-color: var(--bb-border);
+  background: var(--bb-surface-elevated);
+  color: var(--bb-text-primary);
+  box-shadow: var(--bb-shadow-md);
+}
+.brandbox-theme-toggle:hover { border-color: var(--bb-accent-border); background: var(--bb-surface-2); }
+
+.bb-dashboard-hero { background: var(--bb-hero-bg); border-color: var(--bb-hero-border); color: var(--bb-text-primary); box-shadow: var(--bb-shadow-sm); }
+.bb-dashboard-hero-ornament { background: var(--bb-hero-ornament); border-color: var(--bb-accent-border); box-shadow: 0 0 42px color-mix(in srgb, var(--bb-accent) 12%, transparent); }
+.bb-dashboard-metric { background: var(--bb-card); border-color: var(--bb-border); box-shadow: var(--bb-shadow-sm); }
+.bb-dashboard-icon { background: var(--bb-hover); color: var(--bb-text-secondary); }
+.bb-dashboard-icon-accent { background: linear-gradient(135deg, var(--bb-accent), #980612); color: var(--bb-text-inverse); }
+.bb-dashboard-row { background: var(--bb-surface-1); border-color: var(--bb-border-subtle); color: var(--bb-text-primary); }
+.bb-dashboard-row:hover { background: var(--bb-hover); border-color: var(--bb-accent-border); }
+.bb-dashboard-empty { border-color: var(--bb-border); color: var(--bb-text-secondary); }
+.bb-dashboard-skeleton { background: color-mix(in srgb, var(--bb-text-primary) 5%, transparent); border-color: var(--bb-border-subtle); }
+.bb-media-canvas { background: var(--bb-media-canvas); color: #ff3344; }
+.bb-media-control { background: rgba(5, 6, 8, 0.78); border-color: rgba(255, 255, 255, 0.18); color: #e5e7eb; }
+.bb-media-control:hover { color: #ff5360; }
+
+/* Temporary legacy bridge for screens not migrated to semantic tokens yet. Do not expand this list. */
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#050506]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#06070a]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#070707]'],
@@ -100,9 +224,7 @@ html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#090a0d]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-gray-950'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-zinc-950'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-neutral-950'],
-html[data-theme='light'] .brandbox-theme-scope [class~='bg-slate-950'] {
-  background-color: var(--brand-bg) !important;
-}
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-slate-950'] { background-color: #f3f4f6 !important; }
 
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#0b0d12]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#0d0f17]'],
@@ -112,114 +234,56 @@ html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#101010]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-gray-900'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-zinc-900'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-neutral-900'],
-html[data-theme='light'] .brandbox-theme-scope [class~='bg-slate-900'],
-html[data-theme='light'] .brandbox-global-nav [class~='bg-[#090a0d]'],
-html[data-theme='light'] .brandbox-global-nav [class~='bg-[#0d1016]'] {
-  background-color: var(--brand-surface) !important;
-}
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-slate-900'] { background-color: #f8f9fb !important; }
 
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#11131a]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#111111]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#121212]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#121520]'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#141414]'],
-html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#171717]'] {
-  background-color: var(--brand-card) !important;
-}
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#171717]'] { background-color: #ffffff !important; }
 
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-white/5'],
 html[data-theme='light'] .brandbox-theme-scope [class~='bg-white/[.02]'],
-html[data-theme='light'] .brandbox-theme-scope [class~='bg-white/[.03]'],
-html[data-theme='light'] .brandbox-global-nav [class~='bg-white/5'],
-html[data-theme='light'] .brandbox-global-nav [class~='bg-white/[.02]'],
-html[data-theme='light'] .brandbox-global-nav [class~='bg-white/[.03]'] {
-  background-color: var(--brand-subtle) !important;
-}
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-white/[.03]'] { background-color: rgba(17, 24, 39, 0.045) !important; }
 
 html[data-theme='light'] .brandbox-theme-scope [class~='border-white/5'],
 html[data-theme='light'] .brandbox-theme-scope [class~='border-white/10'],
 html[data-theme='light'] .brandbox-theme-scope [class~='border-white/15'],
 html[data-theme='light'] .brandbox-theme-scope [class~='border-white/[.07]'],
-html[data-theme='light'] .brandbox-theme-scope [class~='border-white/[.08]'],
-html[data-theme='light'] .brandbox-global-nav [class~='border-white/5'],
-html[data-theme='light'] .brandbox-global-nav [class~='border-white/10'],
-html[data-theme='light'] .brandbox-global-nav [class~='border-white/15'],
-html[data-theme='light'] .brandbox-global-nav [class~='border-white/[.07]'] {
-  border-color: rgba(15, 23, 42, 0.11) !important;
-}
+html[data-theme='light'] .brandbox-theme-scope [class~='border-white/[.08]'] { border-color: rgba(15, 23, 42, 0.11) !important; }
 
 html[data-theme='light'] .brandbox-theme-scope [class~='text-white'],
 html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-100'],
-html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-200'],
-html[data-theme='light'] .brandbox-global-nav [class~='text-white'],
-html[data-theme='light'] .brandbox-global-nav [class~='text-gray-100'],
-html[data-theme='light'] .brandbox-global-nav [class~='text-gray-200'] {
-  color: #17191f !important;
-}
-
-html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-300'],
-html[data-theme='light'] .brandbox-global-nav [class~='text-gray-300'] {
-  color: #3f4856 !important;
-}
-
-html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-400'],
-html[data-theme='light'] .brandbox-global-nav [class~='text-gray-400'] {
-  color: #667085 !important;
-}
-
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-200'] { color: #181b21 !important; }
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-300'] { color: #475467 !important; }
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-400'] { color: #667085 !important; }
 html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-500'],
-html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-600'],
-html[data-theme='light'] .brandbox-global-nav [class~='text-gray-500'],
-html[data-theme='light'] .brandbox-global-nav [class~='text-gray-600'] {
-  color: #7a8494 !important;
-}
-
-html[data-theme='light'] .brandbox-theme-scope [class~='hover:bg-white/5']:hover,
-html[data-theme='light'] .brandbox-global-nav [class~='hover:bg-white/5']:hover {
-  background-color: rgba(15, 23, 42, 0.06) !important;
-}
-
-html[data-theme='light'] .brandbox-theme-scope [class~='hover:text-white']:hover,
-html[data-theme='light'] .brandbox-global-nav [class~='hover:text-white']:hover {
-  color: #111827 !important;
-}
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-600'] { color: #7b8492 !important; }
+html[data-theme='light'] .brandbox-theme-scope [class~='hover:bg-white/5']:hover { background-color: rgba(15, 23, 42, 0.05) !important; }
+html[data-theme='light'] .brandbox-theme-scope [class~='hover:text-white']:hover { color: #111827 !important; }
 
 html[data-theme='light'] [class~='bg-[#f31325]'],
 html[data-theme='light'] [class~='bg-[#ff2637]'],
 html[data-theme='light'] [class~='bg-red-500'],
-html[data-theme='light'] [class~='bg-red-600'] {
-  color: #ffffff !important;
-}
-
+html[data-theme='light'] [class~='bg-red-600'] { color: #ffffff !important; }
 html[data-theme='light'] [class~='bg-[#f31325]'] [class~='text-white'],
 html[data-theme='light'] [class~='bg-[#ff2637]'] [class~='text-white'],
 html[data-theme='light'] [class~='bg-red-500'] [class~='text-white'],
 html[data-theme='light'] [class~='bg-red-600'] [class~='text-white'],
 html[data-theme='light'] [class~='bg-black'] [class~='text-white'],
-html[data-theme='light'] [class~='bg-black'][class~='text-white'] {
-  color: #ffffff !important;
-}
-
-html[data-theme='light'] [class~='ring-offset-[#050506]'] {
-  --tw-ring-offset-color: #ffffff !important;
-}
+html[data-theme='light'] [class~='bg-black'][class~='text-white'] { color: #ffffff !important; }
+html[data-theme='light'] [class~='ring-offset-[#050506]'] { --tw-ring-offset-color: #ffffff !important; }
 
 html[data-theme='light'] input,
 html[data-theme='light'] select,
-html[data-theme='light'] textarea {
-  color: var(--brand-text);
-}
+html[data-theme='light'] textarea { color: var(--bb-text-primary); }
 
 @media (prefers-reduced-motion: reduce) {
   body,
   .brandbox-global-nav,
   .brandbox-theme-scope,
-  .brandbox-theme-toggle {
-    transition: none;
-  }
+  .brandbox-theme-toggle { transition: none; }
 }
 
-/* The root layout owns the persistent navigation now. */
-main#home > header:first-child {
-  display: none;
-}
+main#home > header:first-child { display: none; }
