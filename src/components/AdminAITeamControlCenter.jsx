@@ -134,7 +134,7 @@ export default function AdminAITeamControlCenter() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
           <div className="flex min-w-0 flex-1 items-center gap-4">
             <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-[#f31325] shadow-[0_0_40px_rgba(243,19,37,.2)]"><Bot size={27}/></span>
-            <div className="min-w-0"><div className="text-[10px] font-black tracking-[.22em] text-[#ff6674]">AI TEAM CONTROL CENTER</div><h1 className="mt-1 text-2xl font-black">مراقبة فريق البرمجة الآلي</h1><p className="mt-2 text-xs leading-6 text-gray-500">الحالة مستنتجة من GitHub Issues وPull Requests وActions وVercel، وليست Presence مباشرًا لكل Agent.</p></div>
+            <div className="min-w-0"><div className="text-[10px] font-black tracking-[.22em] text-[#ff6674]">AI TEAM CONTROL CENTER</div><h1 className="mt-1 text-2xl font-black">مراقبة فريق البرمجة الآلي</h1><p className="mt-2 text-xs leading-6 text-gray-500">تعرض اللوحة النشاط الجاري وآخر نشاط موثق خلال 7 أيام من GitHub وCI وVercel؛ وليست Presence مباشرًا لكل Agent.</p></div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link href="/admin" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-[#10131a] px-4 py-3 text-xs font-black text-gray-300"><ArrowRight size={15}/> مركز الإدارة</Link>
@@ -145,6 +145,8 @@ export default function AdminAITeamControlCenter() {
       </header>
 
       {error && <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>}
+
+      {!payload?.currentPull && payload?.recentPull && <div className="flex flex-col gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[.07] px-4 py-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-[10px] font-black text-emerald-300">آخر تنفيذ جماعي موثق</div><div className="mt-1 text-sm font-black">PR #{payload.recentPull.number} · {payload.recentPull.title}</div><div className="mt-1 text-[10px] text-gray-500">ستظهر أدوار الإيجنتات المشاركة بحالة «مكتمل» لمدة 7 أيام بعد الدمج.</div></div><a href={payload.recentPull.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-black text-emerald-300">فتح النشاط <ExternalLink size={13}/></a></div>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Agents يعملون/يراجعون" value={Number(counts.working || 0) + Number(counts.testing || 0) + Number(counts.reviewing || 0) + Number(counts.deploying || 0)} note={`${agents.length} أدوار مراقبة`} icon={Activity}/>
@@ -166,7 +168,7 @@ export default function AdminAITeamControlCenter() {
         </Card>
       </div>
 
-      <Card title="الفريق" subtitle="الحالة تُستنتج من نوع المهمة الحالية وCI؛ يمكن أن يعمل أكثر من دور على نفس PR">
+      <Card title="الفريق" subtitle="الحالة تُستنتج من المهمة الجارية أو آخر PR مدمج خلال 7 أيام؛ يمكن أن يعمل أكثر من دور على نفس PR">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {agents.map((agent) => {
             const Icon = AGENT_ICONS[agent.id] || Bot;

@@ -23,6 +23,8 @@ type GithubPull = {
   body?: string | null;
   html_url: string;
   draft: boolean;
+  state: 'open' | 'closed';
+  merged_at?: string | null;
   created_at: string;
   updated_at: string;
   head: { ref: string; sha: string };
@@ -96,17 +98,20 @@ function titleWithoutPriority(title: string) {
 function deriveAgents(params: {
   currentIssue: GithubIssue | null;
   currentPull: GithubPull | null;
+  recentPull: GithubPull | null;
   releaseRun?: GithubRun;
   safetyRun?: GithubRun;
   vercel?: GithubCombinedStatus['statuses'][number];
 }): AgentSnapshot[] {
-  const { currentIssue, currentPull, releaseRun, safetyRun, vercel } = params;
-  const task = currentPull
-    ? `PR #${currentPull.number} · ${currentPull.title}`
+  const { currentIssue, currentPull, recentPull, releaseRun, safetyRun, vercel } = params;
+  const activityPull = currentPull || recentPull;
+  const isRecentCompletedActivity = !currentPull && Boolean(recentPull);
+  const task = activityPull
+    ? `${currentPull ? 'PR' : 'آخر نشاط · PR'} #${activityPull.number} · ${activityPull.title}`
     : currentIssue
       ? `#${currentIssue.number} · ${titleWithoutPriority(currentIssue.title)}`
       : 'لا توجد مهمة إطلاق مفتوحة';
-  const text = `${currentPull?.title || ''} ${currentPull?.body || ''} ${currentIssue?.title || ''} ${currentIssue?.body || ''}`.toLowerCase();
+  const text = `${activityPull?.title || ''} ${activityPull?.body || ''} ${currentIssue?.title || ''} ${currentIssue?.body || ''}`.toLowerCase();
   const issueNumber = currentIssue?.number || 0;
   const releaseState = workflowState(releaseRun);
   const safetyState = workflowState(safetyRun);
@@ -135,9 +140,9 @@ function deriveAgents(params: {
       id: 'product-business',
       name: 'Product & Business Agent',
       specialty: 'Product Strategy · Pricing · Growth · Customer Value',
-      status: currentPull && productActive ? 'reviewing' : 'waiting',
-      task: currentPull && productActive ? task : 'بانتظار مهمة منتج أو مراجعة واجهة',
-      note: currentPull && productActive
+      status: currentPull && productActive ? 'reviewing' : isRecentCompletedActivity && productActive ? 'completed' : 'waiting',
+      task: activityPull && productActive ? task : 'بانتظار مهمة منتج أو مراجعة واجهة',
+      note: activityPull && productActive
         ? 'يراجع قيمة المنتج ووضوح CTA والنصوص والاحتكاك داخل الواجهة قبل قبول التغيير'
         : 'يحافظ على اتساق قرارات المنتج والواجهات مع نموذج الأعمال وأهداف الإطلاق',
     },
@@ -145,9 +150,9 @@ function deriveAgents(params: {
       id: 'visual-designer',
       name: 'UI/UX & Visual Designer Agent',
       specialty: 'Design System · Layout · Typography · Brand Consistency',
-      status: currentPull && designActive ? 'reviewing' : 'waiting',
-      task: currentPull && designActive ? task : 'بانتظار مهمة مراجعة وتصميم واجهة',
-      note: currentPull && designActive
+      status: currentPull && designActive ? 'reviewing' : isRecentCompletedActivity && designActive ? 'completed' : 'waiting',
+      task: activityPull && designActive ? task : 'بانتظار مهمة مراجعة وتصميم واجهة',
+      note: activityPull && designActive
         ? 'يراجع جودة التصميم والهوية وتجربة الاستخدام قبل قبول تنفيذ الواجهة'
         : 'مسؤول عن المراجعة البصرية ومعايير UI/UX وهوية Brand Box',
     },
@@ -155,34 +160,34 @@ function deriveAgents(params: {
       id: 'frontend',
       name: 'Frontend & UI Engineer Agent',
       specialty: 'Next.js · React · RTL · Mobile · Motion',
-      status: currentPull && frontendActive ? 'working' : 'waiting',
-      task: currentPull && frontendActive ? task : 'بانتظار مهمة تنفيذ واجهة',
-      note: currentPull && frontendActive
+      status: currentPull && frontendActive ? 'working' : isRecentCompletedActivity && frontendActive ? 'completed' : 'waiting',
+      task: activityPull && frontendActive ? task : 'بانتظار مهمة تنفيذ واجهة',
+      note: activityPull && frontendActive
         ? 'ينفذ متطلبات التصميم كواجهة مستقرة ومتجاوبة ويغلق مشاكل التنقل والـUI'
         : 'ينفذ مخرجات المصمم مع الحفاظ على RTL وMobile والاختبارات',
     },
     {
       id: 'backend',
-      name: 'Backend Agent',
-      specialty: 'API · Auth · Business Rules',
-      status: currentPull && backendActive ? 'working' : 'waiting',
-      task: currentPull && backendActive ? task : 'بانتظار مهمة Backend',
-      note: currentPull && backendActive ? 'نشاط Backend مستنتج من عنوان ووصف PR' : 'لا توجد إشارة Backend نشطة',
+      name: 'Store & Backend Agent',
+      specialty: 'Store · API · Auth · Business Rules',
+      status: currentPull && backendActive ? 'working' : isRecentCompletedActivity && backendActive ? 'completed' : 'waiting',
+      task: activityPull && backendActive ? task : 'بانتظار مهمة Store أو Backend',
+      note: activityPull && backendActive ? 'نشاط Store/Backend موثق من عنوان ووصف PR' : 'لا توجد إشارة Store/Backend نشطة',
     },
     {
       id: 'ai',
       name: 'AI Integration Agent',
       specialty: 'OpenRouter · Models · Generation',
-      status: (currentPull && aiActive) || [88, 89, 90].includes(issueNumber) ? 'working' : 'waiting',
-      task: (currentPull && aiActive) || [88, 89, 90].includes(issueNumber) ? task : 'بانتظار مهمة تكامل AI',
+      status: (currentPull && aiActive) || [88, 89, 90].includes(issueNumber) ? 'working' : isRecentCompletedActivity && aiActive ? 'completed' : 'waiting',
+      task: (activityPull && aiActive) || [88, 89, 90].includes(issueNumber) ? task : 'بانتظار مهمة تكامل AI',
       note: 'يتابع مسارات المحادثة والصور والفيديو ومزودي النماذج',
     },
     {
       id: 'database',
       name: 'Database Agent',
       specialty: 'Supabase · RLS · Migrations',
-      status: currentPull && databaseActive ? 'working' : 'waiting',
-      task: currentPull && databaseActive ? task : 'بانتظار تغيير قاعدة بيانات',
+      status: currentPull && databaseActive ? 'working' : isRecentCompletedActivity && databaseActive ? 'completed' : 'waiting',
+      task: activityPull && databaseActive ? task : 'بانتظار تغيير قاعدة بيانات',
       note: 'لا ينفذ تغييرات Production مدمرة',
     },
     {
@@ -190,7 +195,7 @@ function deriveAgents(params: {
       name: 'QA Agent',
       specialty: 'Regression · Build · Acceptance',
       status: releaseState === 'failed' ? 'blocked' : releaseState === 'running' ? 'testing' : releaseState === 'success' ? 'completed' : 'waiting',
-      task: currentPull ? `Release verification · PR #${currentPull.number}` : 'بانتظار PR للاختبار',
+      task: activityPull ? `Release verification · PR #${activityPull.number}` : 'بانتظار PR للاختبار',
       note: releaseState === 'success' ? 'Release verification ناجح' : releaseState === 'failed' ? 'يوجد فشل في Release verification' : 'يتابع بوابة الاختبارات والبناء',
     },
     {
@@ -198,17 +203,17 @@ function deriveAgents(params: {
       name: 'Security Reviewer',
       specialty: 'Auth · RLS · Payments · Secrets',
       status: safetyState === 'failed' ? 'blocked' : safetyState === 'running' ? 'reviewing' : safetyState === 'success' ? 'completed' : 'waiting',
-      task: currentPull ? `Safety Gate · PR #${currentPull.number}` : 'بانتظار PR للمراجعة',
+      task: activityPull ? `Safety Gate · PR #${activityPull.number}` : 'بانتظار PR للمراجعة',
       note: safetyState === 'success' ? 'Safety Gate ناجح' : 'يراجع حدود الأمان قبل الدمج',
     },
     {
       id: 'monitoring-maintenance',
       name: 'Monitoring & Maintenance Agent',
       specialty: 'Reliability · Runtime Health · Incidents · Maintenance',
-      status: platformFailure ? 'working' : currentPull && monitoringActive ? 'reviewing' : 'waiting',
+      status: platformFailure ? 'working' : currentPull && monitoringActive ? 'reviewing' : isRecentCompletedActivity && monitoringActive ? 'completed' : 'waiting',
       task: platformFailure
         ? 'تحليل فشل البوابات أو النشر وتحديد سبب التراجع'
-        : currentPull && monitoringActive
+        : activityPull && monitoringActive
           ? task
           : 'مراقبة صحة المنصة والاستعداد للصيانة',
       note: platformFailure
@@ -222,7 +227,7 @@ function deriveAgents(params: {
       name: 'DevOps Agent',
       specialty: 'CI/CD · Vercel · Preview',
       status: vercelState === 'failed' ? 'blocked' : vercelState === 'success' ? 'completed' : currentPull ? 'deploying' : 'waiting',
-      task: currentPull ? `Vercel Preview · PR #${currentPull.number}` : 'بانتظار نشر Preview',
+      task: activityPull ? `Vercel Preview · PR #${activityPull.number}` : 'بانتظار نشر Preview',
       note: vercel?.description || 'يتابع حالة النشر وPreview',
     },
   ];
@@ -240,13 +245,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const [pulls, issues, runs] = await Promise.all([
-      githubJson<GithubPull[]>('/pulls?state=open&per_page=10&sort=updated&direction=desc', fresh),
+      githubJson<GithubPull[]>('/pulls?state=all&per_page=20&sort=updated&direction=desc', fresh),
       githubJson<GithubIssue[]>('/issues?state=all&per_page=100&sort=updated&direction=desc', fresh),
       githubJson<GithubRuns>('/actions/runs?per_page=30', fresh),
     ]);
 
-    const openPulls = [...pulls].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    const sortedPulls = [...pulls].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    const openPulls = sortedPulls.filter((pull) => pull.state === 'open');
     const currentPull = openPulls[0] || null;
+    const recentCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recentPull = currentPull
+      ? null
+      : sortedPulls.find((pull) => pull.merged_at && Date.parse(pull.merged_at) >= recentCutoff) || null;
+    const monitoredPull = currentPull || recentPull;
     const launchIssues = issues
       .filter((issue) => !issue.pull_request && issue.number >= 85 && issue.number <= 98)
       .sort((a, b) => a.number - b.number);
@@ -254,19 +265,19 @@ export async function GET(request: NextRequest) {
     const currentIssue = launchTasks.find((issue) => issue.state === 'open') || null;
     const launchProgram = launchIssues.find((issue) => issue.number === 98) || null;
 
-    const currentRuns = currentPull
-      ? runs.workflow_runs.filter((run) => run.head_sha === currentPull.head.sha || run.head_branch === currentPull.head.ref)
+    const currentRuns = monitoredPull
+      ? runs.workflow_runs.filter((run) => run.head_sha === monitoredPull.head.sha || run.head_branch === monitoredPull.head.ref)
       : [];
     const safetyRun = currentRuns.find((run) => run.name === 'AI PR Safety Gate');
     const releaseRun = currentRuns.find((run) => run.name === 'Release v1 verification');
 
     let combinedStatus: GithubCombinedStatus | null = null;
-    if (currentPull) {
-      combinedStatus = await githubJson<GithubCombinedStatus>(`/commits/${currentPull.head.sha}/status`, fresh);
+    if (monitoredPull) {
+      combinedStatus = await githubJson<GithubCombinedStatus>(`/commits/${monitoredPull.head.sha}/status`, fresh);
     }
     const vercel = combinedStatus?.statuses.find((status) => status.context.toLowerCase() === 'vercel');
 
-    const agents = deriveAgents({ currentIssue, currentPull, releaseRun, safetyRun, vercel });
+    const agents = deriveAgents({ currentIssue, currentPull, recentPull, releaseRun, safetyRun, vercel });
     const statusCounts = agents.reduce<Record<string, number>>((acc, agent) => {
       acc[agent.status] = (acc[agent.status] || 0) + 1;
       return acc;
@@ -325,6 +336,16 @@ export async function GET(request: NextRequest) {
             updatedAt: currentPull.updated_at,
           }
         : null,
+      recentPull: recentPull
+        ? {
+            number: recentPull.number,
+            title: recentPull.title,
+            url: recentPull.html_url,
+            branch: recentPull.head.ref,
+            sha: recentPull.head.sha,
+            mergedAt: recentPull.merged_at,
+          }
+        : null,
       pullRequests: openPulls.map((pull) => ({
         number: pull.number,
         title: pull.title,
@@ -337,7 +358,7 @@ export async function GET(request: NextRequest) {
         safety: { state: workflowState(safetyRun), url: safetyRun?.html_url || null },
         release: { state: workflowState(releaseRun), url: releaseRun?.html_url || null },
         vercel: {
-          state: vercel?.state || (currentPull ? 'pending' : 'unknown'),
+          state: vercel?.state || (monitoredPull ? 'pending' : 'unknown'),
           description: vercel?.description || null,
           url: vercel?.target_url || null,
         },
@@ -347,7 +368,7 @@ export async function GET(request: NextRequest) {
       timeline,
       snapshotAt: new Date().toISOString(),
       cacheSeconds: fresh ? 0 : CACHE_SECONDS,
-      statusSource: 'GitHub activity inference',
+      statusSource: 'GitHub activity inference · live + recent 7 days',
     });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'GITHUB_MONITOR_UNAVAILABLE';
