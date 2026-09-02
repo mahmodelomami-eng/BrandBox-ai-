@@ -91,39 +91,39 @@ export default function ProjectTrashWorkspace() {
   }
 
   return (
-    <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050506] px-4 py-8 text-white sm:px-6 lg:px-8">
+    <main dir="rtl" className="bb-app-canvas min-h-[calc(100vh-5rem)] px-4 py-8 sm:px-6 lg:px-8">
       <section className="mx-auto max-w-[1320px]">
         <div className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <Link href="/projects" className="mb-3 inline-flex items-center gap-2 text-xs font-black text-gray-500 transition hover:text-[#ff3344]">
+            <Link href="/projects" className="bb-text-tertiary bb-hoverable mb-3 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-xs font-black transition">
               <ArrowLeft size={15} className="rotate-180" /> العودة إلى المشاريع
             </Link>
             <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#f31325]/25 bg-[#f31325]/10 text-[#ff3344]">
+              <span className="bb-accent-soft flex h-12 w-12 items-center justify-center rounded-2xl border">
                 <Trash2 size={24} />
               </span>
               <div>
-                <h1 className="text-2xl font-black sm:text-3xl">سلة المحذوفات</h1>
-                <p className="mt-1 text-sm leading-7 text-gray-500">يمكن استعادة المشروع لمدة 30 يومًا من تاريخ نقله إلى السلة.</p>
+                <h1 className="bb-text-primary text-2xl font-black sm:text-3xl">سلة المحذوفات</h1>
+                <p className="bb-text-secondary mt-1 text-sm leading-7">يمكن استعادة المشروع لمدة 30 يومًا من تاريخ نقله إلى السلة.</p>
               </div>
             </div>
           </div>
 
-          <label className="flex min-w-[260px] items-center gap-2 rounded-xl border border-white/10 bg-[#101217] px-4 py-3 text-gray-500 focus-within:border-[#f31325]/40">
-            <Search size={17} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث في المحذوفات..." className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-600" />
+          <label className="bb-input flex min-w-[260px] items-center gap-2 rounded-xl border px-4 py-3 focus-within:border-[var(--bb-accent-border)]">
+            <Search size={17} className="bb-text-tertiary" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث في المحذوفات..." className="bb-text-primary w-full bg-transparent text-sm outline-none placeholder:text-[var(--bb-placeholder)]" />
           </label>
         </div>
 
-        <div className="mb-6 rounded-2xl border border-[#f31325]/20 bg-[#f31325]/7 px-5 py-4 text-sm leading-7 text-gray-300">
-          <strong className="text-white">سياسة الحفظ:</strong> المشاريع النشطة لا تنتهي تلقائيًا. المشروع لا يدخل هذه السلة إلا عندما تحذفه أنت، ويظل قابلًا للاستعادة خلال نافذة الـ30 يومًا قبل أن يصبح مؤهلًا للتنظيف النهائي الآمن للملفات والبيانات.
+        <div className="bb-accent-soft mb-6 rounded-2xl border px-5 py-4 text-sm leading-7">
+          <strong className="bb-text-primary">سياسة الحفظ:</strong> <span className="bb-text-secondary">المشاريع النشطة لا تنتهي تلقائيًا. المشروع لا يدخل هذه السلة إلا عندما تحذفه أنت، ويظل قابلًا للاستعادة خلال نافذة الـ30 يومًا قبل أن يصبح مؤهلًا للتنظيف النهائي الآمن للملفات والبيانات.</span>
         </div>
 
-        {error && <div className="mb-5 rounded-xl border border-red-500/25 bg-red-500/8 px-4 py-3 text-sm font-bold text-red-300">{error}</div>}
+        {error && <div className="bb-danger-surface mb-5 rounded-xl border px-4 py-3 text-sm font-bold">{error}</div>}
 
         {loading ? (
-          <div className="flex min-h-[320px] items-center justify-center rounded-3xl border border-white/10 bg-[#0b0d12]">
-            <div className="flex items-center gap-3 text-sm font-bold text-gray-400"><Loader2 className="h-5 w-5 animate-spin text-[#f31325]" /> جاري تحميل المحذوفات...</div>
+          <div className="bb-panel flex min-h-[320px] items-center justify-center rounded-3xl border">
+            <div className="bb-text-secondary flex items-center gap-3 text-sm font-bold"><Loader2 className="bb-text-accent h-5 w-5 animate-spin" /> جاري تحميل المحذوفات...</div>
           </div>
         ) : visibleProjects.length ? (
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -134,21 +134,21 @@ export default function ProjectTrashWorkspace() {
               const days = remainingDays(project.purge_after);
 
               return (
-                <article key={project.id} className="rounded-3xl border border-white/10 bg-[#101217] p-5 shadow-[0_18px_50px_rgba(0,0,0,.28)]">
+                <article key={project.id} className="bb-card rounded-3xl border p-5">
                   <div className="flex items-start justify-between gap-4">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#181b22] text-[#ff3344]"><Icon size={23} /></span>
-                    <span className="rounded-lg border border-white/10 bg-black/40 px-2.5 py-1 text-[10px] font-black text-gray-400">{meta.label}</span>
+                    <span className="bb-accent-soft flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border"><Icon size={23} /></span>
+                    <span className="bb-surface-1 bb-border-subtle bb-text-secondary rounded-lg border px-2.5 py-1 text-[10px] font-black">{meta.label}</span>
                   </div>
 
-                  <h2 className="mt-5 truncate text-lg font-black">{project.name || 'مشروع بدون اسم'}</h2>
-                  <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-gray-500">{project.description || 'مشروع محفوظ في سلة المحذوفات.'}</p>
+                  <h2 className="bb-text-primary mt-5 truncate text-lg font-black">{project.name || 'مشروع بدون اسم'}</h2>
+                  <p className="bb-text-tertiary mt-2 line-clamp-2 min-h-10 text-xs leading-5">{project.description || 'مشروع محفوظ في سلة المحذوفات.'}</p>
 
-                  <div className="mt-5 space-y-2 border-t border-white/[.07] pt-4 text-xs text-gray-500">
-                    <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5"><CalendarDays size={14} /> نُقل إلى السلة</span><strong className="text-gray-300">{formatDate(project.deleted_at)}</strong></div>
-                    <div className="flex items-center justify-between gap-3"><span>نافذة الاستعادة</span><strong className={days <= 3 ? 'text-[#ff6672]' : 'text-gray-300'}>{days} يوم متبقٍ</strong></div>
+                  <div className="bb-divider bb-text-tertiary mt-5 space-y-2 border-t pt-4 text-xs">
+                    <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5"><CalendarDays size={14} /> نُقل إلى السلة</span><strong className="bb-text-secondary">{formatDate(project.deleted_at)}</strong></div>
+                    <div className="flex items-center justify-between gap-3"><span>نافذة الاستعادة</span><strong className={days <= 3 ? 'bb-text-danger' : 'bb-text-secondary'}>{days} يوم متبقٍ</strong></div>
                   </div>
 
-                  <button type="button" disabled={restoring} onClick={() => restoreProject(project.id)} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#f31325] px-4 py-3 text-sm font-black transition hover:bg-[#ff2637] disabled:cursor-not-allowed disabled:opacity-60">
+                  <button type="button" disabled={restoring} onClick={() => restoreProject(project.id)} className="bb-button-primary mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60">
                     {restoring ? <Loader2 size={17} className="animate-spin" /> : <RotateCcw size={17} />} استعادة المشروع
                   </button>
                 </article>
@@ -156,10 +156,10 @@ export default function ProjectTrashWorkspace() {
             })}
           </div>
         ) : (
-          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-[#0b0d12] px-6 text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#171a21] text-gray-500"><FolderOpen size={28} /></span>
-            <h2 className="mt-5 text-lg font-black">{search ? 'لا توجد نتائج مطابقة' : 'سلة المحذوفات فارغة'}</h2>
-            <p className="mt-2 max-w-md text-sm leading-7 text-gray-500">{search ? 'جرّب كلمة بحث أخرى.' : 'لن يظهر هنا أي مشروع ما لم تقم بنقله إلى سلة المحذوفات.'}</p>
+          <div className="bb-panel flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed px-6 text-center">
+            <span className="bb-surface-1 bb-text-tertiary flex h-16 w-16 items-center justify-center rounded-2xl"><FolderOpen size={28} /></span>
+            <h2 className="bb-text-primary mt-5 text-lg font-black">{search ? 'لا توجد نتائج مطابقة' : 'سلة المحذوفات فارغة'}</h2>
+            <p className="bb-text-secondary mt-2 max-w-md text-sm leading-7">{search ? 'جرّب كلمة بحث أخرى.' : 'لن يظهر هنا أي مشروع ما لم تقم بنقله إلى سلة المحذوفات.'}</p>
           </div>
         )}
       </section>
