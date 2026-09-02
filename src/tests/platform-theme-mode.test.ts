@@ -20,7 +20,11 @@ assert.ok(themeContext.includes("value === 'light' ? 'light' : 'dark'"));
 assert.ok(themeContext.includes('document.documentElement.dataset.theme'));
 assert.ok(themeContext.includes('document.documentElement.style.colorScheme'));
 assert.ok(themeContext.includes('localStorage.setItem(THEME_STORAGE_KEY'));
-assert.ok(themeContext.includes("currentTheme === 'light' ? 'dark' : 'light'"));
+assert.ok(themeContext.includes('useSyncExternalStore'));
+assert.ok(themeContext.includes('subscribeTheme'));
+assert.ok(themeContext.includes("readTheme() === 'light' ? 'dark' : 'light'"));
+assert.ok(!themeContext.includes('useEffect('));
+assert.ok(!themeContext.includes('setThemeState'));
 
 assert.ok(wrapper.includes('<ThemeProvider>'));
 assert.ok(wrapper.includes('<ThemeToggle />'));
