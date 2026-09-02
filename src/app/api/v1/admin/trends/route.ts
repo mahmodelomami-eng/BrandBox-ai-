@@ -77,17 +77,16 @@ export async function GET(request: NextRequest) {
   if (!checkPermission(actor.role, 'settings.read')) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
 
   const database = createPrivilegedSupabaseClient();
-  const [briefsResult, templatesResult, usageResult] = await Promise.all([
+  const [briefsResult, templatesResult, usageCountResult] = await Promise.all([
     database.from('trend_briefs').select('*').order('trend_score', { ascending: false }).order('discovered_at', { ascending: false }).limit(200),
     database.from('trend_templates').select('*').order('is_featured', { ascending: false }).order('trend_score', { ascending: false }).limit(200),
-    database.from('trend_usage_events').select('id,event_type,created_at', { count: 'exact', head: false }).gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()).limit(1000),
+    database.from('trend_usage_events').select('id', { count: 'exact', head: true }).eq('event_type', 'use').gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
   ]);
 
-  if (briefsResult.error || templatesResult.error || usageResult.error) {
+  if (briefsResult.error || templatesResult.error || usageCountResult.error) {
     return NextResponse.json({ error: 'TREND_ADMIN_UNAVAILABLE' }, { status: 503 });
   }
 
-  const usageRows = usageResult.data || [];
   return NextResponse.json({
     briefs: briefsResult.data || [],
     templates: templatesResult.data || [],
@@ -95,7 +94,7 @@ export async function GET(request: NextRequest) {
       briefs: briefsResult.data?.length || 0,
       published: (templatesResult.data || []).filter((item) => item.is_published).length,
       trending: (templatesResult.data || []).filter((item) => item.is_published && item.lifecycle === 'trending').length,
-      uses30d: usageRows.filter((item) => item.event_type === 'use').length,
+      uses30d: usageCountResult.count || 0,
     },
     capabilities: { canManage: checkPermission(actor.role, 'settings.manage') },
     actorRole: actor.role,
@@ -161,7 +160,7 @@ export async function POST(request: NextRequest) {
     const inputs = Array.isArray(body.requiredInputs) ? body.requiredInputs.slice(0, 12) : [];
     const tags = Array.isArray(body.tags) ? body.tags.map((tag) => cleanString(tag, 40)).filter(Boolean).slice(0, 16) : [];
     const score = Math.min(100, Math.max(0, Number(body.trendScore || 0)));
-    const publish = body.isPublished === true && readiness !== 'draft';
+    const publish = body.isPublished === true && readiness !== 'draft' && lifecycle !== 'archived';
     const row = {
       brief_id: typeof body.briefId === 'string' && /^[0-9a-f-]{36}$/i.test(body.briefId) ? body.briefId : null,
       slug,
@@ -220,20 +219,36 @@ export async function PATCH(request: NextRequest) {
   if (body.action === 'updateTemplate') {
     const id = String(body.id || '');
     if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'INVALID_TEMPLATE_ID' }, { status: 400 });
+
+    const { data: current, error: currentError } = await database
+      .from('trend_templates')
+      .select('id,readiness,lifecycle,is_published')
+      .eq('id', id)
+      .maybeSingle();
+    if (currentError || !current) return NextResponse.json({ error: 'TEMPLATE_NOT_FOUND' }, { status: 404 });
+
     const patch: Record<string, unknown> = { updated_by: actor.userId };
-    if (body.lifecycle !== undefined) {
-      if (!TEMPLATE_LIFECYCLES.has(String(body.lifecycle))) return NextResponse.json({ error: 'INVALID_LIFECYCLE' }, { status: 400 });
-      patch.lifecycle = String(body.lifecycle);
-    }
-    if (body.readiness !== undefined) {
-      if (!TEMPLATE_READINESS.has(String(body.readiness))) return NextResponse.json({ error: 'INVALID_READINESS' }, { status: 400 });
-      patch.readiness = String(body.readiness);
-    }
+    const nextReadiness = body.readiness !== undefined ? String(body.readiness) : current.readiness;
+    const nextLifecycle = body.lifecycle !== undefined ? String(body.lifecycle) : current.lifecycle;
+
+    if (!TEMPLATE_READINESS.has(nextReadiness)) return NextResponse.json({ error: 'INVALID_READINESS' }, { status: 400 });
+    if (!TEMPLATE_LIFECYCLES.has(nextLifecycle)) return NextResponse.json({ error: 'INVALID_LIFECYCLE' }, { status: 400 });
+
+    if (body.lifecycle !== undefined) patch.lifecycle = nextLifecycle;
+    if (body.readiness !== undefined) patch.readiness = nextReadiness;
     if (body.isFeatured !== undefined) patch.is_featured = body.isFeatured === true;
-    if (body.isPublished !== undefined) {
+
+    if (nextLifecycle === 'archived') {
+      patch.is_published = false;
+      patch.published_at = null;
+    } else if (body.isPublished !== undefined) {
+      if (body.isPublished === true && nextReadiness === 'draft') {
+        return NextResponse.json({ error: 'DRAFT_TEMPLATE_CANNOT_PUBLISH' }, { status: 400 });
+      }
       patch.is_published = body.isPublished === true;
       patch.published_at = body.isPublished === true ? new Date().toISOString() : null;
     }
+
     if (body.previewUrl !== undefined) patch.preview_url = cleanString(body.previewUrl, 1200) || null;
     const { data, error } = await database.from('trend_templates').update(patch).eq('id', id).select('*').maybeSingle();
     if (error || !data) return NextResponse.json({ error: 'TEMPLATE_UPDATE_FAILED' }, { status: 503 });
