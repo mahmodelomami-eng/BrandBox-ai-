@@ -7,10 +7,13 @@ const migration = readFileSync(join(root, 'supabase/migrations/20260902215000_tr
 const counterMigration = readFileSync(join(root, 'supabase/migrations/20260902215100_trend_usage_atomic_counter.sql'), 'utf8');
 const publicApi = readFileSync(join(root, 'src/app/api/v1/trends/route.ts'), 'utf8');
 const adminApi = readFileSync(join(root, 'src/app/api/v1/admin/trends/route.ts'), 'utf8');
+const trendAgentApi = readFileSync(join(root, 'src/app/api/v1/admin/trend-agent/route.ts'), 'utf8');
 const publicComponent = readFileSync(join(root, 'src/components/TrendLabLibrary.jsx'), 'utf8');
 const adminComponent = readFileSync(join(root, 'src/components/AdminTrendLabPanel.jsx'), 'utf8');
+const agentStatusComponent = readFileSync(join(root, 'src/components/TrendAgentStatusCard.jsx'), 'utf8');
 const templatesPage = readFileSync(join(root, 'src/app/templates/page.jsx'), 'utf8');
 const adminPage = readFileSync(join(root, 'src/app/admin/page.jsx'), 'utf8');
+const adminTrendPage = readFileSync(join(root, 'src/app/admin/trends/page.jsx'), 'utf8');
 const agentContract = readFileSync(join(root, 'docs/AI_TREND_INTELLIGENCE_AGENT.md'), 'utf8');
 
 for (const table of ['trend_briefs', 'trend_templates', 'trend_usage_events']) {
@@ -34,7 +37,7 @@ assert.ok(counterMigration.includes('revoke all on function public.increment_tre
 assert.ok(publicApi.includes(".eq('is_published', true)"));
 assert.ok(publicApi.includes(".in('lifecycle', ['trending', 'evergreen'])"));
 assert.ok(publicApi.includes('authenticateActiveUser(request)'));
-assert.ok(publicApi.includes(".eq('user_id', auth.user.id)"), 'usage project ownership must be checked server-side');
+assert.ok(publicApi.includes(".eq('owner_id', auth.user.id)"), 'usage project ownership must use canonical projects.owner_id server-side');
 assert.ok(publicApi.includes("event_type: eventType"));
 assert.ok(!publicApi.includes('use_count: Number(current.use_count'), 'use counts must not use a read-modify-write race');
 
@@ -50,6 +53,12 @@ assert.ok(adminApi.includes("'ADMIN_CREATED_TREND_BRIEF'"));
 assert.ok(adminApi.includes("'ADMIN_CREATED_TREND_TEMPLATE'"));
 assert.ok(adminApi.includes('Cache-Control'), 'admin GET must be no-store');
 
+assert.ok(trendAgentApi.includes("id: 'trend-intelligence'"));
+assert.ok(trendAgentApi.includes("name: 'Trend Intelligence & Prompt Research Agent'"));
+assert.ok(trendAgentApi.includes("statusSource: 'Trend Lab database workflow'"));
+assert.ok(trendAgentApi.includes(".not('workflow_status', 'in', '(rejected,published)')"));
+assert.ok(trendAgentApi.includes("checkPermission(role, 'settings.read')"));
+
 assert.ok(templatesPage.includes("import TrendLabLibrary from '../../components/TrendLabLibrary'"));
 assert.ok(templatesPage.includes('<TrendLabLibrary />'));
 assert.ok(publicComponent.includes('BRAND BOX TREND LAB'));
@@ -64,10 +73,13 @@ assert.ok(publicComponent.includes('bb-media-canvas'));
 assert.ok(!publicComponent.toLowerCase().includes('araby'));
 
 assert.ok(adminPage.includes('href="/admin/trends"'));
+assert.ok(adminTrendPage.includes('<TrendAgentStatusCard />'));
 assert.ok(adminComponent.includes('Brand Box Trend Lab'));
 assert.ok(adminComponent.includes('Trend Intelligence Pipeline'));
 assert.ok(adminComponent.includes("action: 'createBrief'"));
 assert.ok(adminComponent.includes("action: 'createTemplate'"));
+assert.ok(agentStatusComponent.includes("fetch('/api/v1/admin/trend-agent'"));
+assert.ok(agentStatusComponent.includes('Agent دائم'));
 assert.ok(agentContract.includes('Trend Intelligence & Prompt Research Agent'));
 assert.ok(agentContract.includes('Discover -> Evidence -> Score -> Deduplicate -> Localize -> Brief -> Design -> Test -> Approve -> Publish -> Measure -> Refresh/Archive'));
 assert.ok(agentContract.includes('75+'));
