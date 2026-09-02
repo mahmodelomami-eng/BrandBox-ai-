@@ -103,6 +103,19 @@ function friendlyImageError(value) {
   return 'تعذر توليد الصورة. احتفظنا بإعداداتك ويمكنك إعادة المحاولة.';
 }
 
+function SelectTile({ active, children, onClick, pressed, className = '' }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      className={`min-h-11 rounded-xl border p-2 transition focus-visible:outline-none focus-visible:ring-2 ${active ? 'bb-menu-item-active border-[var(--bb-accent-border)]' : 'bb-button-secondary'} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function ImageStudioWorkspace() {
   const searchParams = useSearchParams();
   const { creditBalance, refreshProfile } = useAuth();
@@ -200,11 +213,7 @@ export default function ImageStudioWorkspace() {
 
       const { data: authData } = await supabase.auth.getUser();
       if (authData.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('credit_balance')
-          .eq('id', authData.user.id)
-          .maybeSingle();
+        const { data: profile } = await supabase.from('profiles').select('credit_balance').eq('id', authData.user.id).maybeSingle();
         setBalance(profile?.credit_balance ?? null);
       }
 
@@ -231,9 +240,7 @@ export default function ImageStudioWorkspace() {
     }
   }, [loadHistory, projectFromUrl, supabase]);
 
-  useEffect(() => {
-    void loadWorkspace();
-  }, [loadWorkspace]);
+  useEffect(() => { void loadWorkspace(); }, [loadWorkspace]);
 
   useEffect(() => {
     if (projectFromUrl && projectFromUrl !== selectedProjectId && projects.length > 0) {
@@ -322,40 +329,23 @@ export default function ImageStudioWorkspace() {
     try {
       const token = await getToken();
       if (!token) throw new Error('SESSION_REQUIRED');
-      const finalPrompt = selectedStyle.prompt
-        ? `${prompt.trim()}\nالأسلوب البصري المطلوب: ${selectedStyle.prompt}.`
-        : prompt.trim();
+      const finalPrompt = selectedStyle.prompt ? `${prompt.trim()}\nالأسلوب البصري المطلوب: ${selectedStyle.prompt}.` : prompt.trim();
       const response = await fetch('/api/v1/generations', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           generationType: 'image',
           requestId: crypto.randomUUID(),
           modelId: selectedModel.id,
           prompt: finalPrompt,
           projectId: activeProject.id,
-          settings: {
-            aspectRatio,
-            resolution,
-            count,
-            style: styleId,
-            useBrandKit,
-          },
+          settings: { aspectRatio, resolution, count, style: styleId, useBrandKit },
         }),
       });
       const result = await response.json();
-      if (!response.ok || !result.success) {
-        throw new Error(result.errorMessage || result.error || 'IMAGE_GENERATION_FAILED');
-      }
+      if (!response.ok || !result.success) throw new Error(result.errorMessage || result.error || 'IMAGE_GENERATION_FAILED');
 
-      const urls = Array.isArray(result.resultUrls)
-        ? result.resultUrls
-        : result.resultUrl
-          ? [result.resultUrl]
-          : [];
+      const urls = Array.isArray(result.resultUrls) ? result.resultUrls : result.resultUrl ? [result.resultUrl] : [];
       const now = new Date().toISOString();
       const optimistic = urls.map((url, index) => ({
         id: `${result.generationId}-${index}`,
@@ -369,13 +359,8 @@ export default function ImageStudioWorkspace() {
         setGalleryProjectId(activeProject.id);
         setGallery((current) => [...optimistic, ...current]);
       }
-      if (typeof result.remainingBalance === 'number') {
-        setBalance(result.remainingBalance);
-      }
-      setMessage({
-        type: 'success',
-        text: `تم توليد ${urls.length || count} ${urls.length === 1 || count === 1 ? 'صورة' : 'صور'} بنجاح. احتفظنا بالوصف لتعديله أو إعادة استخدامه.`,
-      });
+      if (typeof result.remainingBalance === 'number') setBalance(result.remainingBalance);
+      setMessage({ type: 'success', text: `تم توليد ${urls.length || count} ${urls.length === 1 || count === 1 ? 'صورة' : 'صور'} بنجاح. احتفظنا بالوصف لتعديله أو إعادة استخدامه.` });
       if (refreshProfile) void refreshProfile();
       window.setTimeout(() => void loadHistory(activeProject.id), 800);
     } catch (error) {
@@ -397,10 +382,10 @@ export default function ImageStudioWorkspace() {
 
   if (loading) {
     return (
-      <main className="min-h-[calc(100vh-5rem)] bg-[#050506] px-5 py-16 text-white" dir="rtl">
+      <main className="bb-app-canvas min-h-[calc(100vh-5rem)] px-5 py-16" dir="rtl">
         <div className="mx-auto flex min-h-[60vh] max-w-7xl items-center justify-center">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#0d1016] px-5 py-4 text-sm font-bold text-gray-300" aria-live="polite">
-            <Loader2 className="h-5 w-5 animate-spin text-[#f31325]" /> جاري تجهيز استوديو الصور...
+          <div className="bb-panel bb-text-secondary flex items-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold" aria-live="polite">
+            <Loader2 className="bb-text-accent h-5 w-5 animate-spin" /> جاري تجهيز استوديو الصور...
           </div>
         </div>
       </main>
@@ -408,23 +393,18 @@ export default function ImageStudioWorkspace() {
   }
 
   return (
-    <main className="min-h-[calc(100vh-5rem)] bg-[radial-gradient(circle_at_15%_15%,rgba(243,19,37,.08),transparent_28%),#050506] text-white" dir="rtl">
-      <div className="sticky top-20 z-40 border-b border-white/[.06] bg-[#07080b]/95 px-4 py-3 backdrop-blur-xl lg:px-6">
+    <main className="bb-app-canvas min-h-[calc(100vh-5rem)]" dir="rtl">
+      <div className="bb-surface-1 bb-border-subtle sticky top-20 z-40 border-b px-4 py-3 shadow-[var(--bb-shadow-sm)] lg:px-6">
         <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-3">
-          <div className="hidden text-xs font-black text-gray-500 lg:block">تنقل سريع بين أدوات الذكاء الاصطناعي</div>
+          <div className="bb-text-tertiary hidden text-xs font-black lg:block">تنقل سريع بين أدوات الذكاء الاصطناعي</div>
           <div className="flex flex-1 items-stretch justify-end gap-2 overflow-x-auto lg:flex-none">
             {TOOL_LINKS.map((tool) => {
               const Icon = tool.icon;
               const active = tool.id === 'images';
               return (
-                <Link
-                  key={tool.id}
-                  href={tool.href}
-                  aria-current={active ? 'page' : undefined}
-                  className={`group flex min-h-12 min-w-[130px] items-center gap-2 rounded-xl border px-3 py-2.5 text-right transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70 ${active ? 'border-[#f31325]/55 bg-[#f31325]/10' : 'border-white/[.08] bg-[#0d1016] hover:border-[#f31325]/55 hover:bg-[#f31325]/8'}`}
-                >
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition ${active ? 'border-[#f31325]/45 bg-[#f31325] text-white' : 'border-white/10 bg-[#171a21] text-[#ff3344] group-hover:border-[#ff3344]/40'}`}><Icon size={18} /></span>
-                  <span><span className="block text-xs font-black text-white">{tool.label}</span><span className="mt-0.5 hidden text-[9px] text-gray-500 xl:block">{tool.description}</span></span>
+                <Link key={tool.id} href={tool.href} aria-current={active ? 'page' : undefined} className={`group flex min-h-12 min-w-[130px] items-center gap-2 rounded-xl border px-3 py-2.5 text-right transition focus-visible:outline-none focus-visible:ring-2 ${active ? 'bb-menu-item-active border-[var(--bb-accent-border)]' : 'bb-button-secondary'}`}>
+                  <span className={`${active ? 'bb-button-primary' : 'bb-accent-soft'} flex h-9 w-9 shrink-0 items-center justify-center rounded-lg`}><Icon size={18} /></span>
+                  <span><span className="bb-text-primary block text-xs font-black">{tool.label}</span><span className="bb-text-tertiary mt-0.5 hidden text-[9px] xl:block">{tool.description}</span></span>
                 </Link>
               );
             })}
@@ -434,133 +414,134 @@ export default function ImageStudioWorkspace() {
 
       {workspaceLoadFailed && (
         <div className="mx-auto max-w-[1800px] px-4 pt-4 lg:px-6">
-          <div className="flex flex-col gap-3 rounded-2xl border border-red-500/25 bg-red-500/[.06] px-4 py-3 text-sm font-bold text-red-200 sm:flex-row sm:items-center sm:justify-between" role="alert">
+          <div className="bb-danger-surface flex flex-col gap-3 rounded-2xl border px-4 py-3 text-sm font-bold sm:flex-row sm:items-center sm:justify-between" role="alert">
             <span>تعذر تحميل مساحة الصور. لم نفقد البرومبت أو إعداداتك الحالية.</span>
-            <button type="button" onClick={() => void loadWorkspace()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-400/25 px-3 text-xs font-black transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"><RefreshCw size={14} /> إعادة المحاولة</button>
+            <button type="button" onClick={() => void loadWorkspace()} className="bb-button-secondary inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2"><RefreshCw size={14} /> إعادة المحاولة</button>
           </div>
         </div>
       )}
 
       <div className="mx-auto grid max-w-[1800px] grid-cols-1 gap-0 lg:grid-cols-[370px_minmax(0,1fr)]">
-        <aside className="border-b border-white/[.07] bg-[#0b0e14] lg:min-h-[calc(100vh-10.5rem)] lg:border-b-0 lg:border-l lg:border-white/[.07]">
-          <div className="border-b border-white/[.07] px-5 py-5">
+        <aside className="bb-surface-2 bb-border-subtle border-b lg:min-h-[calc(100vh-10.5rem)] lg:border-b-0 lg:border-l">
+          <div className="bb-divider border-b px-5 py-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h1 className="flex items-center gap-2 text-xl font-black text-white"><Sparkles className="h-5 w-5 text-[#ff3344]" /> توليد صورة جديدة</h1>
-                <p className="mt-1 text-xs leading-6 text-gray-500">اكتب فكرتك واضبط الإعدادات، وسيظهر السعر قبل تنفيذ الطلب.</p>
+                <h1 className="bb-text-primary flex items-center gap-2 text-xl font-black"><Sparkles className="bb-text-accent h-5 w-5" /> توليد صورة جديدة</h1>
+                <p className="bb-text-secondary mt-1 text-xs leading-6">اكتب فكرتك واضبط الإعدادات، وسيظهر السعر قبل تنفيذ الطلب.</p>
               </div>
-              <button type="button" onClick={() => void loadHistory(activeProject?.id)} disabled={!activeProject || historyLoading} className="grid h-10 w-10 place-items-center rounded-xl border border-white/10 text-gray-500 transition hover:border-[#f31325]/40 hover:text-white disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70" aria-label="تحديث الصور"><RefreshCw className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`} /></button>
+              <button type="button" onClick={() => void loadHistory(activeProject?.id)} disabled={!activeProject || historyLoading} className="bb-button-secondary grid h-10 w-10 place-items-center rounded-xl border transition disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2" aria-label="تحديث الصور"><RefreshCw className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`} /></button>
             </div>
 
             <div className="relative mt-4">
-              <button type="button" onClick={() => setProjectOpen((value) => !value)} aria-expanded={projectOpen} aria-haspopup="listbox" className="flex min-h-12 w-full items-center justify-between rounded-xl border border-white/10 bg-[#11141b] px-3 py-3 text-right transition hover:border-[#f31325]/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70">
-                <span className="min-w-0"><span className="block text-[10px] font-bold text-gray-500">مشروع الصور الحالي</span><span className="mt-0.5 block truncate text-xs font-black text-white">{activeProject?.name || 'لا يوجد مشروع صور'}</span></span>
-                <ChevronDown className={`h-4 w-4 text-gray-500 transition ${projectOpen ? 'rotate-180' : ''}`} />
+              <button type="button" onClick={() => setProjectOpen((value) => !value)} aria-expanded={projectOpen} aria-haspopup="listbox" className="bb-button-secondary flex min-h-12 w-full items-center justify-between rounded-xl border px-3 py-3 text-right transition focus-visible:outline-none focus-visible:ring-2">
+                <span className="min-w-0"><span className="bb-text-tertiary block text-[10px] font-bold">مشروع الصور الحالي</span><span className="bb-text-primary mt-0.5 block truncate text-xs font-black">{activeProject?.name || 'لا يوجد مشروع صور'}</span></span>
+                <ChevronDown className={`bb-text-tertiary h-4 w-4 transition ${projectOpen ? 'rotate-180' : ''}`} />
               </button>
               {projectOpen && projects.length > 0 && (
-                <div className="absolute inset-x-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-[#151820] p-1.5 shadow-2xl" role="listbox" aria-label="مشاريع الصور">
+                <div className="bb-menu absolute inset-x-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-xl border p-1.5" role="listbox" aria-label="مشاريع الصور">
                   {projects.map((project) => (
-                    <button key={project.id} type="button" onClick={() => void selectProject(project.id)} role="option" aria-selected={activeProject?.id === project.id} className={`min-h-11 w-full rounded-lg px-3 py-2.5 text-right text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70 ${activeProject?.id === project.id ? 'bg-[#f31325]/12 text-[#ff3344]' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}>{project.name}</button>
+                    <button key={project.id} type="button" onClick={() => void selectProject(project.id)} role="option" aria-selected={activeProject?.id === project.id} className={`min-h-11 w-full rounded-lg px-3 py-2.5 text-right text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 ${activeProject?.id === project.id ? 'bb-menu-item-active' : 'bb-menu-item'}`}>{project.name}</button>
                   ))}
                 </div>
               )}
             </div>
-            <button type="button" onClick={createImageProject} disabled={creatingProject} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#f31325]/35 px-3 py-2.5 text-xs font-black text-[#ff6573] transition hover:bg-[#f31325]/8 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70"><Plus className="h-4 w-4" />{creatingProject ? 'جاري الإنشاء...' : 'مشروع صور جديد'}</button>
+            <button type="button" onClick={createImageProject} disabled={creatingProject} className="bb-accent-soft mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-xs font-black transition disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2"><Plus className="h-4 w-4" />{creatingProject ? 'جاري الإنشاء...' : 'مشروع صور جديد'}</button>
           </div>
 
           <div className="space-y-5 p-5">
             <div>
-              <div className="mb-2 flex items-center justify-between"><label htmlFor="image-prompt" className="text-xs font-black text-gray-300">وصف الصورة</label><span className="text-[10px] text-gray-600">{prompt.length} / 1000</span></div>
-              <textarea id="image-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value.slice(0, 1000))} rows={5} placeholder="مثال: غرفة معيشة حديثة وفاخرة، إضاءة طبيعية، نافذة كبيرة، أثاث عصري..." className="w-full resize-none rounded-xl border border-white/10 bg-[#11141b] p-3 text-sm leading-6 text-white outline-none transition placeholder:text-gray-600 focus:border-[#f31325]/55 focus:ring-2 focus:ring-[#f31325]/20" />
-              <div className="mt-2 flex gap-2"><button type="button" onClick={() => setPrompt('')} className="min-h-10 flex-1 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-bold text-gray-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70">مسح</button><button type="button" onClick={() => setPrompt('تصميم إعلاني احترافي لمنتج فاخر، تكوين بصري قوي، إضاءة درامية، جودة تصوير تجاري عالية')} className="flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-bold text-gray-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70"><Wand2 className="h-3.5 w-3.5" /> اقتراح جاهز</button></div>
+              <div className="mb-2 flex items-center justify-between"><label htmlFor="image-prompt" className="bb-text-secondary text-xs font-black">وصف الصورة</label><span className="bb-text-tertiary text-[10px]">{prompt.length} / 1000</span></div>
+              <textarea id="image-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value.slice(0, 1000))} rows={5} placeholder="مثال: غرفة معيشة حديثة وفاخرة، إضاءة طبيعية، نافذة كبيرة، أثاث عصري..." className="bb-input w-full resize-none rounded-xl border p-3 text-sm leading-6 outline-none transition" />
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => setPrompt('')} className="bb-button-secondary min-h-10 flex-1 rounded-lg border px-3 py-2 text-[10px] font-bold focus-visible:outline-none focus-visible:ring-2">مسح</button>
+                <button type="button" onClick={() => setPrompt('تصميم إعلاني احترافي لمنتج فاخر، تكوين بصري قوي، إضاءة درامية، جودة تصوير تجاري عالية')} className="bb-button-secondary flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-bold focus-visible:outline-none focus-visible:ring-2"><Wand2 className="h-3.5 w-3.5" /> اقتراح جاهز</button>
+              </div>
             </div>
 
             <div className="relative">
-              <label className="mb-2 block text-xs font-black text-gray-300">النموذج (Model)</label>
-              <button type="button" disabled={!imageModelsAvailable || !selectedModel} onClick={() => setModelOpen((value) => !value)} aria-expanded={modelOpen} aria-haspopup="listbox" className="flex min-h-12 w-full items-center justify-between rounded-xl border border-white/10 bg-[#11141b] p-3 text-right transition hover:border-[#f31325]/35 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70">
+              <label className="bb-text-secondary mb-2 block text-xs font-black">النموذج (Model)</label>
+              <button type="button" disabled={!imageModelsAvailable || !selectedModel} onClick={() => setModelOpen((value) => !value)} aria-expanded={modelOpen} aria-haspopup="listbox" className="bb-button-secondary flex min-h-12 w-full items-center justify-between rounded-xl border p-3 text-right transition disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-none focus-visible:ring-2">
                 {selectedModel ? (
-                  <span className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/20 to-white/5"><Sparkles className="h-4 w-4 text-white" /></span><span className="min-w-0"><span className="flex items-center gap-2"><span className="truncate text-xs font-black text-white">{selectedModel.name}</span><span className="rounded-full bg-[#f31325]/15 px-2 py-0.5 text-[9px] font-black text-[#ff6573]">{selectedModel.badge}</span></span><span className="mt-1 block truncate text-[9px] text-gray-500">{selectedModel.provider} · {selectedModel.cost} نقاط للصورة</span></span></span>
-                ) : (
-                  <span className="text-xs font-bold text-gray-500">لا يوجد نموذج صور مفعّل حاليًا</span>
-                )}
-                <ChevronDown className={`h-4 w-4 shrink-0 text-gray-500 transition ${modelOpen ? 'rotate-180' : ''}`} />
+                  <span className="flex min-w-0 items-center gap-3"><span className="bb-accent-soft flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"><Sparkles className="h-4 w-4" /></span><span className="min-w-0"><span className="flex items-center gap-2"><span className="bb-text-primary truncate text-xs font-black">{selectedModel.name}</span><span className="bb-accent-soft rounded-full px-2 py-0.5 text-[9px] font-black">{selectedModel.badge}</span></span><span className="bb-text-tertiary mt-1 block truncate text-[9px]">{selectedModel.provider} · {selectedModel.cost} نقاط للصورة</span></span></span>
+                ) : <span className="bb-text-tertiary text-xs font-bold">لا يوجد نموذج صور مفعّل حاليًا</span>}
+                <ChevronDown className={`bb-text-tertiary h-4 w-4 shrink-0 transition ${modelOpen ? 'rotate-180' : ''}`} />
               </button>
               {modelOpen && imageModels.length > 0 && (
-                <div className="absolute inset-x-0 top-full z-50 mt-2 rounded-xl border border-white/10 bg-[#151820] p-1.5 shadow-2xl" role="listbox" aria-label="نماذج الصور">
-                  {imageModels.map((model) => <button key={model.id} type="button" onClick={() => { setSelectedModelId(model.id); setModelOpen(false); }} role="option" aria-selected={selectedModel?.id === model.id} className={`flex min-h-11 w-full items-center justify-between rounded-lg px-3 py-2.5 text-right focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70 ${selectedModel?.id === model.id ? 'bg-[#f31325]/12' : 'hover:bg-white/5'}`}><span><span className="block text-xs font-black text-white">{model.name}</span><span className="mt-0.5 block text-[9px] text-gray-500">{model.provider}</span></span><span className="text-[10px] font-black text-[#ff6573]">{model.cost} نقاط/صورة</span></button>)}
+                <div className="bb-menu absolute inset-x-0 top-full z-50 mt-2 rounded-xl border p-1.5" role="listbox" aria-label="نماذج الصور">
+                  {imageModels.map((model) => <button key={model.id} type="button" onClick={() => { setSelectedModelId(model.id); setModelOpen(false); }} role="option" aria-selected={selectedModel?.id === model.id} className={`flex min-h-11 w-full items-center justify-between rounded-lg px-3 py-2.5 text-right focus-visible:outline-none focus-visible:ring-2 ${selectedModel?.id === model.id ? 'bb-menu-item-active' : 'bb-menu-item'}`}><span><span className="bb-text-primary block text-xs font-black">{model.name}</span><span className="bb-text-tertiary mt-0.5 block text-[9px]">{model.provider}</span></span><span className="bb-text-accent text-[10px] font-black">{model.cost} نقاط/صورة</span></button>)}
                 </div>
               )}
-              {(!imageModelsAvailable || imageModels.length === 0) && <p className="mt-2 text-[10px] leading-5 text-amber-300/80">نماذج الصور غير متاحة مؤقتًا. لن يتم خصم نقاط حتى يعود كتالوج النماذج.</p>}
+              {(!imageModelsAvailable || imageModels.length === 0) && <p className="bb-text-warning mt-2 text-[10px] leading-5">نماذج الصور غير متاحة مؤقتًا. لن يتم خصم نقاط حتى يعود كتالوج النماذج.</p>}
             </div>
 
             <div>
-              <div className="mb-2 flex items-center justify-between"><label className="text-xs font-black text-gray-300">الطراز (Style)</label><span className="text-[10px] font-bold text-[#ff4d5f]">{selectedStyle.label}</span></div>
-              <div className="grid grid-cols-5 gap-2">{STYLE_OPTIONS.map((style) => <button key={style.id} type="button" onClick={() => setStyleId(style.id)} aria-pressed={styleId === style.id} className={`overflow-hidden rounded-xl border bg-[#11141b] p-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70 ${styleId === style.id ? 'border-[#f31325] shadow-[0_0_18px_rgba(243,19,37,.14)]' : 'border-white/[.07] hover:border-white/20'}`}><span className="block aspect-square rounded-lg" style={{ background: style.background }} /><span className="mt-1 block truncate text-[9px] font-bold text-gray-400">{style.label}</span></button>)}</div>
+              <div className="mb-2 flex items-center justify-between"><label className="bb-text-secondary text-xs font-black">الطراز (Style)</label><span className="bb-text-accent text-[10px] font-bold">{selectedStyle.label}</span></div>
+              <div className="grid grid-cols-5 gap-2">{STYLE_OPTIONS.map((style) => <SelectTile key={style.id} active={styleId === style.id} pressed={styleId === style.id} onClick={() => setStyleId(style.id)} className="overflow-hidden p-1"><span className="block aspect-square rounded-lg" style={{ background: style.background }} /><span className="bb-text-secondary mt-1 block truncate text-[9px] font-bold">{style.label}</span></SelectTile>)}</div>
             </div>
 
             <div>
-              <div className="mb-2 flex items-center justify-between"><label className="text-xs font-black text-gray-300">النسبة (Aspect Ratio)</label><span className="text-[10px] font-bold text-[#ff4d5f]">{aspectRatio}</span></div>
-              <div className="grid grid-cols-5 gap-2">{ASPECTS.map((item) => <button key={item.value} type="button" onClick={() => setAspectRatio(item.value)} aria-pressed={aspectRatio === item.value} className={`flex min-h-14 flex-col items-center justify-center rounded-xl border text-[9px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70 ${aspectRatio === item.value ? 'border-[#f31325] bg-[#f31325]/7 text-white' : 'border-white/[.08] bg-[#11141b] text-gray-500 hover:border-white/20'}`}><span className={`mb-1 rounded-sm border ${item.box} ${aspectRatio === item.value ? 'border-[#ff3344]' : 'border-gray-500'}`} />{item.label}</button>)}</div>
+              <div className="mb-2 flex items-center justify-between"><label className="bb-text-secondary text-xs font-black">النسبة (Aspect Ratio)</label><span className="bb-text-accent text-[10px] font-bold">{aspectRatio}</span></div>
+              <div className="grid grid-cols-5 gap-2">{ASPECTS.map((item) => <SelectTile key={item.value} active={aspectRatio === item.value} pressed={aspectRatio === item.value} onClick={() => setAspectRatio(item.value)} className="flex min-h-14 flex-col items-center justify-center text-[9px] font-bold"><span className={`mb-1 rounded-sm border ${item.box} ${aspectRatio === item.value ? 'border-[var(--bb-accent)]' : 'border-[var(--bb-border-strong)]'}`} />{item.label}</SelectTile>)}</div>
             </div>
 
             <div>
-              <div className="mb-2 flex items-center justify-between"><label className="text-xs font-black text-gray-300">الدقة (Resolution)</label><span className="text-[10px] font-bold text-[#ff4d5f]">{resolution}</span></div>
-              <div className="grid grid-cols-4 gap-2">{RESOLUTIONS.map((item) => <button key={item.label} type="button" onClick={() => setResolution(item.value)} aria-pressed={resolution === item.value} className={`min-h-11 rounded-xl border px-2 py-2.5 text-[10px] font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70 ${resolution === item.value ? 'border-[#f31325] bg-[#f31325]/7 text-white' : 'border-white/[.08] bg-[#11141b] text-gray-500 hover:border-white/20'}`}>{item.label}</button>)}</div>
+              <div className="mb-2 flex items-center justify-between"><label className="bb-text-secondary text-xs font-black">الدقة (Resolution)</label><span className="bb-text-accent text-[10px] font-bold">{resolution}</span></div>
+              <div className="grid grid-cols-4 gap-2">{RESOLUTIONS.map((item) => <SelectTile key={item.label} active={resolution === item.value} pressed={resolution === item.value} onClick={() => setResolution(item.value)} className="text-[10px] font-black">{item.label}</SelectTile>)}</div>
             </div>
 
             <div>
-              <div className="mb-2 flex items-center justify-between"><label className="text-xs font-black text-gray-300">عدد الصور</label><span className="text-[10px] text-gray-600">حتى 4</span></div>
-              <div className="grid grid-cols-3 gap-2">{[1, 2, 4].map((value) => <button key={value} type="button" onClick={() => setCount(value)} aria-pressed={count === value} className={`min-h-11 rounded-xl border px-2 py-2.5 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70 ${count === value ? 'border-[#f31325] bg-[#f31325]/7 text-white' : 'border-white/[.08] bg-[#11141b] text-gray-500 hover:border-white/20'}`}>{value}</button>)}</div>
+              <div className="mb-2 flex items-center justify-between"><label className="bb-text-secondary text-xs font-black">عدد الصور</label><span className="bb-text-tertiary text-[10px]">حتى 4</span></div>
+              <div className="grid grid-cols-3 gap-2">{[1, 2, 4].map((value) => <SelectTile key={value} active={count === value} pressed={count === value} onClick={() => setCount(value)} className="text-xs font-black">{value}</SelectTile>)}</div>
             </div>
 
-            <button type="button" onClick={() => setUseBrandKit((value) => !value)} aria-pressed={useBrandKit} className="flex min-h-12 w-full items-center justify-between rounded-xl border border-white/[.08] bg-[#11141b] p-3 text-xs font-bold text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70"><span className="flex items-center gap-2"><Palette className="h-4 w-4 text-[#ff3344]" />تطبيق هوية المشروع</span><span className={`relative h-5 w-9 rounded-full transition ${useBrandKit ? 'bg-[#f31325]' : 'bg-[#343847]'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${useBrandKit ? 'right-0.5' : 'right-[18px]'}`} /></span></button>
+            <button type="button" onClick={() => setUseBrandKit((value) => !value)} aria-pressed={useBrandKit} className="bb-button-secondary flex min-h-12 w-full items-center justify-between rounded-xl border p-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2"><span className="flex items-center gap-2"><Palette className="bb-text-accent h-4 w-4" />تطبيق هوية المشروع</span><span className={`relative h-5 w-9 rounded-full transition ${useBrandKit ? 'bg-[var(--bb-accent)]' : 'bg-[var(--bb-border-strong)]'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${useBrandKit ? 'right-0.5' : 'right-[18px]'}`} /></span></button>
 
             {insufficientCredits && selectedModel && (
-              <div className="rounded-xl border border-amber-500/25 bg-amber-500/[.06] p-3 text-xs leading-6 text-amber-100" role="alert">
+              <div className="bb-warning-surface rounded-xl border p-3 text-xs leading-6" role="alert">
                 تحتاج <strong>{requiredCredits}</strong> نقطة لهذه العملية، بينما رصيدك الحالي <strong>{currentBalance}</strong>.
-                <Link href="/pricing" className="mr-2 font-black text-[#ff6573] underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70">شحن الرصيد</Link>
+                <Link href="/pricing" className="bb-text-accent mr-2 font-black underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2">شحن الرصيد</Link>
               </div>
             )}
 
-            <button type="button" onClick={generateImages} disabled={generating || !activeProject || !selectedModel || !imageModelsAvailable || insufficientCredits} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-[#c50f1d] to-[#f31325] py-3.5 text-sm font-black text-white shadow-[0_12px_35px_rgba(243,19,37,.18)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6672]"><Sparkles className="h-4 w-4" />{generating ? 'جاري توليد الصور...' : `توليد ${count === 1 ? 'الصورة' : `${count} صور`}`}</button>
-            {selectedModel && <div className="flex flex-wrap items-center justify-center gap-1.5 text-center text-[10px] text-gray-600"><span>التكلفة المتوقعة</span><strong className="text-gray-400">{requiredCredits}</strong><span>نقطة حسب كتالوج المنصة</span>{currentBalance !== null && <><span>· رصيدك</span><strong className={insufficientCredits ? 'text-amber-300' : 'text-[#ff6573]'}>{currentBalance}</strong></>}</div>}
+            <button type="button" onClick={generateImages} disabled={generating || !activeProject || !selectedModel || !imageModelsAvailable || insufficientCredits} className="bb-button-primary flex min-h-12 w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2"><Sparkles className="h-4 w-4" />{generating ? 'جاري توليد الصور...' : `توليد ${count === 1 ? 'الصورة' : `${count} صور`}`}</button>
+            {selectedModel && <div className="bb-text-tertiary flex flex-wrap items-center justify-center gap-1.5 text-center text-[10px]"><span>التكلفة المتوقعة</span><strong className="bb-text-secondary">{requiredCredits}</strong><span>نقطة حسب كتالوج المنصة</span>{currentBalance !== null && <><span>· رصيدك</span><strong className={insufficientCredits ? 'bb-text-warning' : 'bb-text-accent'}>{currentBalance}</strong></>}</div>}
 
-            {message && <div className={`rounded-xl border px-3 py-2.5 text-xs leading-5 ${message.type === 'error' ? 'border-red-500/25 bg-red-500/8 text-red-200' : 'border-emerald-500/20 bg-emerald-500/8 text-emerald-200'}`} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</div>}
+            {message && <div className={`${message.type === 'error' ? 'bb-danger-surface' : 'bb-accent-soft'} rounded-xl border px-3 py-2.5 text-xs leading-5`} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</div>}
           </div>
         </aside>
 
-        <section className="min-w-0 bg-[#07080b] lg:min-h-[calc(100vh-10.5rem)]">
-          <div className="flex items-center justify-between border-b border-white/[.07] px-5 py-4 sm:px-6">
-            <div className="min-w-0"><p className="text-[10px] font-bold text-[#ff3344]">الصور المولدة</p><h2 className="mt-0.5 truncate text-sm font-black text-white">{activeProject?.name || 'معرض الصور'}</h2></div>
-            <div className="flex items-center gap-2"><span className="rounded-lg border border-white/10 bg-[#0d1016] px-3 py-2 text-[10px] font-bold text-gray-400">{galleryReady ? gallery.length : 0} صورة</span><button type="button" onClick={() => void loadHistory(activeProject?.id)} disabled={!activeProject || historyLoading} className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-[#0d1016] text-gray-500 transition hover:text-white disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70" aria-label="تحديث المعرض"><RefreshCw className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`} /></button></div>
+        <section className="bb-surface-1 min-w-0 lg:min-h-[calc(100vh-10.5rem)]">
+          <div className="bb-divider flex items-center justify-between border-b px-5 py-4 sm:px-6">
+            <div className="min-w-0"><p className="bb-text-accent text-[10px] font-bold">الصور المولدة</p><h2 className="bb-text-primary mt-0.5 truncate text-sm font-black">{activeProject?.name || 'معرض الصور'}</h2></div>
+            <div className="flex items-center gap-2"><span className="bb-panel bb-text-secondary rounded-lg border px-3 py-2 text-[10px] font-bold">{galleryReady ? gallery.length : 0} صورة</span><button type="button" onClick={() => void loadHistory(activeProject?.id)} disabled={!activeProject || historyLoading} className="bb-button-secondary grid h-10 w-10 place-items-center rounded-lg border disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2" aria-label="تحديث المعرض"><RefreshCw className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`} /></button></div>
           </div>
 
           <div className="p-4 sm:p-6">
             {historyError && activeProject && (
-              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-red-500/20 bg-red-500/[.05] px-4 py-3 text-xs font-bold text-red-200 sm:flex-row sm:items-center sm:justify-between" role="alert">
+              <div className="bb-danger-surface mb-4 flex flex-col gap-3 rounded-2xl border px-4 py-3 text-xs font-bold sm:flex-row sm:items-center sm:justify-between" role="alert">
                 <span>{historyError}</span>
-                <button type="button" onClick={() => void loadHistory(activeProject.id)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-400/20 px-3 font-black transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"><RefreshCw size={14} /> إعادة تحميل المعرض</button>
+                <button type="button" onClick={() => void loadHistory(activeProject.id)} className="bb-button-secondary inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 font-black transition focus-visible:outline-none focus-visible:ring-2"><RefreshCw size={14} /> إعادة تحميل المعرض</button>
               </div>
             )}
 
             {!activeProject ? (
-              <div className="flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-[#0b0d12] px-5 text-center"><FolderOpen className="h-12 w-12 text-gray-700" /><h3 className="mt-5 text-lg font-black">أنشئ مشروع صور للبدء</h3><p className="mt-2 max-w-md text-xs leading-6 text-gray-500">سيُنشأ مشروع صور مخصص، وتبقى نتائجه منفصلة عن مشاريع الشات والفيديو والصوت.</p><button type="button" onClick={createImageProject} disabled={creatingProject} className="mt-5 min-h-11 rounded-xl bg-[#f31325] px-5 py-3 text-xs font-black disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6672]">{creatingProject ? 'جاري الإنشاء...' : 'إنشاء مشروع صور'}</button></div>
+              <div className="bb-panel flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed px-5 text-center"><FolderOpen className="bb-text-disabled h-12 w-12" /><h3 className="bb-text-primary mt-5 text-lg font-black">أنشئ مشروع صور للبدء</h3><p className="bb-text-secondary mt-2 max-w-md text-xs leading-6">سيُنشأ مشروع صور مخصص، وتبقى نتائجه منفصلة عن مشاريع الشات والفيديو والصوت.</p><button type="button" onClick={createImageProject} disabled={creatingProject} className="bb-button-primary mt-5 min-h-11 rounded-xl px-5 py-3 text-xs font-black disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2">{creatingProject ? 'جاري الإنشاء...' : 'إنشاء مشروع صور'}</button></div>
             ) : (historyLoading && !galleryReady) ? (
-              <div className="flex min-h-[560px] items-center justify-center rounded-3xl border border-white/10 bg-[#0b0d12]" aria-live="polite"><div className="flex items-center gap-3 text-sm font-bold text-gray-400"><Loader2 className="h-5 w-5 animate-spin text-[#f31325]" /> جاري تحميل معرض المشروع...</div></div>
+              <div className="bb-panel flex min-h-[560px] items-center justify-center rounded-3xl border" aria-live="polite"><div className="bb-text-secondary flex items-center gap-3 text-sm font-bold"><Loader2 className="bb-text-accent h-5 w-5 animate-spin" /> جاري تحميل معرض المشروع...</div></div>
             ) : !galleryReady && historyError ? (
-              <div className="flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed border-red-500/20 bg-[#0b0d12] px-5 text-center"><ImageIcon className="h-10 w-10 text-gray-700" /><h3 className="mt-4 text-base font-black">تعذر عرض نتائج هذا المشروع</h3><p className="mt-2 max-w-md text-xs leading-6 text-gray-500">المشروع وإعداداتك ما زالت محفوظة. استخدم زر إعادة تحميل المعرض أعلاه.</p></div>
+              <div className="bb-panel flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed px-5 text-center"><ImageIcon className="bb-text-disabled h-10 w-10" /><h3 className="bb-text-primary mt-4 text-base font-black">تعذر عرض نتائج هذا المشروع</h3><p className="bb-text-secondary mt-2 max-w-md text-xs leading-6">المشروع وإعداداتك ما زالت محفوظة. استخدم زر إعادة تحميل المعرض أعلاه.</p></div>
             ) : gallery.length === 0 ? (
-              <div className="flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#f31325]/20 bg-[radial-gradient(circle_at_center,rgba(243,19,37,.05),transparent_45%),#0b0d12] px-5 text-center"><span className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-[#11141b]"><ImageIcon className="h-9 w-9 text-gray-600" /></span><h3 className="mt-6 text-lg font-black text-white">لم يتم توليد أي صورة بعد</h3><p className="mt-2 max-w-md text-xs leading-6 text-gray-500">اكتب وصف الصورة وحدد النموذج والطراز والنسبة والدقة. سترى التكلفة قبل التوليد، وستبقى النتائج محفوظة داخل هذا المشروع.</p></div>
+              <div className="bb-panel flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed px-5 text-center"><span className="bb-surface-1 bb-border flex h-20 w-20 items-center justify-center rounded-full border"><ImageIcon className="bb-text-disabled h-9 w-9" /></span><h3 className="bb-text-primary mt-6 text-lg font-black">لم يتم توليد أي صورة بعد</h3><p className="bb-text-secondary mt-2 max-w-md text-xs leading-6">اكتب وصف الصورة وحدد النموذج والطراز والنسبة والدقة. سترى التكلفة قبل التوليد، وستبقى النتائج محفوظة داخل هذا المشروع.</p></div>
             ) : (
               <div className="columns-1 gap-4 sm:columns-2 xl:columns-3 2xl:columns-4">
                 {gallery.map((image) => (
-                  <article key={image.id} className="group relative mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-white/[.08] bg-[#0d1016] shadow-[0_12px_40px_rgba(0,0,0,.18)] transition hover:border-[#f31325]/45 focus-within:border-[#f31325]/45">
+                  <article key={image.id} className="group relative mb-4 break-inside-avoid overflow-hidden rounded-2xl border border-[var(--bb-border)] bg-black shadow-[var(--bb-shadow-sm)] transition hover:border-[var(--bb-accent-border)] focus-within:border-[var(--bb-accent-border)]">
                     <img src={image.url} alt={image.name} className="h-auto w-full object-cover" />
                     <div className="absolute inset-x-0 bottom-0 translate-y-0 bg-gradient-to-t from-black via-black/80 to-transparent p-4 pt-16 transition duration-300 sm:translate-y-full sm:group-hover:translate-y-0 sm:group-focus-within:translate-y-0">
                       <p className="line-clamp-2 text-xs font-black leading-5 text-white">{image.name}</p>
                       <div className="mt-3 flex items-center gap-2">
-                        <button type="button" onClick={() => window.open(image.url, '_blank', 'noopener,noreferrer')} className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-black/50 text-white backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70" aria-label="فتح الصورة بحجم كامل"><ExternalLink className="h-3.5 w-3.5" /></button>
-                        <button type="button" onClick={() => void copyImageLink(image.url)} className="grid h-10 w-10 place-items-center rounded-lg border border-white/10 bg-black/50 text-white backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f31325]/70" aria-label="نسخ رابط مؤقت للصورة"><Copy className="h-3.5 w-3.5" /></button>
+                        <button type="button" onClick={() => window.open(image.url, '_blank', 'noopener,noreferrer')} className="bb-media-control grid h-10 w-10 place-items-center rounded-lg border focus-visible:outline-none focus-visible:ring-2" aria-label="فتح الصورة بحجم كامل"><ExternalLink className="h-3.5 w-3.5" /></button>
+                        <button type="button" onClick={() => void copyImageLink(image.url)} className="bb-media-control grid h-10 w-10 place-items-center rounded-lg border focus-visible:outline-none focus-visible:ring-2" aria-label="نسخ رابط مؤقت للصورة"><Copy className="h-3.5 w-3.5" /></button>
                       </div>
                     </div>
                   </article>

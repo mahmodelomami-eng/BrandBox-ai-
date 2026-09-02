@@ -21,7 +21,7 @@ assert.ok(studio.includes('إعادة تحميل المعرض'));
 assert.ok(studio.includes('إعادة المحاولة'));
 assert.ok(studio.includes('لم نفقد البرومبت أو إعداداتك الحالية'));
 assert.ok(studio.includes("if (event.key === 'Escape')"));
-assert.ok(studio.includes('aria-current={active ? \'page\' : undefined}'));
+assert.ok(studio.includes("aria-current={active ? 'page' : undefined}"));
 
 // Product & Business: price clarity and preflight credit friction reduction.
 assert.ok(studio.includes('const requiredCredits = selectedModel ? selectedModel.cost * count : 0'));
@@ -34,7 +34,7 @@ assert.ok(studio.includes('disabled={generating || !activeProject || !selectedMo
 
 // Errors shown to users should be normalized, while successful generation keeps the prompt reusable.
 assert.ok(studio.includes('function friendlyImageError(value)'));
-assert.ok(studio.includes("friendlyImageError(raw)"));
+assert.ok(studio.includes('friendlyImageError(raw)'));
 assert.ok(studio.includes('احتفظنا بالوصف لتعديله أو إعادة استخدامه'));
 assert.ok(studio.includes('اقتراح جاهز'));
 assert.ok(!studio.includes('إلهام عشوائي'));
@@ -47,10 +47,29 @@ assert.ok(studio.includes('نسخ رابط مؤقت للصورة'));
 assert.ok(studio.includes('قد تنتهي صلاحيته لاحقًا'));
 
 // Selection controls expose pressed/listbox state to assistive tech.
-assert.ok(studio.includes('aria-pressed={styleId === style.id}'));
-assert.ok(studio.includes('aria-pressed={aspectRatio === item.value}'));
-assert.ok(studio.includes('aria-pressed={resolution === item.value}'));
+assert.ok(studio.includes('aria-pressed={pressed}'));
+assert.ok(studio.includes('pressed={styleId === style.id}'));
+assert.ok(studio.includes('pressed={aspectRatio === item.value}'));
+assert.ok(studio.includes('pressed={resolution === item.value}'));
 assert.ok(studio.includes('aria-pressed={useBrandKit}'));
 assert.ok(studio.includes('aria-haspopup="listbox"'));
 
-console.log('Product/Monitoring AI Images interface pass guard passed.');
+// Theme & Design System Expert: app chrome is semantic; only media previews may stay dark.
+assert.ok(studio.includes('bb-app-canvas'));
+assert.ok(studio.includes('bb-surface-2'));
+assert.ok(studio.includes('bb-input'));
+assert.ok(studio.includes('bb-menu'));
+assert.ok(studio.includes('bb-button-primary'));
+assert.ok(studio.includes('bb-button-secondary'));
+assert.ok(studio.includes('bb-media-control'));
+assert.ok(!studio.includes('bg-[#050506]'));
+assert.ok(!studio.includes('bg-[#07080b]'));
+assert.ok(!studio.includes('bg-[#0b0e14]'));
+assert.ok(!studio.includes('bg-[#0d1016]'));
+assert.ok(!studio.includes('bg-[#11141b]'));
+assert.ok(!studio.includes('bg-[#151820]'));
+assert.ok(!studio.includes('text-gray-'));
+assert.ok(!studio.includes('border-white/10'));
+assert.ok(!studio.includes('border-white/[.07]'));
+
+console.log('Product/Monitoring/Theme AI Images interface pass guard passed.');
