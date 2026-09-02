@@ -101,16 +101,24 @@ function uiAuditPullMatch(pull: GithubPull) {
     || /\bui\b|\bux\b|frontend|interface|visual|responsive|mobile|navigation|dashboard|workspace/.test(text);
 }
 
+function storePullMatch(pull: GithubPull) {
+  const branch = pull.head.ref.toLowerCase();
+  const text = `${pull.title} ${pull.body || ''}`.toLowerCase();
+  return /(^|[\/_-])store([\/_-]|$)/.test(branch)
+    || /\bstore\b|\bcatalog\b|\bcheckout\b|\borders?\b|\bfulfillment\b|\binventory\b|\bsupplier\b|\brefund\b|\bvoucher\b|\bsku\b|\bcart\b|digital code/.test(text);
+}
+
 function deriveAgents(params: {
   currentIssue: GithubIssue | null;
   currentPull: GithubPull | null;
   uiAuditIssue: GithubIssue | null;
   uiAuditPull: GithubPull | null;
+  storePull: GithubPull | null;
   releaseRun?: GithubRun;
   safetyRun?: GithubRun;
   vercel?: GithubCombinedStatus['statuses'][number];
 }): AgentSnapshot[] {
-  const { currentIssue, currentPull, uiAuditIssue, uiAuditPull, releaseRun, safetyRun, vercel } = params;
+  const { currentIssue, currentPull, uiAuditIssue, uiAuditPull, storePull, releaseRun, safetyRun, vercel } = params;
   const task = currentPull
     ? `PR #${currentPull.number} · ${currentPull.title}`
     : currentIssue
@@ -121,13 +129,16 @@ function deriveAgents(params: {
     : uiAuditIssue?.state === 'open'
       ? `#${uiAuditIssue.number} · ${titleWithoutPriority(uiAuditIssue.title)}`
       : null;
+  const storeTask = storePull ? `PR #${storePull.number} · ${storePull.title}` : null;
   const text = `${currentPull?.title || ''} ${currentPull?.body || ''} ${currentIssue?.title || ''} ${currentIssue?.body || ''}`.toLowerCase();
   const uiText = `${uiAuditPull?.title || ''} ${uiAuditPull?.body || ''} ${uiAuditIssue?.title || ''} ${uiAuditIssue?.body || ''}`.toLowerCase();
+  const storeText = `${storePull?.title || ''} ${storePull?.body || ''}`.toLowerCase();
   const issueNumber = currentIssue?.number || 0;
   const releaseState = workflowState(releaseRun);
   const safetyState = workflowState(safetyRun);
   const vercelState = vercel?.state === 'success' ? 'success' : vercel ? 'failed' : 'unknown';
   const uiWorkActive = Boolean(uiTask);
+  const storeWorkActive = Boolean(storeTask);
 
   const frontendActive = /frontend|next\.?js|react|component|responsive|mobile|navigation|workspace|dashboard|rtl|screen|layout|interaction|motion/.test(text);
   const designActive = /design|designer|visual|\bui\b|\bux\b|interface|layout|typography|icon|color|brand|responsive|mobile|rtl|screen|dashboard|workspace/.test(text);
@@ -138,6 +149,7 @@ function deriveAgents(params: {
   const backendActive = /api|backend|auth|store|project|server|scope|payment|credit|route/.test(text);
   const aiActive = [88, 89, 90].includes(issueNumber) || /openrouter|generation|\bchat\b|image|video|model|provider/.test(text);
   const databaseActive = /database|migration|\bdb\b|rls|supabase|schema|index/.test(text);
+  const storeActive = /\bstore\b|\bcatalog\b|\bcheckout\b|\borders?\b|\bfulfillment\b|\binventory\b|\bsupplier\b|\brefund\b|\bvoucher\b|\bsku\b|\bcart\b|digital code/.test(`${text} ${storeText}`);
   const productActive = interfaceReviewActive || /product|business|pricing|plan|subscription|onboarding|conversion|growth|analytics|store|launch|revenue|customer|market|package/.test(text);
   const monitoringActive = interfaceReviewActive || /observability|monitor|runtime|health|incident|error|log|maintenance|uptime|regression|performance|alert|reliability/.test(text);
   const uiProductActive = uiInterfaceReviewActive || /product|business|pricing|plan|subscription|onboarding|conversion|growth|customer|value|launch/.test(uiText);
@@ -196,6 +208,16 @@ function deriveAgents(params: {
       status: currentPull && backendActive ? 'working' : 'waiting',
       task: currentPull && backendActive ? task : 'بانتظار مهمة Backend',
       note: currentPull && backendActive ? 'نشاط Backend مستنتج من عنوان ووصف PR' : 'لا توجد إشارة Backend نشطة',
+    },
+    {
+      id: 'store',
+      name: 'Store Agent',
+      specialty: 'Catalog · Checkout · Orders · Fulfillment',
+      status: storeWorkActive || (currentPull && storeActive) ? 'working' : 'waiting',
+      task: storeWorkActive ? storeTask! : currentPull && storeActive ? task : 'بانتظار مهمة متجر',
+      note: storeWorkActive || (currentPull && storeActive)
+        ? 'يتابع الكتالوج والدفع والطلبات والمخزون والتسليم والاسترداد مع الحفاظ على idempotency وسلامة العزل بين العملاء'
+        : 'مسؤول عن جاهزية Brand Box Store من المنتج حتى التسليم وما بعد الشراء',
     },
     {
       id: 'ai',
@@ -280,6 +302,7 @@ export async function GET(request: NextRequest) {
     const openPulls = [...pulls].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
     const currentPull = openPulls[0] || null;
     const uiAuditPull = openPulls.find(uiAuditPullMatch) || null;
+    const storePull = openPulls.find(storePullMatch) || null;
     const launchIssues = issues
       .filter((issue) => !issue.pull_request && issue.number >= 85 && issue.number <= 98)
       .sort((a, b) => a.number - b.number);
@@ -300,7 +323,7 @@ export async function GET(request: NextRequest) {
     }
     const vercel = combinedStatus?.statuses.find((status) => status.context.toLowerCase() === 'vercel');
 
-    const agents = deriveAgents({ currentIssue, currentPull, uiAuditIssue, uiAuditPull, releaseRun, safetyRun, vercel });
+    const agents = deriveAgents({ currentIssue, currentPull, uiAuditIssue, uiAuditPull, storePull, releaseRun, safetyRun, vercel });
     const statusCounts = agents.reduce<Record<string, number>>((acc, agent) => {
       acc[agent.status] = (acc[agent.status] || 0) + 1;
       return acc;
@@ -367,6 +390,18 @@ export async function GET(request: NextRequest) {
               branch: uiAuditPull.head.ref,
               sha: uiAuditPull.head.sha,
               updatedAt: uiAuditPull.updated_at,
+            }
+          : null,
+      },
+      store: {
+        currentPull: storePull
+          ? {
+              number: storePull.number,
+              title: storePull.title,
+              url: storePull.html_url,
+              branch: storePull.head.ref,
+              sha: storePull.head.sha,
+              updatedAt: storePull.updated_at,
             }
           : null,
       },
