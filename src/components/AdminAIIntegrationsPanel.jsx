@@ -15,6 +15,11 @@ function modelStatus(model) {
   return { label: 'متاح', cls: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' };
 }
 
+function creditsPerSecond(model) {
+  const value = Number(model?.metadata?.brandbox_credits_per_second || 0);
+  return Number.isInteger(value) && value >= 1 ? value : 0;
+}
+
 export default function AdminAIIntegrationsPanel() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [payload, setPayload] = useState(null);
@@ -92,6 +97,29 @@ export default function AdminAIIntegrationsPanel() {
     });
   }
 
+  async function editPricing(model) {
+    if (model.provider === 'runway' && model.generation_type === 'video') {
+      const perSecond = window.prompt('Brand Box credits / second', String(creditsPerSecond(model)));
+      if (perSecond === null) return;
+      const minimum = window.prompt('Minimum credits floor', String(model.minimum_credits ?? 0));
+      if (minimum === null) return;
+      await patch({
+        action: 'update_pricing',
+        modelId: model.model_id,
+        brandboxCreditsPerSecond: Number(perSecond),
+        minimumCredits: Number(minimum),
+      });
+      return;
+    }
+    const input = window.prompt('Input cost / 1M USD', String(model.input_cost_per_million_usd ?? 0));
+    if (input === null) return;
+    const output = window.prompt('Output cost / 1M USD', String(model.output_cost_per_million_usd ?? 0));
+    if (output === null) return;
+    const minCredits = window.prompt('Minimum credits', String(model.minimum_credits ?? 0));
+    if (minCredits === null) return;
+    await patch({ action: 'update_pricing', modelId: model.model_id, inputCostPerMillionUsd: Number(input), outputCostPerMillionUsd: Number(output), minimumCredits: Number(minCredits) });
+  }
+
   if (loading && !payload) {
     return <div className="grid min-h-64 place-items-center rounded-3xl border border-white/10 bg-[#0d1016]"><div className="flex items-center gap-3 text-sm text-gray-500"><Loader2 className="animate-spin text-[#ff3344]" size={18}/> جاري تحميل تكاملات AI...</div></div>;
   }
@@ -115,7 +143,7 @@ export default function AdminAIIntegrationsPanel() {
 
     <div className="grid gap-4 lg:grid-cols-3">
       {providers.map((provider) => <div key={provider.id} className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><div className="flex items-center justify-between"><div className="flex items-center gap-2 font-black"><Cpu size={18} className="text-[#ff3344]"/>{provider.id}</div><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${provider.configured ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-red-500/20 bg-red-500/10 text-red-300'}`}>{provider.configured ? 'Configured' : 'Missing secret'}</span></div><div className="mt-4 text-xs text-gray-500">{provider.enabledModelCount} نموذج مفعّل من أصل {provider.modelCount}</div></div>)}
-      <div className="rounded-3xl border border-amber-500/15 bg-amber-500/5 p-5"><div className="flex items-center gap-2 font-black text-amber-200"><KeyRound size={18}/> سياسة الأسرار</div><div className="mt-4 text-xs leading-6 text-amber-100/70">OpenRouter: {secretPolicy.openrouterConfigured ? 'مهيأ على الخادم' : 'غير مهيأ'}<br/>Browser exposure: {secretPolicy.exposedToBrowser ? 'غير آمن' : 'لا يتم كشف الأسرار'}</div></div>
+      <div className="rounded-3xl border border-amber-500/15 bg-amber-500/5 p-5"><div className="flex items-center gap-2 font-black text-amber-200"><KeyRound size={18}/> سياسة الأسرار</div><div className="mt-4 text-xs leading-6 text-amber-100/70">OpenRouter: {secretPolicy.openrouterConfigured ? 'مهيأ على الخادم' : 'غير مهيأ'}<br/>Runway: {secretPolicy.runwayConfigured ? 'مهيأ على الخادم' : 'غير مهيأ'}<br/>Browser exposure: {secretPolicy.exposedToBrowser ? 'غير آمن' : 'لا يتم كشف الأسرار'}</div></div>
       <div className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><div className="flex items-center gap-2 font-black"><Database size={18} className="text-emerald-300"/> سياسة التكلفة</div><div className="mt-4 text-xs leading-6 text-gray-500">FX: {billing.market_usd_lyd ?? '—'} LYD/USD<br/>Risk buffer: {billing.risk_buffer_pct ?? '—'}%<br/>Target margin: {billing.target_gross_margin_pct ?? '—'}%</div></div>
     </div>
 
@@ -145,15 +173,7 @@ export default function AdminAIIntegrationsPanel() {
 
     <section className="rounded-3xl border border-white/10 bg-[#0d1016] p-4 sm:p-5">
       <div className="mb-4 flex items-center gap-2 font-black"><Sparkles size={18} className="text-[#ff3344]"/> كتالوج النماذج</div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[1200px] text-right text-xs"><thead className="border-b border-white/10 text-gray-500"><tr><th className="p-3">النموذج</th><th className="p-3">المزود</th><th className="p-3">النوع</th><th className="p-3">الحالة</th><th className="p-3">Input / 1M</th><th className="p-3">Output / 1M</th><th className="p-3">Fixed</th><th className="p-3">Min Credits</th><th className="p-3">Fallback</th><th className="p-3">الإجراءات</th></tr></thead><tbody className="divide-y divide-white/[.06]">{models.map((model) => { const status = modelStatus(model); return <tr key={model.model_id}><td className="p-3"><div className="font-black">{model.display_name_ar || model.display_name_en || model.model_id}</div><div className="mt-1 max-w-[280px] truncate font-mono text-[10px] text-gray-600">{model.model_id}</div></td><td className="p-3">{model.provider}</td><td className="p-3 text-amber-300">{model.generation_type}</td><td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.cls}`}>{status.label}</span></td><td className="p-3">{money(model.input_cost_per_million_usd)}</td><td className="p-3">{money(model.output_cost_per_million_usd)}</td><td className="p-3">{money(model.fixed_provider_cost_usd)}</td><td className="p-3 font-black">{model.minimum_credits}</td><td className="p-3 font-mono text-[10px] text-gray-500">{model.fallback_model_id || '—'}</td><td className="p-3"><div className="flex flex-wrap gap-2">{capabilities.canManageModels && <button disabled={busy} onClick={() => void patch({ action: 'update_model', modelId: model.model_id, isEnabled: !model.is_enabled })} className="rounded-lg border border-white/10 px-2.5 py-2 text-gray-300">{model.is_enabled ? <ToggleRight size={16} className="text-emerald-300"/> : <ToggleLeft size={16}/>}</button>}{capabilities.canManageModels && <button disabled={busy} onClick={() => void patch({ action: 'update_model', modelId: model.model_id, isVisibleToUsers: !model.is_visible_to_users })} className="rounded-lg border border-cyan-500/20 px-2.5 py-2 text-cyan-300">{model.is_visible_to_users ? 'إخفاء' : 'إظهار'}</button>}{capabilities.canManageModels && <button disabled={busy} onClick={() => { const fallback = window.prompt('Fallback model ID', model.fallback_model_id || ''); if (fallback !== null) void patch({ action: 'update_model', modelId: model.model_id, fallbackModelId: fallback || null }); }} className="rounded-lg border border-amber-500/20 px-2.5 py-2 text-amber-300">Fallback</button>}{capabilities.canManagePricing && <button disabled={busy} onClick={() => {
-  const input = window.prompt('Input cost / 1M USD', String(model.input_cost_per_million_usd ?? 0));
-  if (input === null) return;
-  const output = window.prompt('Output cost / 1M USD', String(model.output_cost_per_million_usd ?? 0));
-  if (output === null) return;
-  const minCredits = window.prompt('Minimum credits', String(model.minimum_credits ?? 0));
-  if (minCredits === null) return;
-  void patch({ action: 'update_pricing', modelId: model.model_id, inputCostPerMillionUsd: Number(input), outputCostPerMillionUsd: Number(output), minimumCredits: Number(minCredits) });
-}} className="rounded-lg border border-emerald-500/20 px-2.5 py-2 text-emerald-300">التكلفة</button>}</div></td></tr>; })}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[1280px] text-right text-xs"><thead className="border-b border-white/10 text-gray-500"><tr><th className="p-3">النموذج</th><th className="p-3">المزود</th><th className="p-3">النوع</th><th className="p-3">الحالة</th><th className="p-3">Input / 1M</th><th className="p-3">Output / 1M</th><th className="p-3">Fixed</th><th className="p-3">Min Credits</th><th className="p-3">BB / sec</th><th className="p-3">Fallback</th><th className="p-3">الإجراءات</th></tr></thead><tbody className="divide-y divide-white/[.06]">{models.map((model) => { const status = modelStatus(model); return <tr key={model.model_id}><td className="p-3"><div className="font-black">{model.display_name_ar || model.display_name_en || model.model_id}</div><div className="mt-1 max-w-[280px] truncate font-mono text-[10px] text-gray-600">{model.model_id}</div></td><td className="p-3">{model.provider}</td><td className="p-3 text-amber-300">{model.generation_type}</td><td className="p-3"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.cls}`}>{status.label}</span></td><td className="p-3">{money(model.input_cost_per_million_usd)}</td><td className="p-3">{money(model.output_cost_per_million_usd)}</td><td className="p-3">{money(model.fixed_provider_cost_usd)}</td><td className="p-3 font-black">{model.minimum_credits}</td><td className="p-3 font-black text-[#ff6674]">{model.provider === 'runway' && model.generation_type === 'video' ? creditsPerSecond(model) || '—' : '—'}</td><td className="p-3 font-mono text-[10px] text-gray-500">{model.fallback_model_id || '—'}</td><td className="p-3"><div className="flex flex-wrap gap-2">{capabilities.canManageModels && <button disabled={busy} onClick={() => void patch({ action: 'update_model', modelId: model.model_id, isEnabled: !model.is_enabled })} className="rounded-lg border border-white/10 px-2.5 py-2 text-gray-300">{model.is_enabled ? <ToggleRight size={16} className="text-emerald-300"/> : <ToggleLeft size={16}/>}</button>}{capabilities.canManageModels && <button disabled={busy} onClick={() => void patch({ action: 'update_model', modelId: model.model_id, isVisibleToUsers: !model.is_visible_to_users })} className="rounded-lg border border-cyan-500/20 px-2.5 py-2 text-cyan-300">{model.is_visible_to_users ? 'إخفاء' : 'إظهار'}</button>}{capabilities.canManageModels && <button disabled={busy} onClick={() => { const fallback = window.prompt('Fallback model ID', model.fallback_model_id || ''); if (fallback !== null) void patch({ action: 'update_model', modelId: model.model_id, fallbackModelId: fallback || null }); }} className="rounded-lg border border-amber-500/20 px-2.5 py-2 text-amber-300">Fallback</button>}{capabilities.canManagePricing && <button disabled={busy} onClick={() => void editPricing(model)} className="rounded-lg border border-emerald-500/20 px-2.5 py-2 text-emerald-300">التكلفة</button>}</div></td></tr>; })}</tbody></table></div>
       {!models.length && <div className="py-12 text-center text-sm text-gray-500">لا توجد نماذج في ai_model_catalog.</div>}
     </section>
 
