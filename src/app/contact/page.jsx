@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -10,9 +10,11 @@ import {
   Headphones,
   Loader2,
   MessageSquareText,
+  Paperclip,
   Send,
   ShieldCheck,
   UserRound,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { createBrowserSupabaseClient } from '../../lib/supabase/client';
@@ -26,6 +28,8 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_LABELS = Object.fromEntries(CATEGORIES);
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 
 const STATUS_LABELS = {
   open: 'جديد',
@@ -44,9 +48,25 @@ function statusStyle(status) {
   return { color: 'var(--bb-success)', background: 'var(--bb-success-soft)', borderColor: 'color-mix(in srgb, var(--bb-success) 25%, transparent)' };
 }
 
+function noticeStyle(type) {
+  if (type === 'success') {
+    return { background: 'var(--bb-success-soft)', color: 'var(--bb-success)', borderColor: 'color-mix(in srgb, var(--bb-success) 25%, transparent)' };
+  }
+  if (type === 'warning') {
+    return { background: 'var(--bb-warning-soft)', color: 'var(--bb-warning)', borderColor: 'color-mix(in srgb, var(--bb-warning) 25%, transparent)' };
+  }
+  return { background: 'var(--bb-danger-soft)', color: 'var(--bb-danger)', borderColor: 'color-mix(in srgb, var(--bb-danger) 25%, transparent)' };
+}
+
 function requestNumber(id) {
   const suffix = String(id || '').replaceAll('-', '').slice(-6).toUpperCase() || '000000';
   return `#BR-${suffix}`;
+}
+
+function fileSizeLabel(bytes) {
+  if (!Number.isFinite(bytes)) return '';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function ContactContent() {
@@ -54,13 +74,17 @@ function ContactContent() {
   const { user, loading } = useAuth();
   const userId = user?.id || null;
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const fileInputRef = useRef(null);
   const categoryFromUrl = CATEGORIES.some(([id]) => id === searchParams.get('category')) ? searchParams.get('category') : 'general';
   const [category, setCategory] = useState(categoryFromUrl || 'general');
   const [subject, setSubject] = useState((searchParams.get('subject') || '').slice(0, 160));
   const [message, setMessage] = useState('');
+  const [attachment, setAttachment] = useState(null);
+  const [attachmentRetryRequestId, setAttachmentRetryRequestId] = useState('');
   const [requests, setRequests] = useState([]);
   const [requestsLoaded, setRequestsLoaded] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [notice, setNotice] = useState(null);
 
   const loadRequests = useCallback(async () => {
@@ -81,9 +105,75 @@ function ContactContent() {
     return () => window.clearTimeout(timer);
   }, [loadRequests, userId]);
 
+  function clearAttachment() {
+    setAttachment(null);
+    setAttachmentRetryRequestId('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function chooseAttachment(event) {
+    const file = event.target.files?.[0] || null;
+    setNotice(null);
+    if (!file) {
+      clearAttachment();
+      return;
+    }
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+      event.target.value = '';
+      setAttachment(null);
+      setNotice({ type: 'error', text: 'المرفق يجب أن يكون JPG أو PNG أو WEBP أو PDF.' });
+      return;
+    }
+    if (file.size <= 0 || file.size > MAX_ATTACHMENT_BYTES) {
+      event.target.value = '';
+      setAttachment(null);
+      setNotice({ type: 'error', text: 'حجم المرفق يجب ألا يتجاوز 10MB.' });
+      return;
+    }
+    setAttachment(file);
+  }
+
+  async function uploadAttachment(requestId, file) {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session?.access_token) throw new Error('انتهت جلسة الدخول قبل رفع المرفق.');
+
+    const body = new FormData();
+    body.append('requestId', requestId);
+    body.append('file', file);
+
+    const response = await fetch('/api/v1/support-requests/attachments', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+      body,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'تعذر رفع المرفق.');
+    return payload.attachment;
+  }
+
+  async function retryAttachmentUpload() {
+    if (!attachmentRetryRequestId || !attachment || uploadingAttachment) return;
+    setUploadingAttachment(true);
+    setNotice(null);
+    try {
+      await uploadAttachment(attachmentRetryRequestId, attachment);
+      clearAttachment();
+      setNotice({ type: 'success', text: 'تم رفع المرفق وربطه بطلب الدعم بنجاح.' });
+    } catch {
+      setNotice({ type: 'warning', text: 'الطلب محفوظ، لكن رفع المرفق لم ينجح بعد. يمكنك إعادة المحاولة.' });
+    } finally {
+      setUploadingAttachment(false);
+    }
+  }
+
   async function submitRequest(event) {
     event.preventDefault();
-    if (!userId || sending) return;
+    if (!userId || sending || uploadingAttachment) return;
+    if (attachmentRetryRequestId) {
+      setNotice({ type: 'warning', text: 'طلبك السابق محفوظ. أكمل رفع المرفق أو احذفه قبل إرسال طلب جديد.' });
+      return;
+    }
+
     const cleanSubject = subject.trim();
     const cleanMessage = message.trim();
     if (cleanSubject.length < 3 || cleanMessage.length < 10) {
@@ -93,21 +183,45 @@ function ContactContent() {
 
     setSending(true);
     setNotice(null);
-    const { error } = await supabase.from('support_requests').insert({
-      user_id: userId,
-      category,
-      subject: cleanSubject,
-      message: cleanMessage,
-    });
+    const { data: createdRequest, error } = await supabase
+      .from('support_requests')
+      .insert({
+        user_id: userId,
+        category,
+        subject: cleanSubject,
+        message: cleanMessage,
+      })
+      .select('id')
+      .single();
 
-    if (error) {
+    if (error || !createdRequest?.id) {
       setNotice({ type: 'error', text: 'تعذر إرسال الطلب الآن. حاول مرة أخرى.' });
-    } else {
-      setMessage('');
-      setSubject('');
-      setNotice({ type: 'success', text: 'تم إرسال الطلب إلى فريق Brand Box وحفظه في حسابك.' });
-      await loadRequests();
+      setSending(false);
+      return;
     }
+
+    let attachmentUploaded = true;
+    if (attachment) {
+      setUploadingAttachment(true);
+      try {
+        await uploadAttachment(createdRequest.id, attachment);
+      } catch {
+        attachmentUploaded = false;
+        setAttachmentRetryRequestId(createdRequest.id);
+      } finally {
+        setUploadingAttachment(false);
+      }
+    }
+
+    setMessage('');
+    setSubject('');
+    if (attachmentUploaded) {
+      clearAttachment();
+      setNotice({ type: 'success', text: attachment ? 'تم إرسال الطلب ورفع المرفق إلى فريق Brand Box.' : 'تم إرسال الطلب إلى فريق Brand Box وحفظه في حسابك.' });
+    } else {
+      setNotice({ type: 'warning', text: 'تم حفظ طلب الدعم، لكن تعذر رفع المرفق. اضغط «إعادة رفع المرفق» دون إنشاء طلب جديد.' });
+    }
+    await loadRequests();
     setSending(false);
   }
 
@@ -203,10 +317,33 @@ function ContactContent() {
                 <span className="bb-text-disabled mt-1 block text-left text-[9px]">{message.length}/4000</span>
               </label>
 
-              {notice && <div className="mt-4 rounded-xl border px-4 py-3 text-xs font-bold" style={notice.type === 'success' ? { background: 'var(--bb-success-soft)', color: 'var(--bb-success)', borderColor: 'color-mix(in srgb, var(--bb-success) 25%, transparent)' } : { background: 'var(--bb-danger-soft)', color: 'var(--bb-danger)', borderColor: 'color-mix(in srgb, var(--bb-danger) 25%, transparent)' }}>{notice.text}</div>}
+              <div className="mt-4">
+                <div className="bb-text-secondary mb-2 text-xs font-bold">أضف مرفقًا <span className="bb-text-tertiary font-normal">(اختياري)</span></div>
+                {attachment ? (
+                  <div className="bb-surface-1 flex items-center justify-between gap-3 rounded-2xl border border-dashed bb-border p-4">
+                    <div className="flex min-w-0 items-center gap-3"><span className="bb-accent-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl border"><Paperclip size={17} /></span><div className="min-w-0"><div className="bb-text-primary truncate text-xs font-black">{attachment.name}</div><div className="bb-text-tertiary mt-1 text-[9px]">{fileSizeLabel(attachment.size)} · ملف خاص لا يُنشر للعامة</div></div></div>
+                    <button type="button" onClick={clearAttachment} disabled={sending || uploadingAttachment} className="bb-button-secondary grid h-9 w-9 shrink-0 place-items-center rounded-lg border disabled:opacity-40" aria-label="حذف المرفق"><X size={15} /></button>
+                  </div>
+                ) : (
+                  <label className="bb-surface-1 bb-hoverable flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed bb-border p-5 text-center">
+                    <Paperclip size={20} className="bb-text-accent" />
+                    <span className="bb-text-primary mt-2 text-xs font-black">اختر صورة أو PDF</span>
+                    <span className="bb-text-tertiary mt-1 text-[9px]">JPG / PNG / WEBP / PDF — حتى 10MB</span>
+                    <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={chooseAttachment} disabled={sending || uploadingAttachment} className="hidden" />
+                  </label>
+                )}
+              </div>
 
-              <button type="submit" disabled={sending} className="bb-button-primary mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-black disabled:opacity-50">{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} {sending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button>
-              <p className="bb-text-disabled mt-3 text-center text-[9px]">سيظهر الطلب في هذه الصفحة مباشرة بعد الحفظ.</p>
+              {notice && <div className="mt-4 rounded-xl border px-4 py-3 text-xs font-bold" style={noticeStyle(notice.type)}>{notice.text}</div>}
+
+              {attachmentRetryRequestId && attachment && (
+                <button type="button" onClick={() => void retryAttachmentUpload()} disabled={uploadingAttachment} className="bb-button-secondary mt-4 flex w-full items-center justify-center gap-2 rounded-xl border px-5 py-3 text-xs font-black disabled:opacity-50">
+                  {uploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16} />} إعادة رفع المرفق
+                </button>
+              )}
+
+              <button type="submit" disabled={sending || uploadingAttachment || Boolean(attachmentRetryRequestId)} className="bb-button-primary mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-black disabled:opacity-50">{sending || uploadingAttachment ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} {uploadingAttachment ? 'جاري رفع المرفق...' : sending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button>
+              <p className="bb-text-disabled mt-3 text-center text-[9px]">سيظهر الطلب في هذه الصفحة مباشرة بعد الحفظ، والمرفقات تُخزن بشكل خاص.</p>
             </form>
           </div>
         )}
