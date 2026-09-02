@@ -23,7 +23,10 @@ export default function TrendAgentStatusCard() {
     }
   }, [supabase]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const agent = data?.agent;
   return (
