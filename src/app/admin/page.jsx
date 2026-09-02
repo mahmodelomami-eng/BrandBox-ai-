@@ -2,7 +2,7 @@
 
 import React, { Suspense } from 'react';
 import Link from 'next/link';
-import { Bot, Headphones } from 'lucide-react';
+import { Bot, Flame, Headphones } from 'lucide-react';
 import AuthGate from '../../components/AuthGate';
 import AdminControlCenter from '../../components/AdminControlCenter';
 
@@ -22,6 +22,9 @@ export default function AdminPage() {
     <AuthGate>
       <Suspense fallback={<AdminLoadingState />}>
         <AdminControlCenter />
+        <Link href="/admin/trends" className="bb-surface-elevated fixed bottom-[8.75rem] left-5 z-[80] flex items-center gap-2 rounded-2xl border border-[var(--bb-accent)] px-4 py-3 text-xs font-black text-[var(--bb-accent)] shadow-[var(--bb-shadow-lg)] transition hover:bg-[var(--bb-accent-soft)]" title="فتح Brand Box Trend Lab">
+          <Flame size={17} /> Trend Lab
+        </Link>
         <Link href="/admin/ai-team" className="bb-surface-elevated fixed bottom-20 left-5 z-[80] flex items-center gap-2 rounded-2xl border border-[var(--bb-info)] px-4 py-3 text-xs font-black text-[var(--bb-info)] shadow-[var(--bb-shadow-lg)] transition hover:bg-[var(--bb-info-soft)]" title="مراقبة فريق البرمجة الآلي">
           <Bot size={17} /> فريق AI
         </Link>
