@@ -6,7 +6,6 @@ import {
   ROLE_DEFINITIONS,
 } from '@/lib/auth/rbac-engine';
 import {
-  assertRoleChangePolicy,
   assertSuspendPolicy,
   canAdjustCredits,
   canDeleteUsers,
@@ -19,6 +18,13 @@ const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const IDLE_WINDOW_MS = 10 * 60 * 1000;
 
 type PresenceState = 'online' | 'idle' | 'offline';
+
+type RoleChangeRpcRow = {
+  success?: boolean;
+  role?: AdminRole;
+  updated_at?: string;
+  changed?: boolean;
+};
 
 async function actorFromRequest(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -199,23 +205,21 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'INVALID_ROLE' }, { status: 400 });
       }
 
-      const { count: activeSuperAdminCount, error: countError } = await database
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'SUPER_ADMIN')
-        .eq('status', 'active');
-      if (countError) return NextResponse.json({ error: 'ROLE_SAFETY_CHECK_FAILED' }, { status: 503 });
-
-      assertRoleChangePolicy({
-        actorRole: actor.role,
-        actorUserId: actor.userId,
-        targetUserId: body.userId,
-        currentRole: targetRole,
-        nextRole: body.role,
-        activeSuperAdminCount: activeSuperAdminCount || 0,
+      const { data: rpcData, error: rpcError } = await database.rpc('admin_change_user_role_atomic', {
+        p_actor_id: actor.userId,
+        p_target_user_id: body.userId,
+        p_next_role: body.role,
       });
 
-      const result = await AdminService.changeUserRole(actor, body.userId, body.role);
+      if (rpcError) {
+        return errorResponse(new Error(`ROLE_UPDATE_FAILED: ${rpcError.message}`));
+      }
+
+      const rpcRow = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as RoleChangeRpcRow | null;
+      if (!rpcRow?.success || !rpcRow.role || rpcRow.role !== body.role) {
+        return NextResponse.json({ error: 'ROLE_UPDATE_VERIFICATION_FAILED' }, { status: 503 });
+      }
+
       const { data: verifiedRole, error: verifyError } = await database
         .from('profiles')
         .select('role,updated_at')
@@ -226,10 +230,11 @@ export async function PATCH(request: NextRequest) {
       }
 
       return NextResponse.json({
-        ...result,
+        success: true,
         role: verifiedRole.role,
         roleLabelAr: ROLE_DEFINITIONS[verifiedRole.role as AdminRole]?.labelAr || verifiedRole.role,
-        updatedAt: verifiedRole.updated_at,
+        updatedAt: verifiedRole.updated_at || rpcRow.updated_at || null,
+        changed: Boolean(rpcRow.changed),
       });
     }
 
