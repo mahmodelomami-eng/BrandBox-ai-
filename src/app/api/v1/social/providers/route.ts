@@ -1,36 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateActiveUser } from '@/lib/auth/user-auth';
-
-type ProviderDefinition = {
-  id: string;
-  name: string;
-  required: string[];
-  enableFlag: string;
-  capabilities: string[];
-};
-
-const providers: ProviderDefinition[] = [
-  { id: 'meta', name: 'Facebook & Instagram', required: ['META_APP_ID', 'META_APP_SECRET', 'META_OAUTH_REDIRECT_URI'], enableFlag: 'BRANDBOX_META_PUBLISHING_ENABLED', capabilities: ['connect', 'pages', 'publish', 'insights'] },
-  { id: 'tiktok', name: 'TikTok', required: ['TIKTOK_CLIENT_KEY', 'TIKTOK_CLIENT_SECRET', 'TIKTOK_OAUTH_REDIRECT_URI'], enableFlag: 'BRANDBOX_TIKTOK_PUBLISHING_ENABLED', capabilities: ['connect', 'upload', 'publish'] },
-  { id: 'youtube', name: 'YouTube', required: ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_OAUTH_REDIRECT_URI'], enableFlag: 'BRANDBOX_YOUTUBE_PUBLISHING_ENABLED', capabilities: ['connect', 'upload', 'publish', 'analytics'] },
-  { id: 'linkedin', name: 'LinkedIn', required: ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET', 'LINKEDIN_OAUTH_REDIRECT_URI'], enableFlag: 'BRANDBOX_LINKEDIN_PUBLISHING_ENABLED', capabilities: ['connect', 'publish'] },
-];
+import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
+import { providerConnectionCapability } from '@/lib/social/oauth-service';
+import {
+  SOCIAL_PROVIDER_DEFINITIONS,
+  providerServerConfiguration,
+  SocialProviderId,
+} from '@/lib/social/providers';
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateActiveUser(request);
   if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
-  return NextResponse.json({
-    providers: providers.map((provider) => {
-      const oauthConfigured = provider.required.every((key) => Boolean(process.env[key]?.trim()));
-      const publishingEnabled = oauthConfigured && process.env[provider.enableFlag] === 'true';
-      return {
-        id: provider.id,
-        name: provider.name,
-        oauthConfigured,
-        publishingEnabled,
-        capabilities: provider.capabilities,
-      };
-    }),
+  const database = createPrivilegedSupabaseClient();
+  const { data: connections, error } = await database.from('social_connections')
+    .select('id,provider,provider_account_id,account_name,account_type,avatar_url,status,scopes,credential_expires_at,last_sync_at')
+    .eq('user_id', auth.user.id)
+    .order('created_at', { ascending: true });
+  if (error) return NextResponse.json({ error: 'SOCIAL_CONNECTIONS_UNAVAILABLE' }, { status: 503 });
+
+  const providers = (Object.keys(SOCIAL_PROVIDER_DEFINITIONS) as SocialProviderId[]).map((providerId) => {
+    const definition = SOCIAL_PROVIDER_DEFINITIONS[providerId];
+    const config = providerServerConfiguration(providerId);
+    const providerConnections = (connections || []).filter((item) => item.provider === providerId && item.status === 'connected');
+    const publishingEnabled = providerConnections.some((connection) =>
+      providerConnectionCapability(providerId, Array.isArray(connection.scopes) ? connection.scopes : []).publishingEnabled
+    );
+
+    return {
+      id: providerId,
+      name: definition.name,
+      oauthConfigured: config.oauthConfigured,
+      publishingEnabled,
+      connectionCount: providerConnections.length,
+      capabilities: definition.capabilities,
+      accounts: providerConnections.map((connection) => ({
+        id: connection.id,
+        providerAccountId: connection.provider_account_id,
+        name: connection.account_name,
+        type: connection.account_type,
+        avatarUrl: connection.avatar_url,
+        credentialExpiresAt: connection.credential_expires_at,
+        lastSyncAt: connection.last_sync_at,
+      })),
+    };
   });
+
+  return NextResponse.json({ providers });
 }
