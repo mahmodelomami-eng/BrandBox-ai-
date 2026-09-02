@@ -33,7 +33,7 @@ function RootPageContent() {
   }, [legacyTarget, router]);
 
   if (legacyTarget) {
-    return <div className="min-h-screen bg-[#050506]" aria-hidden="true" />;
+    return <div className="bb-app-canvas min-h-screen" aria-hidden="true" />;
   }
 
   return <HomeExperience />;
@@ -41,7 +41,7 @@ function RootPageContent() {
 
 export default function RootPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#050506]" />}>
+    <Suspense fallback={<div className="bb-app-canvas min-h-screen" />}>
       <RootPageContent />
     </Suspense>
   );
