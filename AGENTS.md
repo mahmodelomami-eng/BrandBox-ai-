@@ -37,6 +37,9 @@ Owns Next.js UI, responsive behavior, accessibility, Arabic RTL, mobile navigati
 ### Backend Agent
 Owns route handlers, server actions, domain services, validation, server-authoritative business rules, and Supabase integration.
 
+### Store Agent
+Owns the Brand Box Store catalog, checkout, order lifecycle, fulfillment, digital-code/inventory reservation, supplier readiness, refund behavior, and Store regression coverage. It must preserve server-authoritative pricing, tenant isolation, idempotency, and the rule that no third-party product becomes sellable before supplier authorization and fulfillment/refund requirements are verified.
+
 ### AI Integration Agent
 Owns OpenRouter/model integrations, provider adapters, generation flows, retries, usage accounting, and failure isolation.
 
