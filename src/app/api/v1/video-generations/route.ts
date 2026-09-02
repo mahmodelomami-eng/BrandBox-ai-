@@ -17,13 +17,19 @@ function modelCreditsPerSecond(metadata: unknown): number | null {
   return Number.isInteger(value) && value >= 1 ? value : null;
 }
 
+function safeMinimumCredits(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function safeVideoModel(model: Record<string, unknown>) {
   const creditsPerSecond = modelCreditsPerSecond(model.metadata);
+  const minimumCredits = safeMinimumCredits(model.minimum_credits) ?? 0;
   return {
     modelId: model.model_id,
     name: model.display_name_ar || model.display_name_en || model.model_id,
     vendor: model.vendor_name || 'Runway',
-    minimumCredits: Number(model.minimum_credits || 0),
+    minimumCredits,
     creditsPerSecond,
     sortOrder: Number(model.sort_order || 0),
     pricingReady: creditsPerSecond !== null,
@@ -142,7 +148,10 @@ export async function POST(request: NextRequest) {
   if (!model) return NextResponse.json({ error: 'VIDEO_MODEL_NOT_AVAILABLE' }, { status: 400 });
 
   const creditsPerSecond = modelCreditsPerSecond(model.metadata);
-  if (!creditsPerSecond) return NextResponse.json({ error: 'VIDEO_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
+  const minimumCredits = safeMinimumCredits(model.minimum_credits);
+  if (!creditsPerSecond || minimumCredits === null) {
+    return NextResponse.json({ error: 'VIDEO_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
+  }
   if (!runwayConfigured()) return NextResponse.json({ error: 'VIDEO_PROVIDER_NOT_CONFIGURED' }, { status: 503 });
 
   try {
@@ -155,7 +164,7 @@ export async function POST(request: NextRequest) {
         requestId,
         settings: { ratio, duration, quality },
       },
-      { creditsPerSecond }
+      { creditsPerSecond, minimumCredits }
     );
     const status = result.success ? 202 : result.errorCode === 'INSUFFICIENT_CREDITS' ? 402 : 502;
     return NextResponse.json(result, { status });
