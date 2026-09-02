@@ -60,4 +60,33 @@ assert.ok(workspace.includes('النماذج المفعّلة من لوحة ال
 assert.ok(!workspace.includes('const MODELS = ['), 'chat model list must no longer be hardcoded in the browser');
 assert.ok(!workspace.includes(".filter((item) => item.project_id === projectId"), 'chat history filtering must happen on the server');
 
-console.log('Chat/OpenRouter launch guard passed.');
+// Theme & Design System Expert: app chrome is semantic; user bubbles keep Brand Box red intentionally.
+assert.ok(workspace.includes('bb-app-canvas'));
+assert.ok(workspace.includes('bb-panel'));
+assert.ok(workspace.includes('bb-input'));
+assert.ok(workspace.includes('bb-button-primary'));
+assert.ok(workspace.includes('bb-button-secondary'));
+assert.ok(workspace.includes('bb-warning-surface'));
+assert.ok(workspace.includes('bb-card'));
+assert.ok(workspace.includes('bg-[var(--bb-accent)]'));
+assert.ok(!workspace.includes('bg-[#050506]'));
+assert.ok(!workspace.includes('bg-[#0b0d12]'));
+assert.ok(!workspace.includes('bg-[#0d1016]'));
+assert.ok(!workspace.includes('bg-[#14171e]'));
+assert.ok(!workspace.includes('bg-[#171a21]'));
+assert.ok(!workspace.includes('text-gray-'));
+assert.ok(!workspace.includes('border-white/10'));
+
+// Monitoring/Product: load failure is distinct from an empty chat and minimum-credit preflight is visible.
+assert.ok(workspace.includes('const [workspaceLoadFailed, setWorkspaceLoadFailed]'));
+assert.ok(workspace.includes('تعذر تحميل مشروع الشات'));
+assert.ok(workspace.includes('لم يتم اعتبار المحادثة فارغة'));
+assert.ok(workspace.includes("!/محادثة|chat|نص/i.test(found.type || '')"));
+assert.ok(workspace.includes('const insufficientCredits ='));
+assert.ok(workspace.includes('selectedModel.cost > balance'));
+assert.ok(workspace.includes('href="/pricing"'));
+assert.ok(workspace.includes('رصيدك الحالي أقل من الحد الأدنى المتوقع'));
+assert.ok(workspace.includes('disabled={sending || !prompt.trim() || !modelId || !modelCatalogAvailable || insufficientCredits}'));
+assert.ok(workspace.includes('إعادة المحاولة'));
+
+console.log('Chat/OpenRouter launch + semantic theme guard passed.');
