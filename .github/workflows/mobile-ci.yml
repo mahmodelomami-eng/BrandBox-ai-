@@ -7,15 +7,20 @@ on:
       - 'src/app/api/v1/mobile/**'
       - 'src/app/api/v1/social/**'
       - 'src/app/api/v1/trends/**'
+      - 'src/tests/mobile-*.guard.cjs'
+      - 'supabase/migrations/**'
       - '.github/workflows/mobile-ci.yml'
   push:
     branches:
-      - 'feat/mobile-ai-growth-hub-v1'
+      - 'feat/mobile-*'
     paths:
       - 'apps/mobile/**'
       - 'src/app/api/v1/mobile/**'
       - 'src/app/api/v1/social/**'
       - 'src/app/api/v1/trends/**'
+      - 'src/tests/mobile-*.guard.cjs'
+      - 'supabase/migrations/**'
+      - '.github/workflows/mobile-ci.yml'
 
 permissions:
   contents: read
@@ -37,3 +42,5 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Typecheck mobile app
         run: npm run typecheck
+      - name: Campaign Composer security guard
+        run: node ../../src/tests/mobile-campaign-composer.guard.cjs
