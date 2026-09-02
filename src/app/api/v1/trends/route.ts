@@ -5,6 +5,7 @@ import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 const ALLOWED_EVENT_TYPES = new Set(['open', 'use', 'share']);
 const ALLOWED_TOOLS = new Set(['images', 'video']);
 const ALLOWED_LIFECYCLES = new Set(['trending', 'evergreen']);
+const PROJECT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{2,159}$/;
 
 type SafeMetadataValue = string | number | boolean | null;
 
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
   if (!ALLOWED_EVENT_TYPES.has(eventType)) {
     return NextResponse.json({ error: 'INVALID_EVENT_TYPE' }, { status: 400 });
   }
-  if (body.projectId && !/^[0-9a-f-]{36}$/i.test(body.projectId)) {
+  if (body.projectId && !PROJECT_ID_PATTERN.test(body.projectId)) {
     return NextResponse.json({ error: 'INVALID_PROJECT_ID' }, { status: 400 });
   }
 
