@@ -108,9 +108,9 @@ export async function POST(request: NextRequest) {
   if (body.projectId) {
     const { data: project } = await database
       .from('projects')
-      .select('id,user_id')
+      .select('id,owner_id')
       .eq('id', body.projectId)
-      .eq('user_id', auth.user.id)
+      .eq('owner_id', auth.user.id)
       .maybeSingle();
     if (!project) return NextResponse.json({ error: 'PROJECT_NOT_OWNED' }, { status: 403 });
   }
