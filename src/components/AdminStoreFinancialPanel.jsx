@@ -1,16 +1,60 @@
 'use client';
-import { useEffect,useMemo,useState } from 'react'; import { CircleDollarSign,Loader2,RefreshCw,ReceiptText,RotateCcw,TrendingUp } from 'lucide-react'; import { createBrowserSupabaseClient } from '../lib/supabase/client';
-const money=(v)=>Number(v||0).toLocaleString('ar-LY',{maximumFractionDigits:3});
-export default function AdminStoreFinancialPanel(){
- const supabase=useMemo(()=>createBrowserSupabaseClient(),[]); const [data,setData]=useState(null); const [loading,setLoading]=useState(true); const [error,setError]=useState('');
- async function load(){setLoading(true);setError('');try{const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token)throw new Error('انتهت جلسة الدخول.');const r=await fetch('/api/v1/admin/store/finance',{headers:{Authorization:`Bearer ${session.access_token}`},cache:'no-store'});const j=await r.json();if(!r.ok)throw new Error(j.error||'تعذر تحميل مالية المتجر.');setData(j);}catch(e){setError(e instanceof Error?e.message:'تعذر تحميل مالية المتجر.');}finally{setLoading(false);}}
- useEffect(()=>{const t=window.setTimeout(()=>void load(),0);return()=>window.clearTimeout(t);},[]);
- if(loading&&!data)return <div className="grid min-h-64 place-items-center rounded-3xl border border-white/10 bg-[#0d1016]"><Loader2 className="animate-spin text-[#f31325]"/></div>;
- const m=data?.metrics||{}, rows=data?.skuProfitability||[];
- return <div className="space-y-5">{error&&<div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-xs text-red-200">{error}</div>}
- <section className="flex items-center justify-between rounded-3xl border border-white/10 bg-[#0d1016] p-5"><div><div className="text-[10px] font-black tracking-[.2em] text-[#ff3344]">STORE FINANCE</div><h2 className="mt-2 text-xl font-black">التحليل المالي للمتجر</h2><p className="mt-2 text-xs text-gray-500">الأرقام محسوبة من الطلبات المدفوعة وتكلفة المورد المسجلة وطلبات الاسترداد المعتمدة.</p></div><button onClick={()=>void load()} className="rounded-xl border border-white/10 p-3"><RefreshCw size={16} className={loading?'animate-spin':''}/></button></section>
- <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[[CircleDollarSign,'صافي الإيرادات',m.netRevenueLYD,'د.ل'],[ReceiptText,'تكلفة الموردين',m.providerCostLYD,'د.ل'],[TrendingUp,'إجمالي الربح',m.grossProfitLYD,'د.ل'],[RotateCcw,'الاستردادات',m.refundsLYD,'د.ل']].map(([Icon,l,v,u])=><div key={l} className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><Icon size={18} className="text-[#ff3344]"/><div className="mt-4 text-2xl font-black">{money(v)} {u}</div><div className="mt-1 text-[10px] text-gray-500">{l}</div></div>)}</div>
- <section className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-black">ربحية المنتجات وSKU</h3><p className="mt-1 text-[10px] text-gray-500">الهامش هنا إجمالي قبل المصروفات التشغيلية والضرائب.</p></div><div className="text-left"><div className="text-xl font-black">{m.grossMarginPercent==null?'—':Number(m.grossMarginPercent).toFixed(1)+'%'}</div><div className="text-[10px] text-gray-500">هامش الربح الإجمالي</div></div></div>
- <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-right text-xs"><thead className="text-gray-500"><tr className="border-b border-white/10"><th className="p-3">المنتج</th><th className="p-3">SKU</th><th className="p-3">الإيراد</th><th className="p-3">التكلفة</th><th className="p-3">الربح</th><th className="p-3">الهامش</th></tr></thead><tbody className="divide-y divide-white/[.06]">{rows.map(r=><tr key={r.skuId}><td className="p-3 font-black">{r.product}</td><td className="p-3">{r.sku}</td><td className="p-3">{money(r.revenue)} د.ل</td><td className="p-3">{money(r.cost)} د.ل</td><td className={`p-3 font-black ${r.grossProfit>=0?'text-emerald-300':'text-red-300'}`}>{money(r.grossProfit)} د.ل</td><td className="p-3">{r.marginPercent==null?'—':Number(r.marginPercent).toFixed(1)+'%'}</td></tr>)}</tbody></table>{!rows.length&&<div className="py-10 text-center text-sm text-gray-500">لا توجد مبيعات مدفوعة بعد.</div>}</div></section>
- <div className="rounded-2xl border border-white/10 bg-[#10131a] p-4 text-xs text-gray-400">طلبات مدفوعة: <b className="text-white">{m.paidOrders||0}</b> · الإيراد الإجمالي: <b className="text-white">{money(m.grossRevenueLYD)} د.ل</b></div></div>;
+
+import { useEffect, useMemo, useState } from 'react';
+import { CircleDollarSign, Loader2, RefreshCw, ReceiptText, RotateCcw, TrendingUp } from 'lucide-react';
+import { createBrowserSupabaseClient } from '../lib/supabase/client';
+
+const money = (value) => Number(value || 0).toLocaleString('ar-LY', { maximumFractionDigits: 3 });
+
+export default function AdminStoreFinancialPanel() {
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  async function load() {
+    setLoading(true); setError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('انتهت جلسة الدخول.');
+      const response = await fetch('/api/v1/admin/store/finance', { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'تعذر تحميل مالية المتجر.');
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر تحميل مالية المتجر.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  if (loading && !data) return <div className="bb-panel grid min-h-64 place-items-center rounded-3xl border"><Loader2 className="bb-text-accent animate-spin" /></div>;
+
+  const metrics = data?.metrics || {};
+  const rows = data?.skuProfitability || [];
+
+  return <div className="space-y-5">
+    {error && <div className="bb-danger-surface rounded-2xl border p-4 text-xs">{error}</div>}
+
+    <section className="bb-panel flex items-center justify-between gap-4 rounded-3xl border p-5">
+      <div><div className="bb-text-accent text-[10px] font-black tracking-[.2em]">STORE FINANCE</div><h2 className="mt-2 text-xl font-black">التحليل المالي للمتجر</h2><p className="bb-text-tertiary mt-2 text-xs">الأرقام محسوبة من الطلبات المدفوعة وتكلفة المورد المسجلة وطلبات الاسترداد المعتمدة.</p></div>
+      <button onClick={() => void load()} disabled={loading} className="bb-button-secondary rounded-xl border p-3 disabled:opacity-50"><RefreshCw size={16} className={loading ? 'animate-spin' : ''}/></button>
+    </section>
+
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {[[CircleDollarSign,'صافي الإيرادات',metrics.netRevenueLYD,'د.ل'],[ReceiptText,'تكلفة الموردين',metrics.providerCostLYD,'د.ل'],[TrendingUp,'إجمالي الربح',metrics.grossProfitLYD,'د.ل'],[RotateCcw,'الاستردادات',metrics.refundsLYD,'د.ل']].map(([Icon,label,value,unit]) => <div key={label} className="bb-card rounded-3xl border p-5"><Icon size={18} className="bb-text-accent"/><div className="mt-4 text-2xl font-black">{money(value)} {unit}</div><div className="bb-text-tertiary mt-1 text-[10px]">{label}</div></div>)}
+    </div>
+
+    <section className="bb-panel rounded-3xl border p-5">
+      <div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-black">ربحية المنتجات وSKU</h3><p className="bb-text-tertiary mt-1 text-[10px]">الهامش هنا إجمالي قبل المصروفات التشغيلية والضرائب.</p></div><div className="text-left"><div className="text-xl font-black">{metrics.grossMarginPercent == null ? '—' : Number(metrics.grossMarginPercent).toFixed(1) + '%'}</div><div className="bb-text-tertiary text-[10px]">هامش الربح الإجمالي</div></div></div>
+      <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-right text-xs"><thead className="bb-text-tertiary"><tr className="bb-divider border-b"><th className="p-3">المنتج</th><th className="p-3">SKU</th><th className="p-3">الإيراد</th><th className="p-3">التكلفة</th><th className="p-3">الربح</th><th className="p-3">الهامش</th></tr></thead><tbody className="divide-y divide-[var(--bb-border-subtle)]">{rows.map((row) => <tr key={row.skuId}><td className="p-3 font-black">{row.product}</td><td className="p-3">{row.sku}</td><td className="p-3">{money(row.revenue)} د.ل</td><td className="p-3">{money(row.cost)} د.ل</td><td className="p-3 font-black" style={{ color: row.grossProfit >= 0 ? 'var(--bb-success)' : 'var(--bb-danger)' }}>{money(row.grossProfit)} د.ل</td><td className="p-3">{row.marginPercent == null ? '—' : Number(row.marginPercent).toFixed(1) + '%'}</td></tr>)}</tbody></table>{!rows.length && <div className="bb-text-tertiary py-10 text-center text-sm">لا توجد مبيعات مدفوعة بعد.</div>}</div>
+    </section>
+
+    <div className="bb-card bb-text-secondary rounded-2xl border p-4 text-xs">طلبات مدفوعة: <b className="bb-text-primary">{metrics.paidOrders || 0}</b> · الإيراد الإجمالي: <b className="bb-text-primary">{money(metrics.grossRevenueLYD)} د.ل</b></div>
+  </div>;
 }
