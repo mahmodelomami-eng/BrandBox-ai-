@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Brand Box AI",
+    "slug": "brand-box-ai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "brandbox",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.brandbox.ai"
+    },
+    "android": {
+      "package": "com.brandbox.ai",
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "extra": {
+      "product": "Brand Box AI Growth Hub"
+    }
+  }
+}
