@@ -64,6 +64,19 @@ assert.ok(templatesComponent.includes("template.tool === 'video'"));
 assert.ok(templatesComponent.includes("template.tool === 'audio'"));
 assert.ok(templatesComponent.includes("template.tool === 'chat'"));
 
+// Semantic-theme architecture: application chrome follows tokens while preview artwork may stay dark.
+assert.ok(templatesComponent.includes('bb-app-canvas'), 'Templates root must follow the semantic app canvas');
+assert.ok(templatesComponent.includes('bb-dashboard-hero'), 'Templates hero must use semantic hero surface');
+assert.ok(templatesComponent.includes('bb-surface-elevated'), 'sticky filter chrome must use an elevated semantic surface');
+assert.ok(templatesComponent.includes('bb-card'), 'template cards must use semantic card surfaces');
+assert.ok(templatesComponent.includes('bb-panel'), 'dialogs and supporting panels must use semantic panels');
+assert.ok(templatesComponent.includes('bb-input'), 'search and quick customization fields must use semantic inputs');
+assert.ok(templatesComponent.includes('bb-button-primary'));
+assert.ok(templatesComponent.includes('bb-button-secondary'));
+assert.ok(templatesComponent.includes('bb-media-canvas'), 'artistic preview canvas must be explicitly separated from app chrome');
+assert.ok(!templatesComponent.includes('className="min-h-[calc(100vh-5rem)] bg-[#050608] text-white"'), 'legacy dark-only Templates root must not return');
+assert.ok(!templatesComponent.includes('border border-white/10 bg-[#0d1016] text-right'), 'mobile template card chrome must not regress to dark-only classes');
+
 assert.ok(imageWorkspace.includes("searchParams.get('prompt')"));
 assert.ok(imageWorkspace.includes("searchParams.get('style')"));
 assert.ok(imageWorkspace.includes("searchParams.get('aspect')"));
