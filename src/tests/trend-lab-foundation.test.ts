@@ -39,6 +39,8 @@ assert.ok(publicApi.includes(".in('lifecycle', ['trending', 'evergreen'])"));
 assert.ok(publicApi.includes('authenticateActiveUser(request)'));
 assert.ok(publicApi.includes(".eq('owner_id', auth.user.id)"), 'usage project ownership must use canonical projects.owner_id server-side');
 assert.ok(publicApi.includes("event_type: eventType"));
+assert.ok(publicApi.includes('sanitizeMetadata'));
+assert.ok(publicApi.includes("typeof rawValue === 'boolean' || rawValue === null"));
 assert.ok(!publicApi.includes('use_count: Number(current.use_count'), 'use counts must not use a read-modify-write race');
 
 assert.ok(adminApi.includes("checkPermission(actor.role, 'settings.read')"));
@@ -51,6 +53,9 @@ assert.ok(adminApi.includes("action: 'updateBriefStatus'"));
 assert.ok(adminApi.includes("action: 'updateTemplate'"));
 assert.ok(adminApi.includes("'ADMIN_CREATED_TREND_BRIEF'"));
 assert.ok(adminApi.includes("'ADMIN_CREATED_TREND_TEMPLATE'"));
+assert.ok(adminApi.includes("count: 'exact', head: true"), '30d usage metric must not be capped by a row limit');
+assert.ok(adminApi.includes('DRAFT_TEMPLATE_CANNOT_PUBLISH'));
+assert.ok(adminApi.includes("nextLifecycle === 'archived'"));
 assert.ok(adminApi.includes('Cache-Control'), 'admin GET must be no-store');
 
 assert.ok(trendAgentApi.includes("id: 'trend-intelligence'"));
