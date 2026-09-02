@@ -64,9 +64,9 @@ const TOOL_META = {
 };
 
 const STATUS_META = {
-  active: { label: 'فعّال الآن', button: 'جرّب الآن', className: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' },
-  draft: { label: 'جهّز الآن', button: 'جهّز المسودة', className: 'border-amber-400/25 bg-amber-400/10 text-amber-200' },
-  reference: { label: 'يتطلب صورة مرجعية', button: 'قريبًا — رفع صورة', className: 'border-white/10 bg-white/[.06] text-gray-400' },
+  active: { label: 'فعّال الآن', button: 'جرّب الآن', className: 'border-[var(--bb-success)] bg-[var(--bb-success-soft)] text-[var(--bb-success)]' },
+  draft: { label: 'جهّز الآن', button: 'جهّز المسودة', className: 'border-[var(--bb-warning)] bg-[var(--bb-warning-soft)] text-[var(--bb-warning)]' },
+  reference: { label: 'يتطلب صورة مرجعية', button: 'قريبًا — رفع صورة', className: 'bb-button-secondary bb-text-tertiary' },
 };
 
 const CATEGORIES = [
@@ -354,13 +354,13 @@ function Preview({ template, large = false, compact = false }) {
   const Icon = template.icon || Sparkles;
   const sizeClass = compact ? 'h-full min-h-[112px]' : large ? 'min-h-[220px] sm:min-h-[260px]' : 'h-40 sm:h-44';
   return (
-    <div className={`relative overflow-hidden ${sizeClass} bg-[#0b0d12]`} style={{ backgroundImage: template.image ? undefined : template.preview }}>
+    <div className={`bb-media-canvas relative overflow-hidden ${sizeClass}`} style={{ backgroundImage: template.image ? undefined : template.preview }}>
       {template.image && <img src={template.image} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />}
       <ToolPreviewArtwork template={template} />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,4,6,.04),rgba(3,4,6,.16)_42%,rgba(3,4,6,.9))]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_88%_8%,rgba(243,19,37,.18),transparent_30%)]" />
       <div className={`${compact ? 'right-2.5 top-2.5 h-8 w-8 rounded-lg' : 'right-4 top-4 h-10 w-10 rounded-xl sm:right-5 sm:top-5 sm:h-12 sm:w-12 sm:rounded-2xl'} absolute flex items-center justify-center border border-white/15 bg-black/45 backdrop-blur`} style={{ color: template.accent }}><Icon size={compact ? 16 : large ? 24 : 20} /></div>
-      {!compact && <div className="absolute bottom-4 right-4 left-4 sm:bottom-5 sm:right-5 sm:left-5"><div className="mb-1.5 flex items-center gap-2 text-[9px] font-black text-white/65 sm:text-[10px]"><Zap size={12} style={{ color: template.accent }} /> {template.result}</div><div className={`${large ? 'text-xl sm:text-2xl' : 'text-base sm:text-lg'} font-black text-white drop-shadow-lg`}>{template.title}</div></div>}
+      {!compact && <div className="absolute bottom-4 left-4 right-4 sm:bottom-5 sm:left-5 sm:right-5"><div className="mb-1.5 flex items-center gap-2 text-[9px] font-black text-white/65 sm:text-[10px]"><Zap size={12} style={{ color: template.accent }} /> {template.result}</div><div className={`${large ? 'text-xl sm:text-2xl' : 'text-base sm:text-lg'} font-black text-white drop-shadow-lg`}>{template.title}</div></div>}
     </div>
   );
 }
@@ -369,13 +369,13 @@ function MobileTemplateCard({ template, onOpen }) {
   const status = statusCopy(template.status);
   const ToolIcon = TOOL_META[template.tool].icon;
   return (
-    <button type="button" onClick={() => onOpen(template)} className="group grid w-full grid-cols-[108px_1fr] overflow-hidden rounded-2xl border border-white/10 bg-[#0d1016] text-right transition active:scale-[.99]">
+    <button type="button" onClick={() => onOpen(template)} className="bb-card group grid w-full grid-cols-[108px_1fr] overflow-hidden rounded-2xl border text-right transition active:scale-[.99]">
       <div className="min-h-[118px] overflow-hidden"><Preview template={template} compact /></div>
       <div className="flex min-w-0 flex-col justify-center p-3.5">
-        <div className="flex flex-wrap items-center gap-1.5"><span className={`rounded-full border px-2 py-0.5 text-[8px] font-black ${status.className}`}>{status.label}</span><span className="flex items-center gap-1 text-[8px] font-black text-gray-600"><ToolIcon size={10} /> {TOOL_META[template.tool].label}</span></div>
-        <h3 className="mt-2 line-clamp-2 text-sm font-black leading-5 text-white">{template.title}</h3>
+        <div className="flex flex-wrap items-center gap-1.5"><span className={`rounded-full border px-2 py-0.5 text-[8px] font-black ${status.className}`}>{status.label}</span><span className="bb-text-tertiary flex items-center gap-1 text-[8px] font-black"><ToolIcon size={10} /> {TOOL_META[template.tool].label}</span></div>
+        <h3 className="bb-text-primary mt-2 line-clamp-2 text-sm font-black leading-5">{template.title}</h3>
         <p className="mt-1 line-clamp-1 text-[10px] font-bold" style={{ color: template.accent }}>{template.subtitle}</p>
-        <div className="mt-2 flex items-center gap-1 text-[9px] text-gray-600"><Clock3 size={10} /> {template.time}</div>
+        <div className="bb-text-tertiary mt-2 flex items-center gap-1 text-[9px]"><Clock3 size={10} /> {template.time}</div>
       </div>
     </button>
   );
@@ -466,8 +466,8 @@ export default function TemplatesLivingLibrary() {
   };
 
   return (
-    <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050608] text-white">
-      {toast && <div className="fixed left-4 right-4 top-24 z-[250] mx-auto max-w-xl rounded-2xl border border-[#ff3344]/30 bg-[#11141a]/95 px-5 py-4 text-sm leading-6 text-gray-200 shadow-2xl backdrop-blur sm:left-6 sm:right-auto">{toast}</div>}
+    <main dir="rtl" className="bb-app-canvas min-h-[calc(100vh-5rem)]">
+      {toast && <div role="status" className="bb-panel bb-text-secondary fixed left-4 right-4 top-24 z-[250] mx-auto max-w-xl rounded-2xl border px-5 py-4 text-sm leading-6 shadow-[var(--bb-shadow-lg)] backdrop-blur sm:left-6 sm:right-auto">{toast}</div>}
 
       {previewTemplate && (() => {
         const template = previewTemplate;
@@ -487,39 +487,49 @@ export default function TemplatesLivingLibrary() {
         };
         return (
           <div className="fixed inset-0 z-[240] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="presentation" onClick={() => setPreviewTemplate(null)}>
-            <div role="dialog" aria-modal="true" aria-labelledby="template-preview-title" className="max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] border border-white/10 bg-[#0d1016] shadow-2xl sm:max-w-3xl sm:rounded-[30px]" onClick={(event) => event.stopPropagation()}>
+            <div role="dialog" aria-modal="true" aria-labelledby="template-preview-title" className="bb-panel max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] border shadow-[var(--bb-shadow-lg)] sm:max-w-3xl sm:rounded-[30px]" onClick={(event) => event.stopPropagation()}>
               <Preview template={template} large />
               <div className="p-5 sm:p-7">
-                <div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.className}`}>{status.label}</span><span className="flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-black text-gray-400"><ToolIcon size={12} /> {TOOL_META[template.tool].label}</span><span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-black text-gray-500">{template.time}</span></div>
-                <h2 id="template-preview-title" className="mt-4 text-xl font-black sm:text-2xl">{template.title}</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.className}`}>{status.label}</span>
+                  <span className="bb-button-secondary bb-text-secondary flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black"><ToolIcon size={12} /> {TOOL_META[template.tool].label}</span>
+                  <span className="bb-button-secondary bb-text-tertiary rounded-full border px-2.5 py-1 text-[10px] font-black">{template.time}</span>
+                </div>
+                <h2 id="template-preview-title" className="bb-text-primary mt-4 text-xl font-black sm:text-2xl">{template.title}</h2>
                 <p className="mt-2 text-sm font-bold" style={{ color: template.accent }}>{template.subtitle}</p>
-                <p className="mt-4 text-sm leading-7 text-gray-400">{template.description}</p>
+                <p className="bb-text-secondary mt-4 text-sm leading-7">{template.description}</p>
+
                 {quickFields.length > 0 && template.status !== 'reference' && (
-                  <div className="mt-5 rounded-2xl border border-[#f31325]/20 bg-[#f31325]/[.04] p-4">
+                  <div className="bb-accent-soft mt-5 rounded-2xl border p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div><div className="text-xs font-black text-white">خصّص القالب في ثوانٍ</div><p className="mt-1 text-[10px] leading-5 text-gray-500">املأ الحقول وسنجهّز البرومبت النهائي تلقائيًا قبل فتح الأداة.</p></div>
-                      <Sparkles size={17} className="mt-0.5 shrink-0 text-[#ff4d5e]" />
+                      <div><div className="bb-text-primary text-xs font-black">خصّص القالب في ثوانٍ</div><p className="bb-text-tertiary mt-1 text-[10px] leading-5">املأ الحقول وسنجهّز البرومبت النهائي تلقائيًا قبل فتح الأداة.</p></div>
+                      <Sparkles size={17} className="bb-text-accent mt-0.5 shrink-0" />
                     </div>
                     <div className={`mt-4 grid gap-3 ${quickFields.length > 1 ? 'sm:grid-cols-2' : ''}`}>
                       {quickFields.map((field) => (
                         <label key={field.token} className={field.multiline ? 'sm:col-span-2' : ''}>
-                          <span className="mb-1.5 block text-[10px] font-black text-gray-400">{field.label}{field.required ? <span className="mr-1 text-[#ff4d5e]">*</span> : null}</span>
+                          <span className="bb-text-secondary mb-1.5 block text-[10px] font-black">{field.label}{field.required ? <span className="bb-text-accent mr-1">*</span> : null}</span>
                           {field.multiline ? (
-                            <textarea rows={4} value={values[field.token] || ''} onChange={(event) => updateQuickField(field, event.target.value)} placeholder={field.placeholder} className="w-full resize-none rounded-xl border border-white/10 bg-[#080a0e] px-3.5 py-3 text-xs leading-6 text-white outline-none transition placeholder:text-gray-700 focus:border-[#f31325]/45" />
+                            <textarea rows={4} value={values[field.token] || ''} onChange={(event) => updateQuickField(field, event.target.value)} placeholder={field.placeholder} className="bb-input w-full resize-none rounded-xl border px-3.5 py-3 text-xs leading-6 outline-none" />
                           ) : (
-                            <input value={values[field.token] || ''} onChange={(event) => updateQuickField(field, event.target.value)} placeholder={field.placeholder} className="w-full rounded-xl border border-white/10 bg-[#080a0e] px-3.5 py-3 text-xs text-white outline-none transition placeholder:text-gray-700 focus:border-[#f31325]/45" />
+                            <input value={values[field.token] || ''} onChange={(event) => updateQuickField(field, event.target.value)} placeholder={field.placeholder} className="bb-input w-full rounded-xl border px-3.5 py-3 text-xs outline-none" />
                           )}
                         </label>
                       ))}
                     </div>
-                    {!quickReady && <p className="mt-3 text-[10px] font-bold text-amber-300/80">أكمل {missingRequiredFields.length} {missingRequiredFields.length === 1 ? 'حقل مطلوب' : 'حقول مطلوبة'} للمتابعة.</p>}
+                    {!quickReady && <p className="mt-3 text-[10px] font-bold text-[var(--bb-warning)]">أكمل {missingRequiredFields.length} {missingRequiredFields.length === 1 ? 'حقل مطلوب' : 'حقول مطلوبة'} للمتابعة.</p>}
                   </div>
                 )}
-                <div className="mt-5 rounded-2xl border border-white/[.07] bg-[#080a0e] p-4">
-                  <div className="flex items-center justify-between gap-3"><div className="text-[10px] font-black text-[#ff6674]">البرومبت الجاهز</div>{quickFields.length > 0 && <span className="text-[9px] font-bold text-gray-600">يتحدّث تلقائيًا</span>}</div>
-                  <p className="mt-2 line-clamp-5 text-xs leading-6 text-gray-500">{preparedPrompt}</p>
+
+                <div className="bb-surface-1 bb-border mt-5 rounded-2xl border p-4">
+                  <div className="flex items-center justify-between gap-3"><div className="bb-text-accent text-[10px] font-black">البرومبت الجاهز</div>{quickFields.length > 0 && <span className="bb-text-tertiary text-[9px] font-bold">يتحدّث تلقائيًا</span>}</div>
+                  <p className="bb-text-secondary mt-2 line-clamp-5 text-xs leading-6">{preparedPrompt}</p>
                 </div>
-                <div className="sticky bottom-0 z-10 -mx-5 -mb-5 mt-5 flex gap-2 border-t border-white/[.07] bg-[#0d1016]/95 px-5 py-4 backdrop-blur-xl sm:static sm:mx-0 sm:mb-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none"><button type="button" onClick={() => setPreviewTemplate(null)} className="flex-1 rounded-xl border border-white/10 py-3 text-xs font-black text-gray-400 hover:text-white">رجوع</button><button type="button" onClick={() => { setPreviewTemplate(null); void handleUseTemplate(template, preparedPrompt); }} disabled={creatingId !== null || loading || !quickReady} className={`flex-[1.6] rounded-xl py-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50 ${template.status === 'reference' ? 'border border-white/10 bg-[#171a21] text-gray-400' : 'bg-[#f31325] text-white hover:bg-[#ff2637]'}`}>{!quickReady ? 'أكمل الحقول أولاً' : status.button}</button></div>
+
+                <div className="bb-surface-2 bb-divider sticky bottom-0 z-10 -mx-5 -mb-5 mt-5 flex gap-2 border-t px-5 py-4 backdrop-blur-xl sm:static sm:mx-0 sm:mb-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+                  <button type="button" onClick={() => setPreviewTemplate(null)} className="bb-button-secondary flex-1 rounded-xl border py-3 text-xs font-black">رجوع</button>
+                  <button type="button" onClick={() => { setPreviewTemplate(null); void handleUseTemplate(template, preparedPrompt); }} disabled={creatingId !== null || loading || !quickReady} className={`flex-[1.6] rounded-xl py-3 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50 ${template.status === 'reference' ? 'bb-button-secondary bb-text-disabled border' : 'bb-button-primary'}`}>{!quickReady ? 'أكمل الحقول أولاً' : status.button}</button>
+                </div>
               </div>
             </div>
           </div>
@@ -527,42 +537,50 @@ export default function TemplatesLivingLibrary() {
       })()}
 
       <div className="mx-auto max-w-[1500px] space-y-7 px-4 py-5 sm:space-y-8 sm:px-6 sm:py-8 lg:px-8">
-        <div className="flex items-center gap-2 text-xs text-gray-600"><span>الرئيسية</span><ArrowLeft size={13} className="rotate-180" /><span className="text-gray-400">مكتبة القوالب</span></div>
+        <div className="bb-text-tertiary flex items-center gap-2 text-xs"><span>الرئيسية</span><ArrowLeft size={13} className="rotate-180" /><span className="bb-text-secondary">مكتبة القوالب</span></div>
 
-        <section className="relative overflow-hidden rounded-[26px] border border-white/10 bg-[#0c0e13] px-5 py-6 sm:rounded-[32px] sm:px-8 sm:py-9 lg:px-10">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_14%,rgba(243,19,37,.17),transparent_32%),radial-gradient(circle_at_12%_90%,rgba(255,51,68,.08),transparent_30%)]" />
+        <section className="bb-dashboard-hero relative overflow-hidden rounded-[26px] border px-5 py-6 sm:rounded-[32px] sm:px-8 sm:py-9 lg:px-10">
           <div className="relative grid gap-6 sm:gap-8 lg:grid-cols-[1fr_420px] lg:items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#f31325]/25 bg-[#f31325]/10 px-3 py-1.5 text-[10px] font-black text-[#ff6674] sm:text-[11px]"><Flame size={14} /> الأكثر استخدامًا في صناعة المحتوى الآن</div>
-              <h1 className="mt-4 max-w-3xl text-[29px] font-black leading-[1.28] sm:mt-5 sm:text-4xl lg:text-5xl">لا تبدأ من صفحة فارغة.<br /><span className="text-[#ff3344]">اختر النتيجة التي تريدها.</span></h1>
-              <p className="mt-3 max-w-2xl text-[13px] leading-6 text-gray-400 sm:mt-4 sm:text-base sm:leading-7">قوالب Brand Box أصبحت تجارب جاهزة: إعلان منتج، ريلز، معايدة، كاروسيل، كتابة حملة أو تعليق صوتي. افتح القالب وسيذهب البرومبت والإعداد المناسب مباشرة إلى الأداة الصحيحة.</p>
-              <div className="mt-5 flex flex-wrap gap-2 text-[10px] sm:mt-6 sm:gap-3 sm:text-xs"><span className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2"><BadgeCheck size={14} className="text-emerald-400" /><strong>{activeNow}</strong> فعّالة الآن</span><span className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2"><Clock3 size={14} className="text-amber-300" /><strong>{prepNow}</strong> جهّزها الآن</span><span className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2"><Layers3 size={14} className="text-[#ff6674]" /><strong>{TEMPLATES.length}</strong> تجربة</span></div>
+              <div className="bb-accent-soft inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-black sm:text-[11px]"><Flame size={14} /> الأكثر استخدامًا في صناعة المحتوى الآن</div>
+              <h1 className="bb-text-primary mt-4 max-w-3xl text-[29px] font-black leading-[1.28] sm:mt-5 sm:text-4xl lg:text-5xl">لا تبدأ من صفحة فارغة.<br /><span className="bb-text-accent">اختر النتيجة التي تريدها.</span></h1>
+              <p className="bb-text-secondary mt-3 max-w-2xl text-[13px] leading-6 sm:mt-4 sm:text-base sm:leading-7">قوالب Brand Box أصبحت تجارب جاهزة: إعلان منتج، ريلز، معايدة، كاروسيل، كتابة حملة أو تعليق صوتي. افتح القالب وسيذهب البرومبت والإعداد المناسب مباشرة إلى الأداة الصحيحة.</p>
+              <div className="mt-5 flex flex-wrap gap-2 text-[10px] sm:mt-6 sm:gap-3 sm:text-xs">
+                <span className="bb-card flex items-center gap-2 rounded-xl border px-3 py-2"><BadgeCheck size={14} className="text-[var(--bb-success)]" /><strong>{activeNow}</strong> فعّالة الآن</span>
+                <span className="bb-card flex items-center gap-2 rounded-xl border px-3 py-2"><Clock3 size={14} className="text-[var(--bb-warning)]" /><strong>{prepNow}</strong> جهّزها الآن</span>
+                <span className="bb-card flex items-center gap-2 rounded-xl border px-3 py-2"><Layers3 size={14} className="bb-text-accent" /><strong>{TEMPLATES.length}</strong> تجربة</span>
+              </div>
             </div>
-            <div className="rounded-[22px] border border-white/10 bg-black/25 p-2.5 shadow-[0_25px_80px_rgba(0,0,0,.35)] sm:rounded-[26px] sm:p-3"><Preview template={TEMPLATES[0]} large /><div className="hidden grid-cols-2 gap-2 pt-2 sm:grid">{featured.slice(1, 3).map((template) => <div key={template.id} className="overflow-hidden rounded-xl border border-white/[.07]"><Preview template={template} /></div>)}</div></div>
+            <div className="bb-card rounded-[22px] border p-2.5 sm:rounded-[26px] sm:p-3"><Preview template={TEMPLATES[0]} large /><div className="hidden grid-cols-2 gap-2 pt-2 sm:grid">{featured.slice(1, 3).map((template) => <div key={template.id} className="bb-border overflow-hidden rounded-xl border"><Preview template={template} /></div>)}</div></div>
           </div>
         </section>
 
-        <section className="sticky top-20 z-30 rounded-2xl border border-white/10 bg-[#090b0f]/95 p-2.5 shadow-[0_15px_50px_rgba(0,0,0,.35)] backdrop-blur-xl sm:p-3">
-          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between"><div className="flex gap-2 overflow-x-auto pb-1 xl:pb-0">{CATEGORIES.map((category) => { const Icon = category.icon; const active = category.id === activeCategory; return <button key={category.id} type="button" onClick={() => selectCategory(category.id)} className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition sm:gap-2 sm:px-3.5 sm:py-2.5 sm:text-xs ${active ? 'border-[#f31325]/50 bg-[#f31325] text-white' : 'border-white/[.07] bg-[#11141a] text-gray-500 hover:border-[#f31325]/30 hover:text-white'}`}><Icon size={14} /> {category.label}</button>; })}</div><label className="flex min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-[#11141a] px-4 py-2.5 text-gray-600 focus-within:border-[#f31325]/40 xl:w-[330px]"><Search size={16} /><input value={search} onChange={(event) => { setSearch(event.target.value); setShowAllMobile(false); }} placeholder="ابحث: منتج، ريلز، مقال..." className="w-full bg-transparent text-xs text-white outline-none placeholder:text-gray-600" /></label></div>
+        <section className="bb-surface-elevated sticky top-20 z-30 rounded-2xl border border-[var(--bb-border)] p-2.5 backdrop-blur-xl sm:p-3">
+          <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex gap-2 overflow-x-auto pb-1 xl:pb-0">{CATEGORIES.map((category) => { const Icon = category.icon; const active = category.id === activeCategory; return <button key={category.id} type="button" onClick={() => selectCategory(category.id)} className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black transition sm:gap-2 sm:px-3.5 sm:py-2.5 sm:text-xs ${active ? 'bb-button-primary border-[var(--bb-accent)]' : 'bb-button-secondary'}`}><Icon size={14} /> {category.label}</button>; })}</div>
+            <label className="bb-input flex min-w-0 items-center gap-2 rounded-xl border px-4 py-2.5 focus-within:border-[var(--bb-accent)] xl:w-[330px]"><Search size={16} className="bb-text-tertiary" /><input value={search} onChange={(event) => { setSearch(event.target.value); setShowAllMobile(false); }} placeholder="ابحث: منتج، ريلز، مقال..." className="bb-text-primary w-full bg-transparent text-xs outline-none placeholder:text-[var(--bb-placeholder)]" /></label>
+          </div>
         </section>
 
         {activeCategory === 'all' && !normalizedSearch && (
           <section>
-            <div className="mb-4 flex items-end justify-between gap-4"><div><div className="flex items-center gap-2 text-sm font-black text-[#ff3344]"><Flame size={17} /> ابدأ بهذه</div><h2 className="mt-1 text-xl font-black sm:text-2xl">تجارب رائجة وسهلة التجربة</h2></div><span className="hidden text-xs text-gray-600 sm:block">نتيجة واضحة بدل اختيار “نوع تصميم” عام</span></div>
-            <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:pb-0">{featured.map((template) => { const status = statusCopy(template.status); const ToolIcon = TOOL_META[template.tool].icon; return <article key={template.id} className="group w-[82vw] max-w-[360px] shrink-0 snap-start overflow-hidden rounded-[24px] border border-white/10 bg-[#0d1016] transition duration-300 hover:-translate-y-1 hover:border-[#f31325]/40 hover:shadow-[0_24px_70px_rgba(0,0,0,.4)] sm:w-[360px] lg:w-auto lg:max-w-none lg:rounded-[26px]"><Preview template={template} large /><div className="p-5"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.className}`}>{status.label}</span><span className="flex items-center gap-1.5 rounded-full border border-white/[.07] bg-white/[.03] px-2.5 py-1 text-[10px] font-black text-gray-500"><ToolIcon size={12} /> {TOOL_META[template.tool].label}</span></div><p className="mt-4 line-clamp-3 text-sm leading-7 text-gray-400">{template.description}</p><button type="button" onClick={() => setPreviewTemplate(template)} disabled={creatingId !== null || loading} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#f31325] py-3.5 text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50"><Sparkles size={17} /> {creatingId === template.id ? 'جاري تجهيز التجربة...' : user ? status.button : 'سجّل الدخول للتجربة'}</button></div></article>; })}</div>
+            <div className="mb-4 flex items-end justify-between gap-4"><div><div className="bb-text-accent flex items-center gap-2 text-sm font-black"><Flame size={17} /> ابدأ بهذه</div><h2 className="bb-text-primary mt-1 text-xl font-black sm:text-2xl">تجارب رائجة وسهلة التجربة</h2></div><span className="bb-text-tertiary hidden text-xs sm:block">نتيجة واضحة بدل اختيار “نوع تصميم” عام</span></div>
+            <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:pb-0">
+              {featured.map((template) => { const status = statusCopy(template.status); const ToolIcon = TOOL_META[template.tool].icon; return <article key={template.id} className="bb-card group w-[82vw] max-w-[360px] shrink-0 snap-start overflow-hidden rounded-[24px] border transition duration-300 hover:-translate-y-1 sm:w-[360px] lg:w-auto lg:max-w-none lg:rounded-[26px]"><Preview template={template} large /><div className="p-5"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.className}`}>{status.label}</span><span className="bb-button-secondary bb-text-tertiary flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black"><ToolIcon size={12} /> {TOOL_META[template.tool].label}</span></div><p className="bb-text-secondary mt-4 line-clamp-3 text-sm leading-7">{template.description}</p><button type="button" onClick={() => setPreviewTemplate(template)} disabled={creatingId !== null || loading} className="bb-button-primary mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-black disabled:opacity-50"><Sparkles size={17} /> {creatingId === template.id ? 'جاري تجهيز التجربة...' : user ? status.button : 'سجّل الدخول للتجربة'}</button></div></article>; })}
+            </div>
           </section>
         )}
 
         <section>
-          <div className="mb-4 flex items-end justify-between gap-3"><div><div className="text-[10px] font-black text-gray-600 sm:text-xs">EXPLORE</div><h2 className="mt-1 text-xl font-black sm:text-2xl">كل التجارب</h2></div><span className="text-[10px] text-gray-600 sm:text-xs">{filtered.length} قالب مطابق</span></div>
-          {filtered.length === 0 ? <div className="rounded-3xl border border-dashed border-white/10 bg-[#0d1016] p-10 text-center"><Search className="mx-auto h-8 w-8 text-gray-700" /><div className="mt-4 font-black">لا توجد تجربة مطابقة</div><p className="mt-2 text-sm text-gray-600">جرّب كلمة مثل: منتج، ريلز، مقال، معايدة أو عقار.</p></div> : <>
+          <div className="mb-4 flex items-end justify-between gap-3"><div><div className="bb-text-tertiary text-[10px] font-black sm:text-xs">EXPLORE</div><h2 className="bb-text-primary mt-1 text-xl font-black sm:text-2xl">كل التجارب</h2></div><span className="bb-text-tertiary text-[10px] sm:text-xs">{filtered.length} قالب مطابق</span></div>
+          {filtered.length === 0 ? <div className="bb-panel bb-text-secondary rounded-3xl border border-dashed p-10 text-center"><Search className="bb-text-disabled mx-auto h-8 w-8" /><div className="bb-text-primary mt-4 font-black">لا توجد تجربة مطابقة</div><p className="bb-text-tertiary mt-2 text-sm">جرّب كلمة مثل: منتج، ريلز، مقال، معايدة أو عقار.</p></div> : <>
             <div className="space-y-3 md:hidden">{mobileTemplates.map((template) => <MobileTemplateCard key={template.id} template={template} onOpen={setPreviewTemplate} />)}</div>
-            {activeCategory === 'all' && !normalizedSearch && filtered.length > MOBILE_INITIAL_LIMIT && <button type="button" onClick={() => setShowAllMobile((value) => !value)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#101319] py-3 text-xs font-black text-gray-300 md:hidden">{showAllMobile ? <ChevronUp size={15} /> : <ChevronDown size={15} />}{showAllMobile ? 'عرض أقل' : `عرض جميع القوالب (${filtered.length})`}</button>}
-            <div className="hidden gap-5 md:grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{filtered.map((template) => { const status = statusCopy(template.status); const ToolIcon = TOOL_META[template.tool].icon; const disabledByCapability = template.status === 'reference'; return <article key={template.id} className="group flex flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#0d1016] transition duration-300 hover:-translate-y-1 hover:border-[#f31325]/35 hover:shadow-[0_20px_55px_rgba(0,0,0,.38)]"><Preview template={template} /><div className="flex flex-1 flex-col p-5"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.className}`}>{status.label}</span><span className="flex items-center gap-1.5 text-[10px] font-black text-gray-600"><ToolIcon size={12} /> {TOOL_META[template.tool].label}</span></div><h3 className="mt-4 text-base font-black">{template.title}</h3><p className="mt-1 text-xs font-bold" style={{ color: template.accent }}>{template.subtitle}</p><p className="mt-3 line-clamp-3 flex-1 text-xs leading-6 text-gray-500">{template.description}</p><div className="mt-4 flex items-center justify-between border-t border-white/[.06] pt-4 text-[10px] text-gray-600"><span className="flex items-center gap-1.5"><Clock3 size={12} /> {template.time}</span><span>{template.result}</span></div><button type="button" onClick={() => setPreviewTemplate(template)} disabled={creatingId !== null || loading} className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-black transition disabled:opacity-50 ${disabledByCapability ? 'border border-white/10 bg-[#15171d] text-gray-500 hover:text-gray-300' : 'bg-[#1a1d25] text-white hover:bg-[#f31325]'}`}>{disabledByCapability ? <Wand2 size={15} /> : <Sparkles size={15} />} {creatingId === template.id ? 'جاري تجهيز التجربة...' : user ? status.button : disabledByCapability ? status.button : 'سجّل الدخول للتجربة'}</button></div></article>; })}</div>
+            {activeCategory === 'all' && !normalizedSearch && filtered.length > MOBILE_INITIAL_LIMIT && <button type="button" onClick={() => setShowAllMobile((value) => !value)} className="bb-button-secondary mt-4 flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-xs font-black md:hidden">{showAllMobile ? <ChevronUp size={15} /> : <ChevronDown size={15} />}{showAllMobile ? 'عرض أقل' : `عرض جميع القوالب (${filtered.length})`}</button>}
+            <div className="hidden gap-5 md:grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{filtered.map((template) => { const status = statusCopy(template.status); const ToolIcon = TOOL_META[template.tool].icon; const disabledByCapability = template.status === 'reference'; return <article key={template.id} className="bb-card group flex flex-col overflow-hidden rounded-[24px] border transition duration-300 hover:-translate-y-1"><Preview template={template} /><div className="flex flex-1 flex-col p-5"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.className}`}>{status.label}</span><span className="bb-text-tertiary flex items-center gap-1.5 text-[10px] font-black"><ToolIcon size={12} /> {TOOL_META[template.tool].label}</span></div><h3 className="bb-text-primary mt-4 text-base font-black">{template.title}</h3><p className="mt-1 text-xs font-bold" style={{ color: template.accent }}>{template.subtitle}</p><p className="bb-text-secondary mt-3 line-clamp-3 flex-1 text-xs leading-6">{template.description}</p><div className="bb-divider bb-text-tertiary mt-4 flex items-center justify-between border-t pt-4 text-[10px]"><span className="flex items-center gap-1.5"><Clock3 size={12} /> {template.time}</span><span>{template.result}</span></div><button type="button" onClick={() => setPreviewTemplate(template)} disabled={creatingId !== null || loading} className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-black transition disabled:opacity-50 ${disabledByCapability ? 'bb-button-secondary bb-text-disabled border' : 'bb-button-secondary border hover:border-[var(--bb-accent)] hover:text-[var(--bb-accent)]'}`}>{disabledByCapability ? <Wand2 size={15} /> : <Sparkles size={15} />} {creatingId === template.id ? 'جاري تجهيز التجربة...' : user ? status.button : disabledByCapability ? status.button : 'سجّل الدخول للتجربة'}</button></div></article>; })}</div>
           </>}
         </section>
 
-        <section className="rounded-[24px] border border-[#f31325]/20 bg-[radial-gradient(circle_at_80%_20%,rgba(243,19,37,.13),transparent_35%),#0d1016] p-5 sm:rounded-[28px] sm:p-8"><div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center"><div><div className="flex items-center gap-2 text-sm font-black text-[#ff3344]"><Wand2 size={18} /> قوالب التحويل بالصورة المرجعية</div><h2 className="mt-2 text-lg font-black sm:text-xl">سينمائي وكرتوني — بدون ادعاء قدرة غير جاهزة</h2><p className="mt-2 max-w-3xl text-xs leading-6 text-gray-500 sm:text-sm sm:leading-7">هذه التجارب ظاهرة من الآن لأنها مطلوبة، لكن تشغيلها سيبقى مقفولًا حتى يدعم استوديو الصور رفع صورة مرجعية وإرسالها إلى نموذج تحرير صور فعلي.</p></div><div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-black text-gray-400"><Palette size={17} className="text-[#ff6674]" /> Image-to-Image ضمن مسار الصور</div></div></section>
+        <section className="bb-panel rounded-[24px] border border-[var(--bb-accent-border)] p-5 sm:rounded-[28px] sm:p-8"><div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center"><div><div className="bb-text-accent flex items-center gap-2 text-sm font-black"><Wand2 size={18} /> قوالب التحويل بالصورة المرجعية</div><h2 className="bb-text-primary mt-2 text-lg font-black sm:text-xl">سينمائي وكرتوني — بدون ادعاء قدرة غير جاهزة</h2><p className="bb-text-secondary mt-2 max-w-3xl text-xs leading-6 sm:text-sm sm:leading-7">هذه التجارب ظاهرة من الآن لأنها مطلوبة، لكن تشغيلها سيبقى مقفولًا حتى يدعم استوديو الصور رفع صورة مرجعية وإرسالها إلى نموذج تحرير صور فعلي.</p></div><div className="bb-accent-soft flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-black"><Palette size={17} /> Image-to-Image ضمن مسار الصور</div></div></section>
       </div>
     </main>
   );
