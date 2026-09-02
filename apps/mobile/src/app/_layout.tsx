@@ -12,6 +12,7 @@ export default function RootLayout() {
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="social" options={{ title: 'حسابات السوشيال' }} />
+        <Stack.Screen name="planner" options={{ title: 'مخطط المحتوى' }} />
         <Stack.Screen name="ai/chat" options={{ title: 'مساعد Brand Box' }} />
         <Stack.Screen name="ai/image" options={{ title: 'توليد الصور' }} />
         <Stack.Screen name="ai/video" options={{ title: 'توليد الفيديو' }} />
