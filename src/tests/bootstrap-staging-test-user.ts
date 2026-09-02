@@ -1,6 +1,6 @@
 import { createStagingTestClient } from '../lib/supabase/test-client';
 
-async function main() {
+export async function ensureStagingTestUser(): Promise<{ userId: string; email: string }> {
   const supabase = createStagingTestClient();
   const email = process.env.STAGING_TEST_USER_EMAIL || 'store.test.staging@brandbox.ai';
 
@@ -17,7 +17,7 @@ async function main() {
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       email_confirm: true,
-      user_metadata: { first_name: 'Store', last_name: 'Staging Test' },
+      user_metadata: { first_name: 'Credit', last_name: 'Staging Test' },
     });
     if (error || !data.user) throw error || new Error('Failed to create staging test auth user.');
     user = data.user;
@@ -26,18 +26,25 @@ async function main() {
   const { error: profileError } = await supabase.from('profiles').upsert({
     id: user.id,
     email,
-    first_name: 'Store',
+    first_name: 'Credit',
     last_name: 'Staging Test',
     role: 'USER',
     status: 'active',
   }, { onConflict: 'id' });
   if (profileError) throw profileError;
 
-  console.log('Dedicated staging test user is ready.');
-  console.log(`STAGING_TEST_USER_ID=${user.id}`);
+  return { userId: user.id, email };
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+async function main() {
+  const { userId } = await ensureStagingTestUser();
+  console.log('Dedicated staging test user is ready.');
+  console.log(`STAGING_TEST_USER_ID=${userId}`);
+}
+
+if (process.argv[1]?.includes('bootstrap-staging-test-user')) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}
