@@ -142,7 +142,10 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
   }, [config, loadItems, projectId]);
 
   useEffect(() => {
-    void loadWorkspace();
+    const timer = window.setTimeout(() => {
+      void loadWorkspace();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadWorkspace]);
 
   function reuseDraft(item) {
