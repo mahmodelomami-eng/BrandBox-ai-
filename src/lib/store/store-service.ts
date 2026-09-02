@@ -1,6 +1,7 @@
 import { processBrandBoxCreditFulfillmentForOrder } from './store-credit-fulfillment';
 import { processDigitalCodeFulfillmentForOrder } from './store-code-fulfillment';
 import { createPrivilegedSupabaseClient } from '../supabase/server';
+import { assertStoreIdempotencyOwner } from './store-idempotency';
 import type { CreateStoreOrderInput, StoreCatalogProduct } from './types';
 
 function assertUuidLike(value: string, label: string) {
@@ -105,7 +106,10 @@ export async function createStoreOrder(input: CreateStoreOrderInput) {
     .maybeSingle();
 
   if (existingError) throw new Error(`STORE_ORDER_LOOKUP_ERROR: ${existingError.message}`);
-  if (existing) return existing;
+  if (existing) {
+    assertStoreIdempotencyOwner(existing.user_id, input.userId);
+    return existing;
+  }
 
   const { data: sku, error: skuError } = await supabase
     .from('store_skus')

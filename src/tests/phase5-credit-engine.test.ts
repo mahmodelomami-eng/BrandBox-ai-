@@ -43,6 +43,7 @@ export async function runPhase5CreditEngineTests(): Promise<{
 
     const genRes = await GenerationEngine.executeGeneration(testUserCtx, {
       generationType: 'image',
+      requestId: 'phase5_refund_test',
       modelId: 'imagen-4.0-generate-001',
       prompt: 'Test prompt',
       simulateFailure: true
