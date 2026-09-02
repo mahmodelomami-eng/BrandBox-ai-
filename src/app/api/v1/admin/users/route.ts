@@ -15,6 +15,11 @@ import {
   isKnownRole,
 } from '@/lib/admin/admin-user-policy';
 
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+const IDLE_WINDOW_MS = 10 * 60 * 1000;
+
+type PresenceState = 'online' | 'idle' | 'offline';
+
 async function actorFromRequest(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -50,6 +55,16 @@ function errorResponse(error: unknown) {
         ? 400
         : 500;
   return NextResponse.json({ error: message }, { status });
+}
+
+function presenceState(lastSeenAt: string | null, now: number): PresenceState {
+  if (!lastSeenAt) return 'offline';
+  const timestamp = new Date(lastSeenAt).getTime();
+  if (!Number.isFinite(timestamp)) return 'offline';
+  const age = Math.max(0, now - timestamp);
+  if (age <= ONLINE_WINDOW_MS) return 'online';
+  if (age <= IDLE_WINDOW_MS) return 'idle';
+  return 'offline';
 }
 
 export async function GET(request: NextRequest) {
@@ -105,7 +120,7 @@ export async function GET(request: NextRequest) {
 
   const now = Date.now();
   const users = (profiles || []).map((profile) => {
-    const lastSeen = profile.last_seen_at ? new Date(profile.last_seen_at).getTime() : 0;
+    const state = presenceState(profile.last_seen_at, now);
     return {
       id: profile.id,
       email: profile.email,
@@ -119,7 +134,8 @@ export async function GET(request: NextRequest) {
       creditBalance: Number(profile.credit_balance || 0),
       planId: planByUser.get(profile.id) || 'free',
       lastSeenAt: profile.last_seen_at,
-      online: Boolean(lastSeen && now - lastSeen <= 120_000),
+      presenceState: state,
+      online: state === 'online',
       createdAt: profile.created_at,
       updatedAt: profile.updated_at,
     };
@@ -128,6 +144,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     users,
     actorRole: actor.role,
+    serverNow: new Date(now).toISOString(),
     total: count || 0,
     page,
     limit,
@@ -199,7 +216,21 @@ export async function PATCH(request: NextRequest) {
       });
 
       const result = await AdminService.changeUserRole(actor, body.userId, body.role);
-      return NextResponse.json(result);
+      const { data: verifiedRole, error: verifyError } = await database
+        .from('profiles')
+        .select('role,updated_at')
+        .eq('id', body.userId)
+        .maybeSingle();
+      if (verifyError || !verifiedRole || verifiedRole.role !== body.role) {
+        return NextResponse.json({ error: 'ROLE_UPDATE_VERIFICATION_FAILED' }, { status: 503 });
+      }
+
+      return NextResponse.json({
+        ...result,
+        role: verifiedRole.role,
+        roleLabelAr: ROLE_DEFINITIONS[verifiedRole.role as AdminRole]?.labelAr || verifiedRole.role,
+        updatedAt: verifiedRole.updated_at,
+      });
     }
 
     if (body.action === 'suspend') {
