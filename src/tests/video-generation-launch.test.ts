@@ -79,6 +79,33 @@ assert.ok(workspace.includes('providerConfigured'));
 assert.ok(workspace.includes('creditsPerSecond'));
 assert.ok(!workspace.includes('Runway Gen-3 Alpha'));
 
+// Theme/Design System: application chrome is semantic, media playback alone stays black.
+assert.ok(workspace.includes('bb-app-canvas'));
+assert.ok(workspace.includes('bb-panel'));
+assert.ok(workspace.includes('bb-input'));
+assert.ok(workspace.includes('bb-button-primary'));
+assert.ok(workspace.includes('bb-button-secondary'));
+assert.ok(workspace.includes('bb-warning-surface'));
+assert.ok(workspace.includes('bg-black object-contain'));
+assert.ok(!workspace.includes('bg-[#050506]'));
+assert.ok(!workspace.includes('bg-[#0b0d12]'));
+assert.ok(!workspace.includes('bg-[#080a0e]'));
+assert.ok(!workspace.includes('bg-[#0d1016]'));
+assert.ok(!workspace.includes('bg-[#11141a]'));
+assert.ok(!workspace.includes('bg-[#171a21]'));
+assert.ok(!workspace.includes('text-gray-'));
+assert.ok(!workspace.includes('border-white/10'));
+
+// Monitoring/Product: load failure is distinct from a genuinely empty project and credit preflight is visible.
+assert.ok(workspace.includes('const [workspaceLoadFailed, setWorkspaceLoadFailed]'));
+assert.ok(workspace.includes('تعذر تحميل مساحة الفيديو'));
+assert.ok(workspace.includes('لم يتم اعتبار المساحة فارغة'));
+assert.ok(workspace.includes('const insufficientCredits ='));
+assert.ok(workspace.includes('priceEstimate > creditBalance'));
+assert.ok(workspace.includes('href="/pricing"'));
+assert.ok(workspace.includes('رصيدك الحالي لا يغطي التكلفة المتوقعة'));
+assert.ok(workspace.includes('disabled={!generationReady || generating || !prompt.trim() || insufficientCredits}'));
+
 assert.ok(adminRoute.includes('function hasRunwaySecret'));
 assert.ok(adminRoute.includes('runwayConfigured: hasRunwaySecret()'));
 assert.ok(adminRoute.includes("error: 'RUNWAY_SECRET_REQUIRED'"));
@@ -111,4 +138,4 @@ assert.ok(pricingMigration.includes("'pricing_margin_floor_pct', 40"));
 assert.ok(!pricingMigration.includes('is_enabled = TRUE'), 'pricing migration must not activate provider without its secret');
 assert.ok(!pricingMigration.includes('is_visible_to_users = TRUE'), 'pricing migration must not expose provider without its secret');
 
-console.log('Video generation launch guard passed.');
+console.log('Video generation launch + semantic theme guard passed.');
