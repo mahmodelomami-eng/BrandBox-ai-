@@ -1,0 +1,39 @@
+name: mobile-ci
+
+on:
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'src/app/api/v1/mobile/**'
+      - 'src/app/api/v1/social/**'
+      - 'src/app/api/v1/trends/**'
+      - '.github/workflows/mobile-ci.yml'
+  push:
+    branches:
+      - 'feat/mobile-ai-growth-hub-v1'
+    paths:
+      - 'apps/mobile/**'
+      - 'src/app/api/v1/mobile/**'
+      - 'src/app/api/v1/social/**'
+      - 'src/app/api/v1/trends/**'
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.1'
+          cache: 'npm'
+          cache-dependency-path: apps/mobile/package.json
+      - name: Install mobile dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Typecheck mobile app
+        run: npm run typecheck
