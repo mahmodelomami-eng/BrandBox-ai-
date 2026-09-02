@@ -93,33 +93,55 @@ function titleWithoutPriority(title: string) {
   return title.replace(/^\[[^\]]+\]\s*/, '').trim();
 }
 
+function uiAuditPullMatch(pull: GithubPull) {
+  const branch = pull.head.ref.toLowerCase();
+  const text = `${pull.title} ${pull.body || ''}`.toLowerCase();
+  return /#114\b/.test(text)
+    || /(^|[\/_-])(ui|ux|frontend)([\/_-]|$)/.test(branch)
+    || /\bui\b|\bux\b|frontend|interface|visual|responsive|mobile|navigation|dashboard|workspace/.test(text);
+}
+
 function deriveAgents(params: {
   currentIssue: GithubIssue | null;
   currentPull: GithubPull | null;
+  uiAuditIssue: GithubIssue | null;
+  uiAuditPull: GithubPull | null;
   releaseRun?: GithubRun;
   safetyRun?: GithubRun;
   vercel?: GithubCombinedStatus['statuses'][number];
 }): AgentSnapshot[] {
-  const { currentIssue, currentPull, releaseRun, safetyRun, vercel } = params;
+  const { currentIssue, currentPull, uiAuditIssue, uiAuditPull, releaseRun, safetyRun, vercel } = params;
   const task = currentPull
     ? `PR #${currentPull.number} · ${currentPull.title}`
     : currentIssue
       ? `#${currentIssue.number} · ${titleWithoutPriority(currentIssue.title)}`
       : 'لا توجد مهمة إطلاق مفتوحة';
+  const uiTask = uiAuditPull
+    ? `PR #${uiAuditPull.number} · ${uiAuditPull.title}`
+    : uiAuditIssue?.state === 'open'
+      ? `#${uiAuditIssue.number} · ${titleWithoutPriority(uiAuditIssue.title)}`
+      : null;
   const text = `${currentPull?.title || ''} ${currentPull?.body || ''} ${currentIssue?.title || ''} ${currentIssue?.body || ''}`.toLowerCase();
+  const uiText = `${uiAuditPull?.title || ''} ${uiAuditPull?.body || ''} ${uiAuditIssue?.title || ''} ${uiAuditIssue?.body || ''}`.toLowerCase();
   const issueNumber = currentIssue?.number || 0;
   const releaseState = workflowState(releaseRun);
   const safetyState = workflowState(safetyRun);
   const vercelState = vercel?.state === 'success' ? 'success' : vercel ? 'failed' : 'unknown';
+  const uiWorkActive = Boolean(uiTask);
 
   const frontendActive = /frontend|next\.?js|react|component|responsive|mobile|navigation|workspace|dashboard|rtl|screen|layout|interaction|motion/.test(text);
   const designActive = /design|designer|visual|\bui\b|\bux\b|interface|layout|typography|icon|color|brand|responsive|mobile|rtl|screen|dashboard|workspace/.test(text);
   const interfaceReviewActive = /\bui\b|\bux\b|interface|screen|layout|navigation|dashboard|responsive|mobile|rtl|cta|copy|loading|empty state|retry|flicker|overflow|accessibility/.test(text);
+  const uiFrontendActive = /frontend|next\.?js|react|component|responsive|mobile|navigation|workspace|dashboard|rtl|screen|layout|interaction|motion|video|chat|profile|admin/.test(uiText);
+  const uiDesignActive = /design|designer|visual|\bui\b|\bux\b|interface|layout|typography|icon|color|brand|responsive|mobile|rtl|screen|dashboard|workspace|video|chat|profile|admin/.test(uiText);
+  const uiInterfaceReviewActive = /\bui\b|\bux\b|interface|screen|layout|navigation|dashboard|responsive|mobile|rtl|cta|copy|loading|empty state|retry|flicker|overflow|accessibility|video|chat|profile|admin/.test(uiText);
   const backendActive = /api|backend|auth|store|project|server|scope|payment|credit|route/.test(text);
   const aiActive = [88, 89, 90].includes(issueNumber) || /openrouter|generation|\bchat\b|image|video|model|provider/.test(text);
   const databaseActive = /database|migration|\bdb\b|rls|supabase|schema|index/.test(text);
   const productActive = interfaceReviewActive || /product|business|pricing|plan|subscription|onboarding|conversion|growth|analytics|store|launch|revenue|customer|market|package/.test(text);
   const monitoringActive = interfaceReviewActive || /observability|monitor|runtime|health|incident|error|log|maintenance|uptime|regression|performance|alert|reliability/.test(text);
+  const uiProductActive = uiInterfaceReviewActive || /product|business|pricing|plan|subscription|onboarding|conversion|growth|customer|value|launch/.test(uiText);
+  const uiMonitoringActive = uiInterfaceReviewActive || /monitor|runtime|health|error|maintenance|regression|performance|reliability|stale|retry|loading/.test(uiText);
   const platformFailure = releaseState === 'failed' || vercelState === 'failed';
 
   return [
@@ -135,31 +157,37 @@ function deriveAgents(params: {
       id: 'product-business',
       name: 'Product & Business Agent',
       specialty: 'Product Strategy · Pricing · Growth · Customer Value',
-      status: currentPull && productActive ? 'reviewing' : 'waiting',
-      task: currentPull && productActive ? task : 'بانتظار مهمة منتج أو مراجعة واجهة',
-      note: currentPull && productActive
-        ? 'يراجع قيمة المنتج ووضوح CTA والنصوص والاحتكاك داخل الواجهة قبل قبول التغيير'
-        : 'يحافظ على اتساق قرارات المنتج والواجهات مع نموذج الأعمال وأهداف الإطلاق',
+      status: uiWorkActive && uiProductActive ? 'reviewing' : currentPull && productActive ? 'reviewing' : 'waiting',
+      task: uiWorkActive && uiProductActive ? uiTask! : currentPull && productActive ? task : 'بانتظار مهمة منتج أو مراجعة واجهة',
+      note: uiWorkActive && uiProductActive
+        ? 'نشط على مسار UI Audit: يراجع CTA والقيمة والنصوص والاحتكاك قبل اعتماد الواجهة'
+        : currentPull && productActive
+          ? 'يراجع قيمة المنتج ووضوح CTA والنصوص والاحتكاك داخل الواجهة قبل قبول التغيير'
+          : 'يحافظ على اتساق قرارات المنتج والواجهات مع نموذج الأعمال وأهداف الإطلاق',
     },
     {
       id: 'visual-designer',
       name: 'UI/UX & Visual Designer Agent',
       specialty: 'Design System · Layout · Typography · Brand Consistency',
-      status: currentPull && designActive ? 'reviewing' : 'waiting',
-      task: currentPull && designActive ? task : 'بانتظار مهمة مراجعة وتصميم واجهة',
-      note: currentPull && designActive
-        ? 'يراجع جودة التصميم والهوية وتجربة الاستخدام قبل قبول تنفيذ الواجهة'
-        : 'مسؤول عن المراجعة البصرية ومعايير UI/UX وهوية Brand Box',
+      status: uiWorkActive && uiDesignActive ? 'reviewing' : currentPull && designActive ? 'reviewing' : 'waiting',
+      task: uiWorkActive && uiDesignActive ? uiTask! : currentPull && designActive ? task : 'بانتظار مهمة مراجعة وتصميم واجهة',
+      note: uiWorkActive && uiDesignActive
+        ? 'نشط على مسار UI Audit: يراجع الهوية والتسلسل البصري وتجربة RTL والموبايل'
+        : currentPull && designActive
+          ? 'يراجع جودة التصميم والهوية وتجربة الاستخدام قبل قبول تنفيذ الواجهة'
+          : 'مسؤول عن المراجعة البصرية ومعايير UI/UX وهوية Brand Box',
     },
     {
       id: 'frontend',
       name: 'Frontend & UI Engineer Agent',
       specialty: 'Next.js · React · RTL · Mobile · Motion',
-      status: currentPull && frontendActive ? 'working' : 'waiting',
-      task: currentPull && frontendActive ? task : 'بانتظار مهمة تنفيذ واجهة',
-      note: currentPull && frontendActive
-        ? 'ينفذ متطلبات التصميم كواجهة مستقرة ومتجاوبة ويغلق مشاكل التنقل والـUI'
-        : 'ينفذ مخرجات المصمم مع الحفاظ على RTL وMobile والاختبارات',
+      status: uiWorkActive && uiFrontendActive ? 'working' : currentPull && frontendActive ? 'working' : 'waiting',
+      task: uiWorkActive && uiFrontendActive ? uiTask! : currentPull && frontendActive ? task : 'بانتظار مهمة تنفيذ واجهة',
+      note: uiWorkActive && uiFrontendActive
+        ? 'نشط على مسار UI Audit: ينفذ الإصلاحات المعتمدة ويحافظ على الاستجابة والتنقل والـRTL'
+        : currentPull && frontendActive
+          ? 'ينفذ متطلبات التصميم كواجهة مستقرة ومتجاوبة ويغلق مشاكل التنقل والـUI'
+          : 'ينفذ مخرجات المصمم مع الحفاظ على RTL وMobile والاختبارات',
     },
     {
       id: 'backend',
@@ -205,17 +233,21 @@ function deriveAgents(params: {
       id: 'monitoring-maintenance',
       name: 'Monitoring & Maintenance Agent',
       specialty: 'Reliability · Runtime Health · Incidents · Maintenance',
-      status: platformFailure ? 'working' : currentPull && monitoringActive ? 'reviewing' : 'waiting',
+      status: platformFailure ? 'working' : uiWorkActive && uiMonitoringActive ? 'reviewing' : currentPull && monitoringActive ? 'reviewing' : 'waiting',
       task: platformFailure
         ? 'تحليل فشل البوابات أو النشر وتحديد سبب التراجع'
-        : currentPull && monitoringActive
-          ? task
-          : 'مراقبة صحة المنصة والاستعداد للصيانة',
+        : uiWorkActive && uiMonitoringActive
+          ? uiTask!
+          : currentPull && monitoringActive
+            ? task
+            : 'مراقبة صحة المنصة والاستعداد للصيانة',
       note: platformFailure
         ? 'يركز على الاستعادة ومنع تكرار الأعطال قبل مواصلة الإطلاق'
-        : currentPull && monitoringActive
-          ? 'يراجع حالات التحميل والخطأ والـstale data والموبايل وقابلية الاستعادة في الواجهة'
-          : 'يتابع الاعتمادية والأخطاء والأداء والصيانة الوقائية',
+        : uiWorkActive && uiMonitoringActive
+          ? 'نشط على مسار UI Audit: يراجع loading/error/retry/stale-data والاعتمادية على الهاتف والكمبيوتر'
+          : currentPull && monitoringActive
+            ? 'يراجع حالات التحميل والخطأ والـstale data والموبايل وقابلية الاستعادة في الواجهة'
+            : 'يتابع الاعتمادية والأخطاء والأداء والصيانة الوقائية',
     },
     {
       id: 'devops',
@@ -247,12 +279,14 @@ export async function GET(request: NextRequest) {
 
     const openPulls = [...pulls].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
     const currentPull = openPulls[0] || null;
+    const uiAuditPull = openPulls.find(uiAuditPullMatch) || null;
     const launchIssues = issues
       .filter((issue) => !issue.pull_request && issue.number >= 85 && issue.number <= 98)
       .sort((a, b) => a.number - b.number);
     const launchTasks = launchIssues.filter((issue) => issue.number <= 97);
     const currentIssue = launchTasks.find((issue) => issue.state === 'open') || null;
     const launchProgram = launchIssues.find((issue) => issue.number === 98) || null;
+    const uiAuditIssue = issues.find((issue) => !issue.pull_request && issue.number === 114) || null;
 
     const currentRuns = currentPull
       ? runs.workflow_runs.filter((run) => run.head_sha === currentPull.head.sha || run.head_branch === currentPull.head.ref)
@@ -266,7 +300,7 @@ export async function GET(request: NextRequest) {
     }
     const vercel = combinedStatus?.statuses.find((status) => status.context.toLowerCase() === 'vercel');
 
-    const agents = deriveAgents({ currentIssue, currentPull, releaseRun, safetyRun, vercel });
+    const agents = deriveAgents({ currentIssue, currentPull, uiAuditIssue, uiAuditPull, releaseRun, safetyRun, vercel });
     const statusCounts = agents.reduce<Record<string, number>>((acc, agent) => {
       acc[agent.status] = (acc[agent.status] || 0) + 1;
       return acc;
@@ -297,6 +331,14 @@ export async function GET(request: NextRequest) {
         at: issue.updated_at,
         url: issue.html_url,
       })),
+      ...(uiAuditIssue ? [{
+        id: `issue-${uiAuditIssue.number}`,
+        type: 'ui_audit_issue',
+        title: `#${uiAuditIssue.number} · ${titleWithoutPriority(uiAuditIssue.title)}`,
+        status: uiAuditIssue.state,
+        at: uiAuditIssue.updated_at,
+        url: uiAuditIssue.html_url,
+      }] : []),
     ]
       .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
       .slice(0, 16);
@@ -314,6 +356,19 @@ export async function GET(request: NextRequest) {
         total: launchTasks.length,
         completed: completedTasks,
         open: launchTasks.length - completedTasks,
+      },
+      uiAudit: {
+        issue: uiAuditIssue,
+        currentPull: uiAuditPull
+          ? {
+              number: uiAuditPull.number,
+              title: uiAuditPull.title,
+              url: uiAuditPull.html_url,
+              branch: uiAuditPull.head.ref,
+              sha: uiAuditPull.head.sha,
+              updatedAt: uiAuditPull.updated_at,
+            }
+          : null,
       },
       currentPull: currentPull
         ? {
