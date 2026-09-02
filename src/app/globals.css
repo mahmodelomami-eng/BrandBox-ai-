@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+html[data-theme='dark'] {
   --brand-bg: #050506;
   --brand-surface: #0d0f17;
   --brand-card: #121520;
@@ -11,6 +12,21 @@
   --brand-red-hover: #ff2637;
   --brand-text: #f8fafc;
   --brand-muted: #9ca3af;
+  --brand-subtle: rgba(255, 255, 255, 0.05);
+  color-scheme: dark;
+}
+
+html[data-theme='light'] {
+  --brand-bg: #f5f6f8;
+  --brand-surface: #ffffff;
+  --brand-card: #ffffff;
+  --brand-border: #dde1e8;
+  --brand-red: #e91527;
+  --brand-red-hover: #f31325;
+  --brand-text: #17191f;
+  --brand-muted: #697386;
+  --brand-subtle: rgba(17, 24, 39, 0.055);
+  color-scheme: light;
 }
 
 html,
@@ -20,9 +36,18 @@ body {
   min-height: 100%;
 }
 
-body {
+html,
+body,
+.brandbox-theme-scope {
   background: var(--brand-bg);
   color: var(--brand-text);
+}
+
+body,
+.brandbox-global-nav,
+.brandbox-theme-scope,
+.brandbox-theme-toggle {
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
 }
 
 * {
@@ -40,6 +65,158 @@ textarea {
 :focus-visible {
   outline: 2px solid var(--brand-red);
   outline-offset: 2px;
+}
+
+.brandbox-theme-toggle {
+  border-color: var(--brand-border);
+  background: var(--brand-card);
+  color: var(--brand-text);
+}
+
+.brandbox-theme-toggle:hover {
+  border-color: color-mix(in srgb, var(--brand-red) 45%, var(--brand-border));
+  background: var(--brand-surface);
+}
+
+html[data-theme='light'] .brandbox-global-nav {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: var(--brand-text);
+  box-shadow: 0 10px 35px rgba(15, 23, 42, 0.09) !important;
+}
+
+html[data-theme='light'] .brandbox-global-nav a[aria-label='Brand Box'] {
+  border-radius: 0.75rem;
+  background: #0c0d11;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Bridge legacy dark utility colors into the centralized light palette. */
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#050506]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#06070a]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#070707]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#08090c]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#090a0d]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-gray-950'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-zinc-950'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-neutral-950'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-slate-950'] {
+  background-color: var(--brand-bg) !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#0b0d12]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#0d0f17]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#0d1016]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#0f1117]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#101010]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-gray-900'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-zinc-900'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-neutral-900'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-slate-900'],
+html[data-theme='light'] .brandbox-global-nav [class~='bg-[#090a0d]'],
+html[data-theme='light'] .brandbox-global-nav [class~='bg-[#0d1016]'] {
+  background-color: var(--brand-surface) !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#11131a]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#111111]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#121212]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#121520]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#141414]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-[#171717]'] {
+  background-color: var(--brand-card) !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-white/5'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-white/[.02]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='bg-white/[.03]'],
+html[data-theme='light'] .brandbox-global-nav [class~='bg-white/5'],
+html[data-theme='light'] .brandbox-global-nav [class~='bg-white/[.02]'],
+html[data-theme='light'] .brandbox-global-nav [class~='bg-white/[.03]'] {
+  background-color: var(--brand-subtle) !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='border-white/5'],
+html[data-theme='light'] .brandbox-theme-scope [class~='border-white/10'],
+html[data-theme='light'] .brandbox-theme-scope [class~='border-white/15'],
+html[data-theme='light'] .brandbox-theme-scope [class~='border-white/[.07]'],
+html[data-theme='light'] .brandbox-theme-scope [class~='border-white/[.08]'],
+html[data-theme='light'] .brandbox-global-nav [class~='border-white/5'],
+html[data-theme='light'] .brandbox-global-nav [class~='border-white/10'],
+html[data-theme='light'] .brandbox-global-nav [class~='border-white/15'],
+html[data-theme='light'] .brandbox-global-nav [class~='border-white/[.07]'] {
+  border-color: rgba(15, 23, 42, 0.11) !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='text-white'],
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-100'],
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-200'],
+html[data-theme='light'] .brandbox-global-nav [class~='text-white'],
+html[data-theme='light'] .brandbox-global-nav [class~='text-gray-100'],
+html[data-theme='light'] .brandbox-global-nav [class~='text-gray-200'] {
+  color: #17191f !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-300'],
+html[data-theme='light'] .brandbox-global-nav [class~='text-gray-300'] {
+  color: #3f4856 !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-400'],
+html[data-theme='light'] .brandbox-global-nav [class~='text-gray-400'] {
+  color: #667085 !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-500'],
+html[data-theme='light'] .brandbox-theme-scope [class~='text-gray-600'],
+html[data-theme='light'] .brandbox-global-nav [class~='text-gray-500'],
+html[data-theme='light'] .brandbox-global-nav [class~='text-gray-600'] {
+  color: #7a8494 !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='hover:bg-white/5']:hover,
+html[data-theme='light'] .brandbox-global-nav [class~='hover:bg-white/5']:hover {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme='light'] .brandbox-theme-scope [class~='hover:text-white']:hover,
+html[data-theme='light'] .brandbox-global-nav [class~='hover:text-white']:hover {
+  color: #111827 !important;
+}
+
+html[data-theme='light'] [class~='bg-[#f31325]'],
+html[data-theme='light'] [class~='bg-[#ff2637]'],
+html[data-theme='light'] [class~='bg-red-500'],
+html[data-theme='light'] [class~='bg-red-600'] {
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] [class~='bg-[#f31325]'] [class~='text-white'],
+html[data-theme='light'] [class~='bg-[#ff2637]'] [class~='text-white'],
+html[data-theme='light'] [class~='bg-red-500'] [class~='text-white'],
+html[data-theme='light'] [class~='bg-red-600'] [class~='text-white'],
+html[data-theme='light'] [class~='bg-black'] [class~='text-white'],
+html[data-theme='light'] [class~='bg-black'][class~='text-white'] {
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] [class~='ring-offset-[#050506]'] {
+  --tw-ring-offset-color: #ffffff !important;
+}
+
+html[data-theme='light'] input,
+html[data-theme='light'] select,
+html[data-theme='light'] textarea {
+  color: var(--brand-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  .brandbox-global-nav,
+  .brandbox-theme-scope,
+  .brandbox-theme-toggle {
+    transition: none;
+  }
 }
 
 /* The root layout owns the persistent navigation now. */
