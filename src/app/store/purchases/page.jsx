@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Clock3, KeyRound, PackageCheck, RefreshCw, RotateCcw, ShieldCheck, ShoppingBag } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../../../lib/supabase/client';
 
 const statusLabel = {
@@ -23,6 +24,13 @@ const statusLabel = {
 function formatDate(value) {
   if (!value) return '—';
   try { return new Date(value).toLocaleString('ar-LY'); } catch { return '—'; }
+}
+
+function statusSurface(status) {
+  if (['FULFILLED', 'PAID', 'ACTIVE'].includes(status)) return 'border-[var(--bb-success)] bg-[var(--bb-success-soft)] text-[var(--bb-success)]';
+  if (['FAILED', 'CANCELLED'].includes(status)) return 'border-[var(--bb-danger)] bg-[var(--bb-danger-soft)] text-[var(--bb-danger)]';
+  if (['REFUNDED', 'PARTIALLY_REFUNDED'].includes(status)) return 'border-[var(--bb-info)] bg-[var(--bb-info-soft)] text-[var(--bb-info)]';
+  return 'border-[var(--bb-warning)] bg-[var(--bb-warning-soft)] text-[var(--bb-warning)]';
 }
 
 export default function StorePurchasesPage() {
@@ -135,88 +143,97 @@ export default function StorePurchasesPage() {
     }
   }
 
-  return (
-    <main dir="rtl" className="min-h-screen bg-zinc-950 text-white">
-      <section className="mx-auto max-w-5xl px-5 py-10 md:px-8">
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-red-500">BRAND BOX STORE</p>
-            <h1 className="mt-1 text-3xl font-black">مشترياتي</h1>
-            <p className="mt-2 text-sm text-zinc-500">طلباتك وحالة الدفع والتفعيل من المصدر الفعلي.</p>
-          </div>
-          <Link href="/store" className="text-sm text-zinc-400 transition hover:text-white">العودة للمتجر</Link>
-        </div>
+  const paymentNoticeFailed = paymentNotice.startsWith('لم تكتمل');
 
-        {paymentNotice && <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-200">{paymentNotice}</div>}
-        {state.loading && <div className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-8 text-zinc-400">جاري تحميل المشتريات...</div>}
-        {!state.loading && state.error && <div className="rounded-3xl border border-red-900/50 bg-red-950/20 p-8 text-red-300">{state.error}</div>}
+  return (
+    <main dir="rtl" className="bb-app-canvas min-h-screen">
+      <section className="mx-auto max-w-5xl space-y-6 px-5 py-8 md:px-8 md:py-10">
+        <header className="bb-dashboard-hero rounded-[28px] border p-6 shadow-[var(--bb-shadow-sm)] sm:p-8">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="bb-accent-soft inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-black"><ShoppingBag size={14} /> BRAND BOX STORE</div>
+              <h1 className="bb-text-primary mt-4 text-3xl font-black">مشترياتي</h1>
+              <p className="bb-text-secondary mt-2 text-sm leading-6">طلباتك وحالة الدفع والتفعيل والاستحقاقات من المصدر الفعلي.</p>
+            </div>
+            <Link href="/store" className="bb-button-secondary inline-flex items-center justify-center rounded-xl border px-5 py-3 text-xs font-black">العودة للمتجر</Link>
+          </div>
+        </header>
+
+        {paymentNotice && <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${paymentNoticeFailed ? 'bb-danger-surface' : 'border-[var(--bb-success)] bg-[var(--bb-success-soft)] text-[var(--bb-success)]'}`}>{paymentNotice}</div>}
+        {state.loading && <div className="bb-panel bb-text-secondary flex items-center gap-3 rounded-3xl border p-8"><RefreshCw className="bb-text-accent animate-spin" size={18} /> جاري تحميل المشتريات...</div>}
+        {!state.loading && state.error && <div className="bb-danger-surface rounded-3xl border p-8" role="alert">{state.error}</div>}
 
         {!state.loading && !state.error && state.orders.length === 0 && (
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/60 p-8 text-center">
-            <h2 className="text-xl font-bold">لا توجد مشتريات بعد</h2>
-            <p className="mt-2 text-zinc-400">ستظهر طلباتك وعمليات التفعيل هنا بعد الشراء.</p>
-            <Link href="/store" className="mt-5 inline-flex rounded-xl bg-red-600 px-5 py-3 text-sm font-bold transition hover:bg-red-500">فتح المتجر</Link>
+          <div className="bb-panel rounded-3xl border p-8 text-center">
+            <span className="bb-accent-soft mx-auto grid h-14 w-14 place-items-center rounded-2xl border"><PackageCheck size={24} /></span>
+            <h2 className="bb-text-primary mt-4 text-xl font-bold">لا توجد مشتريات بعد</h2>
+            <p className="bb-text-secondary mt-2">ستظهر طلباتك وعمليات التفعيل هنا بعد الشراء.</p>
+            <Link href="/store" className="bb-button-primary mt-5 inline-flex rounded-xl px-5 py-3 text-sm font-bold">فتح المتجر</Link>
           </div>
         )}
 
         {!state.loading && !state.error && state.orders.length > 0 && (
-          <div className="space-y-4">
+          <section className="space-y-4">
+            <div><h2 className="bb-text-primary text-lg font-black">الطلبات</h2><p className="bb-text-tertiary mt-1 text-xs">السعر وحالة الدفع وحالة التنفيذ كما سجلها الخادم.</p></div>
             {state.orders.map((order) => (
-              <article key={order.id} className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-5">
+              <article key={order.id} className="bb-card rounded-3xl border p-5 shadow-[var(--bb-shadow-sm)]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs text-zinc-500">{order.order_number}</p>
-                    <h2 className="mt-1 font-bold">{statusLabel[order.status] || order.status}</h2>
-                    <p className="mt-1 text-[11px] text-zinc-600">{formatDate(order.created_at)}</p>
+                    <p className="bb-text-tertiary font-mono text-xs">{order.order_number}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <h3 className="bb-text-primary font-bold">{statusLabel[order.status] || order.status}</h3>
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${statusSurface(order.status)}`}>{statusLabel[order.status] || order.status}</span>
+                    </div>
+                    <p className="bb-text-tertiary mt-1 flex items-center gap-1 text-[11px]"><Clock3 size={11} /> {formatDate(order.created_at)}</p>
                   </div>
                   <div className="text-left">
-                    <strong>{Number(order.total_lyd || 0).toFixed(2)} {order.currency || 'د.ل'}</strong>
-                    <div className="mt-1 text-[11px] text-zinc-500">الدفع: {statusLabel[order.payment_status] || order.payment_status}</div>
+                    <strong className="bb-text-primary">{Number(order.total_lyd || 0).toFixed(2)} {order.currency || 'د.ل'}</strong>
+                    <div className="bb-text-tertiary mt-1 text-[11px]">الدفع: {statusLabel[order.payment_status] || order.payment_status}</div>
                   </div>
                 </div>
-                <div className="mt-4 space-y-2 border-t border-zinc-800 pt-4">
+                <div className="bb-divider mt-4 space-y-2 border-t pt-4">
                   {(order.store_order_items || []).map((item) => (
                     <div key={item.id} className="flex justify-between gap-4 text-sm">
-                      <span className="text-zinc-300">{item.product_name_snapshot} — {item.sku_title_snapshot}</span>
-                      <span className="text-zinc-500">× {item.quantity}</span>
+                      <span className="bb-text-secondary">{item.product_name_snapshot} — {item.sku_title_snapshot}</span>
+                      <span className="bb-text-tertiary">× {item.quantity}</span>
                     </div>
                   ))}
                 </div>
                 {order.payment_status === 'PAID' && ['FULFILLED', 'FULFILLMENT_PENDING', 'REVIEW_REQUIRED'].includes(order.status) && (
-                  <div className="mt-4 border-t border-zinc-800 pt-4">
-                    <button disabled={refundBusy === order.id} onClick={() => void requestRefund(order.id)} className="rounded-xl border border-zinc-700 px-4 py-2 text-xs font-bold text-zinc-300 transition hover:border-red-700 hover:text-red-300 disabled:opacity-50">
-                      {refundBusy === order.id ? 'جاري الإرسال...' : 'طلب استرداد'}
+                  <div className="bb-divider mt-4 border-t pt-4">
+                    <button disabled={refundBusy === order.id} onClick={() => void requestRefund(order.id)} className="bb-button-secondary bb-text-secondary inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold transition hover:border-[var(--bb-danger)] hover:text-[var(--bb-danger)] disabled:opacity-50">
+                      <RotateCcw size={14} /> {refundBusy === order.id ? 'جاري الإرسال...' : 'طلب استرداد'}
                     </button>
                   </div>
                 )}
               </article>
             ))}
-          </div>
+          </section>
         )}
 
         {!state.loading && !state.error && state.entitlements.length > 0 && (
-          <section className="mt-8 rounded-3xl border border-zinc-800 bg-zinc-900/60 p-5">
-            <div className="mb-4">
-              <h2 className="text-lg font-black">الخدمات والاستحقاقات المفعلة</h2>
-              <p className="mt-1 text-xs text-zinc-500">نعرض الحالة والمواعيد فقط؛ بيانات التسليم الحساسة لا تُعرض هنا.</p>
+          <section className="bb-panel rounded-3xl border p-5 sm:p-6">
+            <div className="mb-4 flex items-start gap-3">
+              <span className="bb-accent-soft grid h-10 w-10 shrink-0 place-items-center rounded-xl border"><KeyRound size={18} /></span>
+              <div><h2 className="bb-text-primary text-lg font-black">الخدمات والاستحقاقات المفعلة</h2><p className="bb-text-secondary mt-1 text-xs leading-6">نعرض الحالة والمواعيد أولًا؛ بيانات التسليم الحساسة تُجلب فقط عند طلبك لها.</p></div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {state.entitlements.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                <div key={item.id} className="bb-card rounded-2xl border p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <strong className="text-sm">{item.entitlement_type || 'خدمة رقمية'}</strong>
-                    <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-[10px] font-bold text-zinc-300">{statusLabel[item.status] || item.status}</span>
+                    <strong className="bb-text-primary text-sm">{item.entitlement_type || 'خدمة رقمية'}</strong>
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusSurface(item.status)}`}>{statusLabel[item.status] || item.status}</span>
                   </div>
-                  <div className="mt-3 text-[11px] leading-6 text-zinc-500">
+                  <div className="bb-text-tertiary mt-3 text-[11px] leading-6">
                     <div>البداية: {formatDate(item.starts_at)}</div>
                     <div>الانتهاء: {formatDate(item.expires_at)}</div>
                   </div>
-                  {item.status === 'ACTIVE' && ['VOUCHER','CREDITS'].includes(item.entitlement_type) && <button onClick={() => void revealDelivery(item.id)} disabled={delivery.busy === item.id} className="mt-3 rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-[11px] font-bold text-red-200 disabled:opacity-50">{delivery.busy === item.id ? 'جاري الفتح...' : item.entitlement_type === 'VOUCHER' ? 'عرض بيانات التسليم' : 'عرض تفاصيل الرصيد'}</button>}
-                  {delivery.entitlementId === item.id && delivery.payload && <div className="mt-3 rounded-xl border border-zinc-700 bg-black/40 p-3 text-xs text-zinc-200">{Array.isArray(delivery.payload.codes) && delivery.payload.codes.map((code, index) => <div key={index} dir="ltr" className="break-all font-mono">{String(code)}</div>)}{delivery.payload.credits_granted != null && <div>تمت إضافة {String(delivery.payload.credits_granted)} نقطة — الرصيد الجديد {String(delivery.payload.new_balance ?? '—')}</div>}</div>}
+                  {item.status === 'ACTIVE' && ['VOUCHER','CREDITS'].includes(item.entitlement_type) && <button onClick={() => void revealDelivery(item.id)} disabled={delivery.busy === item.id} className="bb-button-secondary bb-text-accent mt-3 inline-flex items-center gap-2 rounded-xl border border-[var(--bb-accent-border)] px-3 py-2 text-[11px] font-bold disabled:opacity-50"><ShieldCheck size={13} /> {delivery.busy === item.id ? 'جاري الفتح...' : item.entitlement_type === 'VOUCHER' ? 'عرض بيانات التسليم' : 'عرض تفاصيل الرصيد'}</button>}
+                  {delivery.entitlementId === item.id && delivery.payload && <div className="bb-surface-2 bb-border bb-text-primary mt-3 rounded-xl border p-3 text-xs"><div className="bb-text-tertiary mb-2 flex items-center gap-1 text-[10px]"><ShieldCheck size={11} /> بيانات تسليم مطلوبة صراحة</div>{Array.isArray(delivery.payload.codes) && delivery.payload.codes.map((code, index) => <div key={index} dir="ltr" className="break-all font-mono">{String(code)}</div>)}{delivery.payload.credits_granted != null && <div>تمت إضافة {String(delivery.payload.credits_granted)} نقطة — الرصيد الجديد {String(delivery.payload.new_balance ?? '—')}</div>}</div>}
                 </div>
               ))}
             </div>
-          {delivery.error && <div className="mt-3 text-xs text-red-300">{delivery.error}</div>}
+            {delivery.error && <div className="bb-danger-surface mt-3 rounded-xl border px-3 py-2 text-xs" role="alert">{delivery.error}</div>}
           </section>
         )}
       </section>
