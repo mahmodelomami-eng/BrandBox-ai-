@@ -7,6 +7,7 @@ const route = readFileSync(join(root, 'src/app/api/v1/admin/ai-team/route.ts'), 
 const component = readFileSync(join(root, 'src/components/AdminAITeamControlCenter.jsx'), 'utf8');
 const page = readFileSync(join(root, 'src/app/admin/ai-team/page.jsx'), 'utf8');
 const adminPage = readFileSync(join(root, 'src/app/admin/page.jsx'), 'utf8');
+const agentContract = readFileSync(join(root, 'AGENTS.md'), 'utf8');
 const uiDesignRoles = readFileSync(join(root, 'docs/AI_UI_DESIGN_AGENTS.md'), 'utf8');
 const productMonitoringRoles = readFileSync(join(root, 'docs/AI_PRODUCT_MONITORING_AGENTS.md'), 'utf8');
 
@@ -52,14 +53,25 @@ assert.ok(route.includes('function uiAuditPullMatch'));
 assert.ok(route.includes('const uiAuditIssue = issues.find'));
 assert.ok(route.includes('issue.number === 114'));
 assert.ok(route.includes('const uiAuditPull = openPulls.find(uiAuditPullMatch)'));
-assert.ok(route.includes('uiAuditIssue, uiAuditPull, releaseRun'));
+assert.ok(route.includes('uiAuditIssue, uiAuditPull, storePull, releaseRun'));
 assert.ok(route.includes('const uiWorkActive = Boolean(uiTask)'));
 assert.ok(route.includes("type: 'ui_audit_issue'"));
 assert.ok(route.includes('uiAudit: {'));
 assert.ok(route.includes('نشط على مسار UI Audit'));
 
+assert.ok(route.includes('function storePullMatch'));
+assert.ok(route.includes('const storePull = openPulls.find(storePullMatch)'));
+assert.ok(route.includes('const storeWorkActive = Boolean(storeTask)'));
+assert.ok(route.includes("id: 'store'"));
+assert.ok(route.includes("name: 'Store Agent'"));
+assert.ok(route.includes("specialty: 'Catalog · Checkout · Orders · Fulfillment'"));
+assert.ok(route.includes('بانتظار مهمة متجر'));
+assert.ok(route.includes('store: {'));
+assert.ok(agentContract.includes('### Store Agent'));
+assert.ok(agentContract.includes('catalog, checkout, order lifecycle, fulfillment'));
+
 const agentIds = [...route.matchAll(/id: '([a-z-]+)'/g)].map((match) => match[1]);
-assert.equal(new Set(agentIds).size, 11, 'AI Team Control Center must expose exactly 11 unique permanent agents');
+assert.equal(new Set(agentIds).size, 12, 'AI Team Control Center must expose exactly 12 unique permanent agents');
 
 assert.ok(page.includes('<AuthGate>'));
 assert.ok(page.includes('<AdminAITeamControlCenter />'));
