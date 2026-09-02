@@ -8,6 +8,7 @@ const component = readFileSync(join(root, 'src/components/AdminAITeamControlCent
 const page = readFileSync(join(root, 'src/app/admin/ai-team/page.jsx'), 'utf8');
 const adminPage = readFileSync(join(root, 'src/app/admin/page.jsx'), 'utf8');
 const uiDesignRoles = readFileSync(join(root, 'docs/AI_UI_DESIGN_AGENTS.md'), 'utf8');
+const productMonitoringRoles = readFileSync(join(root, 'docs/AI_PRODUCT_MONITORING_AGENTS.md'), 'utf8');
 
 assert.ok(route.includes("from '@/lib/auth/user-auth'"));
 assert.ok(route.includes('authenticateActiveUser(request)'));
@@ -32,6 +33,22 @@ assert.ok(route.includes("specialty: 'Next.js · React · RTL · Mobile · Motio
 assert.ok(uiDesignRoles.includes('UI/UX & Visual Designer Agent'));
 assert.ok(uiDesignRoles.includes('Frontend & UI Engineer Agent'));
 assert.ok(uiDesignRoles.includes('UI/UX & Visual Designer Agent -> Frontend & UI Engineer Agent -> QA Agent'));
+
+assert.ok(route.includes("id: 'product-business'"));
+assert.ok(route.includes("name: 'Product & Business Agent'"));
+assert.ok(route.includes("specialty: 'Product Strategy · Pricing · Growth · Customer Value'"));
+assert.ok(route.includes('const productActive ='));
+assert.ok(route.includes("id: 'monitoring-maintenance'"));
+assert.ok(route.includes("name: 'Monitoring & Maintenance Agent'"));
+assert.ok(route.includes("specialty: 'Reliability · Runtime Health · Incidents · Maintenance'"));
+assert.ok(route.includes('const monitoringActive ='));
+assert.ok(route.includes('const platformFailure ='));
+assert.ok(productMonitoringRoles.includes('Product & Business Agent'));
+assert.ok(productMonitoringRoles.includes('Monitoring & Maintenance Agent'));
+assert.ok(productMonitoringRoles.includes('Product & Business Agent -> AI Tech Lead'));
+
+const agentIds = [...route.matchAll(/id: '([a-z-]+)'/g)].map((match) => match[1]);
+assert.equal(new Set(agentIds).size, 11, 'AI Team Control Center must expose exactly 11 unique permanent agents');
 
 assert.ok(page.includes('<AuthGate>'));
 assert.ok(page.includes('<AdminAITeamControlCenter />'));
