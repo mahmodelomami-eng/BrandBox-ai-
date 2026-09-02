@@ -36,6 +36,10 @@ jobs:
         with:
           node-version: 24
 
+      - name: Install exact dependencies
+        id: dependencies
+        run: npm ci
+
       - name: Require staging service credential
         shell: bash
         run: |
@@ -43,9 +47,6 @@ jobs:
             echo 'STAGING_SERVICE_ROLE_SECRET_NOT_CONFIGURED'
             exit 1
           fi
-
-      - name: Install exact dependencies
-        run: npm ci
 
       - name: Bootstrap isolated staging test user
         shell: bash
@@ -67,5 +68,5 @@ jobs:
           }).catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); })"
 
       - name: Clean isolated staging test data
-        if: always()
+        if: always() && steps.dependencies.outcome == 'success' && env.SUPABASE_SERVICE_ROLE_KEY != ''
         run: npm run db:test-reset
