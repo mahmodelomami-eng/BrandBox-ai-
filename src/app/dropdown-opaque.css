@@ -11,3 +11,15 @@
 .brandbox-global-nav nav.xl\:hidden > div > div[class*="bg-white/[.02]"] {
   background-color: #0d1016 !important;
 }
+
+html[data-theme='light'] .brandbox-global-nav [class*="bg-[#0d1016]/98"] {
+  background-color: #ffffff !important;
+}
+
+html[data-theme='light'] .brandbox-global-nav nav.xl\:hidden {
+  background-color: #f7f8fa !important;
+}
+
+html[data-theme='light'] .brandbox-global-nav nav.xl\:hidden > div > div[class*="bg-white/[.02]"] {
+  background-color: #ffffff !important;
+}
