@@ -36,4 +36,23 @@ assert.ok(media.includes('maxLength={4000}'));
 assert.ok(media.includes('{prompt.length} / 4000'));
 assert.ok(media.includes('id="media-draft-prompt"'));
 
-console.log('Product/Monitoring media workspace interface pass guard passed.');
+// Theme & Design System Expert: draft workspace chrome must use semantic primitives.
+assert.ok(media.includes('bb-app-canvas'));
+assert.ok(media.includes('bb-panel'));
+assert.ok(media.includes('bb-card'));
+assert.ok(media.includes('bb-input'));
+assert.ok(media.includes('bb-button-primary'));
+assert.ok(media.includes('bb-button-secondary'));
+assert.ok(media.includes('bb-warning-surface'));
+assert.ok(media.includes('bb-danger-surface'));
+assert.ok(!media.includes('bg-[#050506]'));
+assert.ok(!media.includes('bg-[#0b0d12]'));
+assert.ok(!media.includes('bg-[#080a0e]'));
+assert.ok(!media.includes('bg-[#0d1016]'));
+assert.ok(!media.includes('bg-[#11141a]'));
+assert.ok(!media.includes('bg-[#171a21]'));
+assert.ok(!media.includes('text-gray-'));
+assert.ok(!media.includes('border-white/10'));
+assert.ok(!media.includes('border-white/[.07]'));
+
+console.log('Product/Monitoring/Theme media workspace interface pass guard passed.');
