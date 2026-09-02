@@ -11,6 +11,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="campaign" options={{ title: 'Campaign Composer' }} />
         <Stack.Screen name="social" options={{ title: 'حسابات السوشيال' }} />
         <Stack.Screen name="planner" options={{ title: 'مخطط المحتوى' }} />
         <Stack.Screen name="ai/chat" options={{ title: 'مساعد Brand Box' }} />
