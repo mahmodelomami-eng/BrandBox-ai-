@@ -46,6 +46,7 @@ assert.ok(engine.includes("'generation_failure_refund'"));
 assert.ok(engine.includes('wasRefunded: refundRes.success'));
 
 const imageClient = client.slice(client.indexOf('export async function createOpenRouterImageGeneration'), client.indexOf('export async function createOpenRouterChatCompletion'));
+assert.ok(imageClient.includes('imageHttpErrorCode(response.status)'), 'image generation must route HTTP failures through the safe error mapper');
 for (const code of [
   'OPENROUTER_IMAGE_RATE_LIMITED',
   'OPENROUTER_IMAGE_PROVIDER_UNAVAILABLE',
@@ -54,7 +55,7 @@ for (const code of [
   'OPENROUTER_IMAGE_INVALID_RESPONSE',
   'OPENROUTER_IMAGE_TIMEOUT',
 ]) {
-  assert.ok(imageClient.includes(code), `missing safe image provider code ${code}`);
+  assert.ok(client.includes(code), `missing safe image provider code ${code}`);
 }
 assert.ok(!imageClient.includes('OPENROUTER_IMAGE_HTTP_'), 'image provider errors must not embed raw HTTP/provider messages');
 assert.ok(!imageClient.includes('error?.message'), 'image client must not surface raw provider error messages');
