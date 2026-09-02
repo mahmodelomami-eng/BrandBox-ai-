@@ -44,7 +44,6 @@ export default function SocialScreen() {
   useEffect(() => {
     if (!accessToken) return;
     let active = true;
-    setLoading(true);
     void apiRequest<{ providers: Provider[] }>('/api/v1/social/providers', accessToken)
       .then((data) => {
         if (!active) return;
