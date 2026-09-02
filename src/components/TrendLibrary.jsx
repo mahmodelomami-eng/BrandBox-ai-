@@ -138,7 +138,7 @@ export default function TrendLibrary() {
   const hotCount = trends.filter((trend) => Number(trend.trend_score) >= 85).length;
   const evergreenCount = trends.filter((trend) => trend.status === 'evergreen').length;
 
-  async function useTrend(trend) {
+  async function launchTrend(trend) {
     if (trend.requires_reference) {
       setNotice('هذا الترند يتطلب صورة مرجعية. لن نعرض قدرة وهمية قبل اكتمال Image-to-Image داخل استوديو الصور.');
       return;
@@ -213,7 +213,7 @@ export default function TrendLibrary() {
               </section>
 
               {notice && <div className="bb-danger-surface mt-4 rounded-xl border px-4 py-3 text-xs font-bold">{notice}</div>}
-              <div className="mt-5 flex gap-2"><button type="button" className="bb-button-secondary flex-1 rounded-xl border py-3 text-xs font-black" onClick={() => { setSelected(null); setNotice(''); }}>رجوع</button><button type="button" disabled={creating} className="bb-button-primary flex-[1.6] rounded-xl py-3 text-xs font-black disabled:opacity-50" onClick={() => void useTrend(selected)}>{creating ? 'جاري تجهيز المشروع...' : selected.cta_ar || 'جرّب هذا الترند'}</button></div>
+              <div className="mt-5 flex gap-2"><button type="button" className="bb-button-secondary flex-1 rounded-xl border py-3 text-xs font-black" onClick={() => { setSelected(null); setNotice(''); }}>رجوع</button><button type="button" disabled={creating} className="bb-button-primary flex-[1.6] rounded-xl py-3 text-xs font-black disabled:opacity-50" onClick={() => void launchTrend(selected)}>{creating ? 'جاري تجهيز المشروع...' : selected.cta_ar || 'جرّب هذا الترند'}</button></div>
             </div>
           </div>
         </div>
