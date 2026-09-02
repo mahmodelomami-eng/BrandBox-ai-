@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, Clock3, Headphones, Loader2, RefreshCw, Save, UserRound } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Clock3, ExternalLink, Headphones, Loader2, Paperclip, RefreshCw, Save, UserRound } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 
 const STATUS_OPTIONS = [
@@ -26,6 +26,12 @@ function statusStyle(status) {
   const resolved = ['resolved', 'closed'].includes(status);
   const color = resolved ? 'var(--bb-success)' : 'var(--bb-warning)';
   return { color, background: resolved ? 'var(--bb-success-soft)' : 'var(--bb-warning-soft)', borderColor: `color-mix(in srgb, ${color} 25%, transparent)` };
+}
+
+function fileSizeLabel(bytes) {
+  const value = Number(bytes || 0);
+  if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function AdminSupportRequests() {
@@ -102,7 +108,7 @@ export default function AdminSupportRequests() {
           <div>
             <Link href="/admin" className="bb-text-tertiary bb-hoverable inline-flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-black"><ArrowRight size={14} /> العودة إلى مركز الإدارة</Link>
             <h1 className="mt-4 flex items-center gap-3 text-3xl font-black"><span className="bb-accent-soft grid h-12 w-12 place-items-center rounded-xl border"><Headphones size={24} /></span> طلبات الدعم</h1>
-            <p className="bb-text-tertiary mt-2 text-sm">طلبات المستخدمين الفعلية من صفحة «اتصل بنا» مع الحالة والملاحظات الداخلية.</p>
+            <p className="bb-text-tertiary mt-2 text-sm">طلبات المستخدمين الفعلية من صفحة «اتصل بنا» مع الحالة والملاحظات الداخلية والمرفقات الخاصة.</p>
           </div>
           <div className="flex items-center gap-2">
             <select value={filter} onChange={(event) => setFilter(event.target.value)} className="bb-input rounded-xl border px-4 py-3 text-xs font-black outline-none">{STATUS_OPTIONS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
@@ -122,6 +128,7 @@ export default function AdminSupportRequests() {
         <section className="mt-6 space-y-4">
           {loading ? <div className="bb-panel grid min-h-64 place-items-center rounded-3xl border"><Loader2 className="bb-text-accent animate-spin" /></div> : rows.length === 0 ? <div className="bb-panel bb-text-tertiary rounded-3xl border p-12 text-center text-sm">لا توجد طلبات ضمن هذا الفلتر.</div> : rows.map((request) => {
             const customerName = [request.customer?.firstName, request.customer?.lastName].filter(Boolean).join(' ') || request.customer?.email || 'مستخدم';
+            const attachments = Array.isArray(request.attachments) ? request.attachments : [];
             return (
               <article key={request.id} className="bb-panel rounded-3xl border p-5 sm:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -129,6 +136,19 @@ export default function AdminSupportRequests() {
                     <div className="flex flex-wrap items-center gap-2"><span className="bb-card bb-text-secondary rounded-full border px-2.5 py-1 text-[10px] font-black">{CATEGORY_LABELS[request.category] || request.category}</span><span className="rounded-full border px-2.5 py-1 text-[10px] font-black" style={statusStyle(request.status)}>{STATUS_LABELS[request.status] || request.status}</span></div>
                     <h2 className="mt-3 text-lg font-black">{request.subject}</h2>
                     <p className="bb-text-secondary mt-3 whitespace-pre-wrap text-sm leading-7">{request.message}</p>
+
+                    {attachments.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        <div className="bb-text-tertiary flex items-center gap-2 text-[10px] font-black"><Paperclip size={13} className="bb-text-accent" /> المرفقات الخاصة</div>
+                        {attachments.map((attachment) => (
+                          <div key={attachment.id} className="bb-card flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3">
+                            <div className="min-w-0"><div className="bb-text-primary max-w-[420px] truncate text-xs font-black">{attachment.fileName}</div><div className="bb-text-tertiary mt-1 text-[9px]">{attachment.contentType} · {fileSizeLabel(attachment.byteSize)}</div></div>
+                            {attachment.url ? <a href={attachment.url} target="_blank" rel="noreferrer" className="bb-button-secondary inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-[10px] font-black">فتح المرفق <ExternalLink size={12} /></a> : <span className="bb-text-disabled text-[9px]">تعذر إنشاء رابط مؤقت</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="bb-divider bb-text-disabled mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-4 text-[11px]"><span className="flex items-center gap-2"><UserRound size={14} /> {customerName}</span>{request.customer?.email && <span>{request.customer.email}</span>}{request.customer?.phone && <span dir="ltr">{request.customer.phone}</span>}<span>{new Date(request.created_at).toLocaleString('ar-LY')}</span></div>
                   </div>
 
