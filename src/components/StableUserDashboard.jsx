@@ -98,33 +98,16 @@ export default function StableUserDashboard() {
   const [stats, setStats] = useState({ projects: 0, generations: 0 });
   const [favoriteBusy, setFavoriteBusy] = useState(() => new Set());
   const [error, setError] = useState('');
-  const [businessLoading, setBusinessLoading] = useState(false);
+  const [errorOwnerId, setErrorOwnerId] = useState(null);
+  const [businessLoading, setBusinessLoading] = useState(true);
   const [dataOwnerId, setDataOwnerId] = useState(null);
   const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let mounted = true;
-    if (authLoading) return undefined;
-
-    if (!authUser?.id) {
-      setProjects([]);
-      setGenerations([]);
-      setSubscription(null);
-      setStats({ projects: 0, generations: 0 });
-      setDataOwnerId(null);
-      setBusinessLoading(false);
-      setError('');
-      return undefined;
-    }
+    if (authLoading || !authUser?.id) return undefined;
 
     const targetUserId = authUser.id;
-    setProjects([]);
-    setGenerations([]);
-    setSubscription(null);
-    setStats({ projects: 0, generations: 0 });
-    setDataOwnerId(null);
-    setBusinessLoading(true);
-    setError('');
 
     const loadBusinessData = async () => {
       try {
@@ -149,10 +132,17 @@ export default function StableUserDashboard() {
         const hasPartialFailure = [projectsRes, generationsRes, projectCountRes, generationCountRes, subscriptionRes]
           .some((result) => result.status === 'rejected' || Boolean(result.value?.error));
         if (hasPartialFailure) {
+          setErrorOwnerId(targetUserId);
           setError('تعذر تحديث بعض بيانات لوحة التحكم. يمكنك إعادة المحاولة دون مغادرة الصفحة.');
+        } else {
+          setErrorOwnerId(null);
+          setError('');
         }
       } catch {
-        if (mounted) setError('تعذر تحميل بيانات لوحة التحكم. حاول مرة أخرى.');
+        if (mounted) {
+          setErrorOwnerId(targetUserId);
+          setError('تعذر تحميل بيانات لوحة التحكم. حاول مرة أخرى.');
+        }
       } finally {
         if (mounted) {
           setDataOwnerId(targetUserId);
@@ -175,15 +165,25 @@ export default function StableUserDashboard() {
   const credits = authCredits ?? 0;
   const currentRoleLabel = roleLabel || (authProfile?.role ? (ROLE_LABELS[authProfile.role] || 'مستخدم') : 'مستخدم');
   const businessReady = Boolean(authUser?.id && dataOwnerId === authUser.id && !businessLoading);
+  const visibleError = Boolean(authUser?.id && errorOwnerId === authUser.id && error);
   const planLabel = businessReady ? String(subscription?.plan_id || 'FREE').toUpperCase() : '—';
   const planHelper = businessReady
     ? (subscription ? 'الخطة النشطة في حسابك' : 'ابدأ بالخطة المناسبة لاحتياجك')
     : 'جار تحديث بيانات الخطة';
   const planAction = subscription ? 'عرض الباقات' : 'استكشف الباقات';
 
+  function retryBusinessData() {
+    setBusinessLoading(true);
+    setDataOwnerId(null);
+    setErrorOwnerId(null);
+    setError('');
+    setReloadTick((value) => value + 1);
+  }
+
   async function toggleFavorite(project) {
     if (favoriteBusy.has(project.id)) return;
     setFavoriteBusy((current) => new Set(current).add(project.id));
+    setErrorOwnerId(null);
     setError('');
     try {
       const updated = await setUserProjectFavorite(project.id, !project.is_favorite);
@@ -191,6 +191,7 @@ export default function StableUserDashboard() {
         .map((item) => item.id === project.id ? { ...item, is_favorite: Boolean(updated?.is_favorite) } : item)
         .sort((a, b) => Number(Boolean(b.is_favorite)) - Number(Boolean(a.is_favorite)) || new Date(b.updated_at || 0) - new Date(a.updated_at || 0)));
     } catch {
+      setErrorOwnerId(authUser?.id || null);
       setError('تعذر تحديث المفضلة. حاول مرة أخرى.');
     } finally {
       setFavoriteBusy((current) => {
@@ -226,10 +227,10 @@ export default function StableUserDashboard() {
   return (
     <main dir="rtl" className="min-h-[calc(100vh-5rem)] bg-[#050608] text-white">
       <div className="mx-auto max-w-[1720px] px-4 py-5 sm:px-6 lg:px-8">
-        {error && (
+        {visibleError && (
           <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-red-500/25 bg-red-500/[.06] px-4 py-3 text-sm font-bold text-red-300 sm:flex-row sm:items-center sm:justify-between" role="alert">
             <span>{error}</span>
-            <button type="button" onClick={() => setReloadTick((value) => value + 1)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-400/25 px-3 text-xs font-black text-red-200 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60">
+            <button type="button" onClick={retryBusinessData} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-400/25 px-3 text-xs font-black text-red-200 transition hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60">
               <RefreshCw size={14} /> إعادة المحاولة
             </button>
           </div>
