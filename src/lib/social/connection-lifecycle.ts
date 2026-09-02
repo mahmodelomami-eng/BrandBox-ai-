@@ -305,10 +305,12 @@ export async function refreshSocialConnection(userId: string, connectionId: stri
     ...credential,
     accessToken: refreshed.accessToken,
     refreshToken: refreshed.refreshToken || asString(credential.refreshToken) || null,
-    refreshExpiresAt: refreshed.refreshExpiresAt ?? asString(credential.refreshExpiresAt) || null,
+    refreshExpiresAt: refreshed.refreshExpiresAt ?? (asString(credential.refreshExpiresAt) || null),
     tokenType: refreshed.tokenType || asString(credential.tokenType) || 'Bearer',
   };
-  const nextScopes = refreshed.scopes?.length ? refreshed.scopes : (Array.isArray(connection.scopes) ? connection.scopes : []);
+  const nextScopes = refreshed.scopes?.length
+    ? refreshed.scopes
+    : (Array.isArray(connection.scopes) ? connection.scopes : []);
   const now = new Date().toISOString();
   const { data: updated, error: updateError } = await database.from('social_connections')
     .update({
