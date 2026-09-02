@@ -7,6 +7,7 @@ const route = readFileSync(join(root, 'src/app/api/v1/admin/ai-team/route.ts'), 
 const component = readFileSync(join(root, 'src/components/AdminAITeamControlCenter.jsx'), 'utf8');
 const page = readFileSync(join(root, 'src/app/admin/ai-team/page.jsx'), 'utf8');
 const adminPage = readFileSync(join(root, 'src/app/admin/page.jsx'), 'utf8');
+const uiDesignRoles = readFileSync(join(root, 'docs/AI_UI_DESIGN_AGENTS.md'), 'utf8');
 
 assert.ok(route.includes("from '@/lib/auth/user-auth'"));
 assert.ok(route.includes('authenticateActiveUser(request)'));
@@ -21,6 +22,16 @@ assert.ok(route.includes("statusSource: 'GitHub activity inference'"));
 assert.ok(route.includes('CACHE_SECONDS = 300'));
 assert.ok(!route.includes('GITHUB_TOKEN'));
 assert.ok(!route.includes('process.env.'));
+
+assert.ok(route.includes("id: 'visual-designer'"));
+assert.ok(route.includes("name: 'UI/UX & Visual Designer Agent'"));
+assert.ok(route.includes("specialty: 'Design System · Layout · Typography · Brand Consistency'"));
+assert.ok(route.includes('const designActive ='));
+assert.ok(route.includes("name: 'Frontend & UI Engineer Agent'"));
+assert.ok(route.includes("specialty: 'Next.js · React · RTL · Mobile · Motion'"));
+assert.ok(uiDesignRoles.includes('UI/UX & Visual Designer Agent'));
+assert.ok(uiDesignRoles.includes('Frontend & UI Engineer Agent'));
+assert.ok(uiDesignRoles.includes('UI/UX & Visual Designer Agent -> Frontend & UI Engineer Agent -> QA Agent'));
 
 assert.ok(page.includes('<AuthGate>'));
 assert.ok(page.includes('<AdminAITeamControlCenter />'));
