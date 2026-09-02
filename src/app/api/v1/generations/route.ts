@@ -198,8 +198,12 @@ export async function POST(request: NextRequest) {
   }
 
   const generationType = body.generationType;
+  const requestId = typeof body.requestId === 'string' ? body.requestId.trim() : '';
   if ((generationType !== 'chat' && generationType !== 'image') || !body.modelId || !body.prompt?.trim() || body.prompt.trim().length > 4000) {
     return NextResponse.json({ error: 'INVALID_GENERATION_REQUEST' }, { status: 400 });
+  }
+  if (!/^[a-zA-Z0-9_-]{8,80}$/.test(requestId)) {
+    return NextResponse.json({ error: 'INVALID_GENERATION_REQUEST_ID' }, { status: 400 });
   }
   if (generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
     return NextResponse.json({ error: 'IMAGE_MODEL_NOT_SUPPORTED' }, { status: 400 });
@@ -291,8 +295,11 @@ export async function POST(request: NextRequest) {
 
   const result = await GenerationEngine.executeGeneration(
     { userId: user.id, email: user.email || '', role: auth.profile.role },
-    body,
+    { ...body, requestId },
     { unitCredits, chatSystemPrompt, imagePromptSuffix }
   );
+  if (result.retryable) {
+    return NextResponse.json(result, { status: 202, headers: { 'Retry-After': '2' } });
+  }
   return NextResponse.json(result, { status: result.success ? 200 : 502 });
 }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { CreditEngine } from '../credits/credit-engine';
 import { AuthContext } from '../auth/rbac-engine';
 import { createOpenRouterChatCompletion, createOpenRouterImageGeneration } from '../ai/openrouter-client';
@@ -7,6 +8,7 @@ export interface GenerationRequest {
   generationType: 'chat' | 'image' | 'video';
   modelId: string;
   prompt: string;
+  requestId: string;
   projectId?: string;
   settings?: Record<string, any>;
   simulateFailure?: boolean;
@@ -23,6 +25,9 @@ export interface GenerationResponse {
   generationId: string;
   creditsConsumed: number;
   remainingBalance: number;
+  status?: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  retryable?: boolean;
+  retryAfterMs?: number;
   resultUrl?: string;
   resultUrls?: string[];
   storagePaths?: string[];
@@ -32,6 +37,81 @@ export interface GenerationResponse {
 }
 
 type NormalizedFailure = { code: string; userMessage: string };
+
+function safeGenerationRequestId(requestId: string): string {
+  const value = String(requestId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{8,80}$/.test(value)) throw new Error('INVALID_GENERATION_REQUEST_ID');
+  return value;
+}
+
+export function generationIdForRequest(userId: string, requestId: string): string {
+  const digest = createHash('sha256').update(`${userId}:${requestId}`).digest('hex');
+  return `gen_${digest.slice(0, 40)}`;
+}
+
+export function generationReplayDisposition(status: string): { success: boolean; retryable: boolean } {
+  if (status === 'completed') return { success: true, retryable: false };
+  if (status === 'queued' || status === 'processing') return { success: false, retryable: true };
+  return { success: false, retryable: false };
+}
+
+async function resolveExistingGeneration(
+  database: ReturnType<typeof createPrivilegedSupabaseClient>,
+  userId: string,
+  generationId: string
+): Promise<GenerationResponse | null> {
+  const { data: existing, error } = await database.from('generations')
+    .select('id,generation_type,status,credits_consumed,result_content,error_message')
+    .eq('id', generationId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw new Error(`GENERATION_IDEMPOTENCY_LOOKUP_FAILED: ${error.message}`);
+  if (!existing) return null;
+
+  let remainingBalance = 0;
+  try { remainingBalance = await CreditEngine.getBalance(userId); } catch { /* replay remains authoritative */ }
+  const resultUrls: string[] = [];
+  const storagePaths: string[] = [];
+  if (existing.generation_type === 'image' && existing.status === 'completed') {
+    const { data: assets, error: assetsError } = await database.from('assets')
+      .select('file_path')
+      .eq('generation_id', generationId)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
+    if (assetsError) throw new Error(`GENERATION_IDEMPOTENCY_LOOKUP_FAILED: ${assetsError.message}`);
+    for (const asset of assets || []) {
+      storagePaths.push(asset.file_path);
+      const { data: signed, error: signedError } = await database.storage
+        .from('generation-assets')
+        .createSignedUrl(asset.file_path, 3600);
+      if (signedError || !signed?.signedUrl) {
+        throw new Error(`GENERATION_IDEMPOTENCY_LOOKUP_FAILED: ${signedError?.message || 'No signed URL returned'}`);
+      }
+      resultUrls.push(signed.signedUrl);
+    }
+  }
+
+  const disposition = generationReplayDisposition(existing.status);
+  const inProgressMessage = 'GENERATION_IN_PROGRESS: عملية التوليد قيد التنفيذ. أعد التحقق بعد قليل.';
+  return {
+    success: disposition.success,
+    generationId: existing.id,
+    creditsConsumed: Number(existing.credits_consumed || 0),
+    remainingBalance,
+    status: existing.status,
+    retryable: disposition.retryable,
+    retryAfterMs: disposition.retryable ? 2000 : undefined,
+    content: typeof existing.result_content === 'string' ? existing.result_content : undefined,
+    resultUrl: resultUrls[0],
+    resultUrls,
+    storagePaths,
+    errorMessage: disposition.success
+      ? undefined
+      : disposition.retryable
+        ? inProgressMessage
+        : typeof existing.error_message === 'string' ? existing.error_message : 'GENERATION_FAILED',
+  };
+}
 
 function normalizeGenerationFailure(error: unknown): NormalizedFailure {
   const raw = error instanceof Error ? error.message : '';
@@ -88,7 +168,8 @@ export class GenerationEngine {
       throw new Error('UNAUTHORIZED: Authentication required for AI generation.');
     }
 
-    const generationId = `gen_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const requestId = safeGenerationRequestId(request.requestId);
+    const generationId = generationIdForRequest(actor.userId, requestId);
     const requestedCount = request.generationType === 'image'
       ? Math.max(1, Math.min(4, Math.trunc(Number(request.settings?.count) || 1)))
       : 1;
@@ -97,6 +178,9 @@ export class GenerationEngine {
       ? Math.trunc(trustedUnitCredits)
       : CreditEngine.calculateRequiredCredits(request.modelId, request.generationType);
     const requiredCredits = unitCredits * requestedCount;
+    const database = createPrivilegedSupabaseClient();
+    const existingGeneration = await resolveExistingGeneration(database, actor.userId, generationId);
+    if (existingGeneration) return existingGeneration;
 
     const currentBalance = await CreditEngine.getBalance(actor.userId);
     if (currentBalance < requiredCredits) {
@@ -133,7 +217,6 @@ export class GenerationEngine {
     const uploadedPaths: string[] = [];
     try {
       const startedAt = Date.now();
-      const database = createPrivilegedSupabaseClient();
       const { error: insertError } = await database.from('generations').insert({
         id: generationId,
         user_id: actor.userId,
@@ -148,7 +231,11 @@ export class GenerationEngine {
         credits_consumed: 0,
         idempotency_key: deductDkey,
       });
-      if (insertError) throw new Error(`GENERATION_LOG_CREATE_FAILED: ${insertError.message}`);
+      if (insertError) {
+        const concurrentGeneration = await resolveExistingGeneration(database, actor.userId, generationId);
+        if (concurrentGeneration) return concurrentGeneration;
+        throw new Error(`GENERATION_LOG_CREATE_FAILED: ${insertError.message}`);
+      }
 
       if (request.simulateFailure) {
         throw new Error('SIMULATED_AI_PROVIDER_TIMEOUT');
@@ -234,6 +321,7 @@ export class GenerationEngine {
         generationId,
         creditsConsumed: requiredCredits,
         remainingBalance: deductionRes.newBalance,
+        status: 'completed',
         content: responseContent,
         resultUrl: responseUrls[0],
         resultUrls: responseUrls,
@@ -291,6 +379,7 @@ export class GenerationEngine {
         generationId,
         creditsConsumed: 0,
         remainingBalance,
+        status: 'failed',
         errorMessage: `${failure.code}: ${failure.userMessage}${refundRes.success ? ' تم إعادة النقاط تلقائيًا.' : ' تعذر تأكيد إعادة النقاط تلقائيًا وتم تسجيل العملية كفاشلة للمراجعة.'}`,
         wasRefunded: refundRes.success
       };

@@ -92,6 +92,7 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           generationType: 'chat',
+          requestId: crypto.randomUUID(),
           modelId,
           prompt: prompt.trim(),
           projectId,

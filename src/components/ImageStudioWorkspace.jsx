@@ -333,6 +333,7 @@ export default function ImageStudioWorkspace() {
         },
         body: JSON.stringify({
           generationType: 'image',
+          requestId: crypto.randomUUID(),
           modelId: selectedModel.id,
           prompt: finalPrompt,
           projectId: activeProject.id,

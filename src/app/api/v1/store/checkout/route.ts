@@ -72,7 +72,9 @@ export async function POST(request: NextRequest) {
       'STORE_OUT_OF_STOCK',
       'STORE_VALIDATION_ERROR',
     ];
-    const status = clientErrors.some((code) => message.includes(code)) ? 400 : 500;
-    return NextResponse.json({ error: status === 400 ? message : 'STORE_CHECKOUT_FAILED' }, { status });
+    let status = 500;
+    if (message.includes('STORE_IDEMPOTENCY_KEY_CONFLICT')) status = 409;
+    else if (clientErrors.some((code) => message.includes(code))) status = 400;
+    return NextResponse.json({ error: status < 500 ? message : 'STORE_CHECKOUT_FAILED' }, { status });
   }
 }
