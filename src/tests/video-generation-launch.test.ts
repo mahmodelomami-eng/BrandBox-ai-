@@ -11,12 +11,14 @@ const page = readFileSync(join(root, 'src/app/projects/video/workspace/page.jsx'
 const adminRoute = readFileSync(join(root, 'src/app/api/v1/admin/ai-integrations/route.ts'), 'utf8');
 const adminWorkspace = readFileSync(join(root, 'src/components/AdminAIIntegrationsPanel.jsx'), 'utf8');
 const migration = readFileSync(join(root, 'supabase/migrations/20260902023000_runway_video_catalog_launch_seed.sql'), 'utf8');
+const pricingMigration = readFileSync(join(root, 'supabase/migrations/20260902135442_price_runway_gen45_video.sql'), 'utf8');
 
 assert.ok(client.includes("RUNWAY_VIDEO_MODELS = ['gen4.5']"));
 assert.ok(client.includes("RUNWAY_TEXT_TO_VIDEO_RATIOS = ['1280:720', '720:1280']"));
 assert.ok(client.includes('RUNWAY_TEXT_TO_VIDEO_MIN_DURATION = 2'));
 assert.ok(client.includes('RUNWAY_TEXT_TO_VIDEO_MAX_DURATION = 10'));
-assert.ok(client.includes('/v1/image_to_video'));
+assert.ok(client.includes('/v1/text_to_video'));
+assert.ok(!client.includes('/v1/image_to_video'), 'text-only Gen-4.5 requests must use Runway text_to_video');
 assert.ok(client.includes('/v1/tasks/'));
 assert.ok(client.includes("'X-Runway-Version': RUNWAY_API_VERSION"));
 assert.ok(client.includes('process.env.RUNWAYML_API_SECRET'));
@@ -99,5 +101,14 @@ assert.ok(migration.includes("'provider_runway_credits_per_second', 12"));
 assert.match(migration, /\n\s*0,\n\s*FALSE,\n\s*FALSE,/);
 assert.ok(!migration.includes('is_enabled = EXCLUDED.is_enabled'));
 assert.ok(!migration.includes('minimum_credits = EXCLUDED.minimum_credits'));
+
+assert.ok(pricingMigration.includes('minimum_credits = 50'));
+assert.ok(pricingMigration.includes("'brandbox_credits_per_second', 25"));
+assert.ok(pricingMigration.includes("'provider_runway_credits_per_second', 12"));
+assert.ok(pricingMigration.includes("'provider_usd_per_second', 0.12"));
+assert.ok(pricingMigration.includes("'pricing_fx_lyd_per_usd', 13"));
+assert.ok(pricingMigration.includes("'pricing_margin_floor_pct', 40"));
+assert.ok(!pricingMigration.includes('is_enabled = TRUE'), 'pricing migration must not activate provider without its secret');
+assert.ok(!pricingMigration.includes('is_visible_to_users = TRUE'), 'pricing migration must not expose provider without its secret');
 
 console.log('Video generation launch guard passed.');
