@@ -9,16 +9,17 @@ const route = readFileSync(join(root, 'src/app/api/v1/video-generations/route.ts
 const workspace = readFileSync(join(root, 'src/components/VideoProjectWorkspace.jsx'), 'utf8');
 const page = readFileSync(join(root, 'src/app/projects/video/workspace/page.jsx'), 'utf8');
 const adminRoute = readFileSync(join(root, 'src/app/api/v1/admin/ai-integrations/route.ts'), 'utf8');
+const adminWorkspace = readFileSync(join(root, 'src/components/AdminAIIntegrationsPanel.jsx'), 'utf8');
 const migration = readFileSync(join(root, 'supabase/migrations/20260902023000_runway_video_catalog_launch_seed.sql'), 'utf8');
 
 assert.ok(client.includes("RUNWAY_VIDEO_MODELS = ['gen4.5']"));
 assert.ok(client.includes("RUNWAY_TEXT_TO_VIDEO_RATIOS = ['1280:720', '720:1280']"));
 assert.ok(client.includes('RUNWAY_TEXT_TO_VIDEO_MIN_DURATION = 2'));
 assert.ok(client.includes('RUNWAY_TEXT_TO_VIDEO_MAX_DURATION = 10'));
-assert.ok(client.includes("'/v1/image_to_video'") || client.includes('`/v1/image_to_video`') || client.includes('/v1/image_to_video'));
+assert.ok(client.includes('/v1/image_to_video'));
 assert.ok(client.includes('/v1/tasks/'));
 assert.ok(client.includes("'X-Runway-Version': RUNWAY_API_VERSION"));
-assert.ok(client.includes("process.env.RUNWAYML_API_SECRET"));
+assert.ok(client.includes('process.env.RUNWAYML_API_SECRET'));
 assert.ok(!client.includes('error?.message'), 'provider internals must not be surfaced by the Runway client');
 assert.ok(!client.includes('gen3a_turbo'));
 assert.ok(!client.includes('runway-gen3-alpha'));
@@ -36,7 +37,7 @@ assert.ok(post.includes("error: 'VIDEO_MODEL_PRICING_UNAVAILABLE'"));
 assert.ok(post.includes("error: 'VIDEO_PROVIDER_NOT_CONFIGURED'"));
 assert.ok(post.includes('modelCreditsPerSecond(model.metadata)'));
 assert.ok(post.includes('ownedVideoProject'));
-assert.ok(post.includes("projectTypeMatchesTool(project.type, 'video')"));
+assert.ok(route.includes("projectTypeMatchesTool(project.type, 'video')"), 'ownedVideoProject must enforce video project type');
 assert.ok(post.includes('validateRunwayVideoRequest'));
 assert.ok(!route.includes('CreditEngine.calculateRequiredCredits'), 'video route must never fall back to generic hardcoded model pricing');
 
@@ -75,6 +76,9 @@ assert.ok(adminRoute.includes("error: 'VIDEO_PRICING_REQUIRED'"));
 assert.ok(adminRoute.includes('brandboxCreditsPerSecond'));
 assert.ok(adminRoute.includes('brandbox_credits_per_second'));
 assert.ok(!adminRoute.includes("provider === 'openrouter' ? hasOpenRouterSecret() : true"), 'unknown providers must not be reported configured by default');
+assert.ok(adminWorkspace.includes('Runway: {secretPolicy.runwayConfigured'));
+assert.ok(adminWorkspace.includes('BB / sec'));
+assert.ok(adminWorkspace.includes('Brand Box credits / second'));
 
 assert.ok(migration.includes("'generation-video-assets'"));
 assert.match(migration, /'generation-video-assets',[\s\S]*?FALSE,[\s\S]*?157286400/);
