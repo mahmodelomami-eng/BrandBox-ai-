@@ -42,15 +42,13 @@ const FUTURE_GROUPS = [
 function SourceBadge({ value }) {
   const normalized = String(value || '').toLowerCase();
   const healthy = normalized === 'ok' || normalized === 'live' || normalized === 'healthy';
-  return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${healthy ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/5 text-gray-400'}`}>{value || 'غير محدد'}</span>;
+  return <span className="rounded-full border px-2.5 py-1 text-[10px] font-black" style={{ background: healthy ? 'var(--bb-success-soft)' : 'var(--bb-hover)', color: healthy ? 'var(--bb-success)' : 'var(--bb-text-secondary)', borderColor: healthy ? 'color-mix(in srgb, var(--bb-success) 25%, transparent)' : 'var(--bb-border)' }}>{value || 'غير محدد'}</span>;
 }
 
 function Field({ definition, value, disabled, onChange }) {
-  const common = 'w-full rounded-xl border border-white/10 bg-[#10131a] px-3 py-2.5 text-xs text-white outline-none focus:border-[#f31325]/50 disabled:cursor-not-allowed disabled:opacity-50';
-
   if (definition.valueType === 'boolean') {
     return (
-      <button type="button" disabled={disabled} onClick={() => onChange(!Boolean(value))} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50 ${value ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-[#10131a] text-gray-400'}`}>
+      <button type="button" disabled={disabled} onClick={() => onChange(!Boolean(value))} className="bb-button-secondary flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50" style={value ? { background: 'var(--bb-success-soft)', color: 'var(--bb-success)', borderColor: 'color-mix(in srgb, var(--bb-success) 25%, transparent)' } : undefined}>
         <span>{definition.labelAr}</span><span>{value ? 'مفعّل' : 'معطّل'}</span>
       </button>
     );
@@ -58,7 +56,7 @@ function Field({ definition, value, disabled, onChange }) {
 
   return (
     <label className="block">
-      <span className="mb-2 block text-[11px] font-bold text-gray-400">{definition.labelAr}</span>
+      <span className="bb-text-secondary mb-2 block text-[11px] font-bold">{definition.labelAr}</span>
       <input
         type={definition.valueType === 'number' ? 'number' : 'text'}
         min={definition.min}
@@ -66,7 +64,7 @@ function Field({ definition, value, disabled, onChange }) {
         value={value ?? ''}
         disabled={disabled}
         onChange={(event) => onChange(definition.valueType === 'number' ? Number(event.target.value) : event.target.value)}
-        className={common}
+        className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-50"
       />
     </label>
   );
@@ -109,10 +107,7 @@ export default function AdminSettingsHub({ sources = {} }) {
   }
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadSettings();
-    }, 0);
-
+    const timeout = window.setTimeout(() => { void loadSettings(); }, 0);
     return () => window.clearTimeout(timeout);
   }, []);
 
@@ -171,26 +166,26 @@ export default function AdminSettingsHub({ sources = {} }) {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-3xl border border-white/10 bg-[#0d1016] p-5 sm:p-6">
+      <section className="bb-panel rounded-3xl border p-5 sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <div className="text-[10px] font-black tracking-[.18em] text-[#ff6674]">ADMIN SETTINGS</div>
+            <div className="bb-text-accent text-[10px] font-black tracking-[.18em]">ADMIN SETTINGS</div>
             <h2 className="mt-2 text-xl font-black">مركز إعدادات المنصة</h2>
-            <p className="mt-2 max-w-3xl text-xs leading-6 text-gray-500">إعدادات غير سرية تُقرأ وتُحفظ عبر API محمي. الأسرار ومفاتيح الخدمات لا يتم إرسالها إلى المتصفح.</p>
+            <p className="bb-text-tertiary mt-2 max-w-3xl text-xs leading-6">إعدادات غير سرية تُقرأ وتُحفظ عبر API محمي. الأسرار ومفاتيح الخدمات لا يتم إرسالها إلى المتصفح.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/admin/home-content" className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#10131a] px-4 py-3 text-xs font-black hover:border-[#f31325]/40"><UserRoundCog size={16} className="text-[#ff3344]" /> محتوى الصفحة الرئيسية</Link>
-            <a href="/api/health" target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-xs font-black text-emerald-300"><Gauge size={16} /> حالة الخدمة</a>
-            {capabilities.canManageSettings && <button disabled={saving || !dirtyCount} onClick={() => void saveSettings()} className="flex items-center gap-2 rounded-xl bg-[#f31325] px-4 py-3 text-xs font-black disabled:opacity-40">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} حفظ {dirtyCount ? `(${dirtyCount})` : ''}</button>}
+            <Link href="/admin/home-content" className="bb-button-secondary flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-black"><UserRoundCog size={16} className="bb-text-accent" /> محتوى الصفحة الرئيسية</Link>
+            <a href="/api/health" target="_blank" rel="noreferrer" className="bb-button-secondary flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-black"><Gauge size={16} style={{ color: 'var(--bb-success)' }} /> حالة الخدمة</a>
+            {capabilities.canManageSettings && <button disabled={saving || !dirtyCount} onClick={() => void saveSettings()} className="bb-button-primary flex items-center gap-2 rounded-xl px-4 py-3 text-xs font-black disabled:opacity-40">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} حفظ {dirtyCount ? `(${dirtyCount})` : ''}</button>}
           </div>
         </div>
       </section>
 
-      {error && <div className="rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-xs text-red-200">{error}</div>}
-      {message && <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-200">{message}</div>}
+      {error && <div className="bb-danger-surface rounded-2xl border px-4 py-3 text-xs">{error}</div>}
+      {message && <div className="rounded-2xl border px-4 py-3 text-xs" style={{ background: 'var(--bb-success-soft)', color: 'var(--bb-success)', borderColor: 'color-mix(in srgb, var(--bb-success) 28%, transparent)' }}>{message}</div>}
 
       {loading ? (
-        <div className="grid min-h-60 place-items-center rounded-3xl border border-white/10 bg-[#0d1016]"><div className="flex items-center gap-3 text-sm text-gray-500"><Loader2 className="animate-spin text-[#ff3344]" size={18} /> جاري تحميل الإعدادات...</div></div>
+        <div className="bb-panel grid min-h-60 place-items-center rounded-3xl border"><div className="bb-text-tertiary flex items-center gap-3 text-sm"><Loader2 className="bb-text-accent animate-spin" size={18} /> جاري تحميل الإعدادات...</div></div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {SETTINGS_GROUPS.map(({ id, title, description, icon: Icon }) => {
@@ -198,12 +193,12 @@ export default function AdminSettingsHub({ sources = {} }) {
             const securityLocked = id === 'security' && !capabilities.canManageSecurity;
             const disabled = !capabilities.canManageSettings || securityLocked;
             return (
-              <section key={id} className="rounded-3xl border border-white/10 bg-[#0d1016] p-5">
+              <section key={id} className="bb-card rounded-3xl border p-5">
                 <div className="flex items-start gap-3">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#f31325]/20 bg-[#f31325]/8 text-[#ff3344]"><Icon size={20} /></span>
-                  <div><h3 className="font-black">{title}</h3><p className="mt-1 text-xs leading-6 text-gray-500">{description}</p></div>
+                  <span className="bb-accent-soft grid h-11 w-11 shrink-0 place-items-center rounded-xl border"><Icon size={20} /></span>
+                  <div><h3 className="font-black">{title}</h3><p className="bb-text-tertiary mt-1 text-xs leading-6">{description}</p></div>
                 </div>
-                {securityLocked && <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] text-amber-200">هذه الإعدادات تتطلب صلاحية security.manage.</div>}
+                {securityLocked && <div className="bb-warning-surface mt-4 rounded-xl border p-3 text-[11px]">هذه الإعدادات تتطلب صلاحية security.manage.</div>}
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   {fields.map((definition) => <Field key={definition.key} definition={definition} value={settings[definition.key]} disabled={disabled} onChange={(value) => setSettings((current) => ({ ...current, [definition.key]: value }))} />)}
                 </div>
@@ -213,39 +208,44 @@ export default function AdminSettingsHub({ sources = {} }) {
         </div>
       )}
 
-      <section className="rounded-3xl border border-[#f31325]/15 bg-[#0d1016] p-5 sm:p-6">
+      <section className="bb-panel rounded-3xl border p-5 sm:p-6">
         <div className="flex items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#f31325]/20 bg-[#f31325]/8 text-[#ff3344]"><Calculator size={20} /></span>
-          <div><h3 className="font-black">حاسبة تكلفة أدوات AI</h3><p className="mt-1 text-xs leading-6 text-gray-500">أدخل تكلفة العملية بالدولار من المزود أو OpenRouter، وتحسب المنصة التكلفة المحلية بعد سعر الصرف وعمولة المصرف ثم السعر المقترح حسب هامش الربح.</p></div>
+          <span className="bb-accent-soft grid h-11 w-11 shrink-0 place-items-center rounded-xl border"><Calculator size={20} /></span>
+          <div><h3 className="font-black">حاسبة تكلفة أدوات AI</h3><p className="bb-text-tertiary mt-1 text-xs leading-6">أدخل تكلفة العملية بالدولار من المزود أو OpenRouter، وتحسب المنصة التكلفة المحلية بعد سعر الصرف وعمولة المصرف ثم السعر المقترح حسب هامش الربح.</p></div>
         </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-[220px_1fr]">
           <label className="block">
-            <span className="mb-2 block text-[11px] font-bold text-gray-400">تكلفة المزود بالدولار USD</span>
-            <input type="number" min="0" step="0.0001" value={providerCostUsd} onChange={(event) => setProviderCostUsd(Number(event.target.value))} className="w-full rounded-xl border border-white/10 bg-[#10131a] px-3 py-3 text-sm font-black text-white outline-none focus:border-[#f31325]/50" />
+            <span className="bb-text-secondary mb-2 block text-[11px] font-bold">تكلفة المزود بالدولار USD</span>
+            <input type="number" min="0" step="0.0001" value={providerCostUsd} onChange={(event) => setProviderCostUsd(Number(event.target.value))} className="bb-input w-full rounded-xl border px-3 py-3 text-sm font-black outline-none" />
           </label>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-white/10 bg-[#10131a] p-4"><div className="text-[10px] text-gray-500">التكلفة بعد الصرف</div><div className="mt-2 text-lg font-black">{costCalculator.providerLyd.toFixed(4)} د.ل</div><div className="mt-1 text-[10px] text-gray-600">1 USD = {costCalculator.usdToLyd} LYD</div></div>
-            <div className="rounded-2xl border border-white/10 bg-[#10131a] p-4"><div className="text-[10px] text-gray-500">عمولة المصرف</div><div className="mt-2 text-lg font-black text-amber-300">{costCalculator.bankFeeLyd.toFixed(4)} د.ل</div><div className="mt-1 text-[10px] text-gray-600">{costCalculator.bankCommission}%</div></div>
-            <div className="rounded-2xl border border-white/10 bg-[#10131a] p-4"><div className="text-[10px] text-gray-500">التكلفة الفعلية</div><div className="mt-2 text-lg font-black text-red-300">{costCalculator.landedCostLyd.toFixed(4)} د.ل</div><div className="mt-1 text-[10px] text-gray-600">قبل هامش الربح</div></div>
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4"><div className="text-[10px] text-gray-500">السعر المقترح</div><div className="mt-2 text-lg font-black text-emerald-300">{costCalculator.suggestedPriceLyd.toFixed(4)} د.ل</div><div className="mt-1 text-[10px] text-gray-600">هامش {costCalculator.targetMargin}%</div></div>
+            <MetricBox label="التكلفة بعد الصرف" value={`${costCalculator.providerLyd.toFixed(4)} د.ل`} note={`1 USD = ${costCalculator.usdToLyd} LYD`} />
+            <MetricBox label="عمولة المصرف" value={`${costCalculator.bankFeeLyd.toFixed(4)} د.ل`} note={`${costCalculator.bankCommission}%`} tone="warning" />
+            <MetricBox label="التكلفة الفعلية" value={`${costCalculator.landedCostLyd.toFixed(4)} د.ل`} note="قبل هامش الربح" tone="danger" />
+            <MetricBox label="السعر المقترح" value={`${costCalculator.suggestedPriceLyd.toFixed(4)} د.ل`} note={`هامش ${costCalculator.targetMargin}%`} tone="success" />
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        {FUTURE_GROUPS.map(({ title, icon: Icon, note }) => <div key={title} className="rounded-3xl border border-white/10 bg-[#0d1016] p-5"><div className="flex items-center gap-2 font-black"><Icon size={18} className="text-[#ff3344]" /> {title}</div><p className="mt-3 text-xs leading-6 text-gray-500">{note}</p><div className="mt-4 text-[10px] font-black text-amber-300">محجوز للمرحلة التالية</div></div>)}
+        {FUTURE_GROUPS.map(({ title, icon: Icon, note }) => <div key={title} className="bb-card rounded-3xl border p-5"><div className="flex items-center gap-2 font-black"><Icon size={18} className="bb-text-accent" /> {title}</div><p className="bb-text-tertiary mt-3 text-xs leading-6">{note}</p><div className="bb-text-warning mt-4 text-[10px] font-black">محجوز للمرحلة التالية</div></div>)}
       </section>
 
       <section className="grid gap-5 xl:grid-cols-2">
-        <div className="rounded-3xl border border-white/10 bg-[#0d1016] p-5">
-          <div className="flex items-center gap-2 font-black"><Database size={18} className="text-emerald-300" /> مصادر البيانات الحالية</div>
-          <div className="mt-4 space-y-2">{Object.entries(sources).length ? Object.entries(sources).map(([key, value]) => <div key={key} className="flex items-center justify-between gap-3 rounded-xl border border-white/[.07] bg-[#10131a] px-4 py-3 text-xs"><span className="font-mono text-gray-400">{key}</span><SourceBadge value={value} /></div>) : <div className="rounded-xl border border-white/[.07] bg-[#10131a] px-4 py-6 text-center text-xs text-gray-600">لا توجد مصادر معلنة حاليًا.</div>}</div>
+        <div className="bb-panel rounded-3xl border p-5">
+          <div className="flex items-center gap-2 font-black"><Database size={18} style={{ color: 'var(--bb-success)' }} /> مصادر البيانات الحالية</div>
+          <div className="mt-4 space-y-2">{Object.entries(sources).length ? Object.entries(sources).map(([key, value]) => <div key={key} className="bb-card flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs"><span className="bb-text-secondary font-mono">{key}</span><SourceBadge value={value} /></div>) : <div className="bb-card bb-text-disabled rounded-xl border px-4 py-6 text-center text-xs">لا توجد مصادر معلنة حاليًا.</div>}</div>
         </div>
-        <div className="rounded-3xl border border-amber-500/15 bg-amber-500/5 p-5">
-          <div className="flex items-center gap-2 font-black text-amber-200"><KeyRound size={18} /> قاعدة الأمان</div>
-          <div className="mt-4 space-y-3 text-xs leading-6 text-amber-100/70"><p>لا يتم تخزين مفاتيح API أو كلمات المرور أو أسرار SMTP داخل هذه الإعدادات.</p><p>كل تعديل ناجح يُسجل في Audit Log، بينما إعدادات الأمان تتطلب صلاحية مستقلة فوق settings.manage.</p><p>Production لن يتم تعديلها من هذه المرحلة؛ migration الجديدة تظل للمراجعة والتطبيق على Staging أولًا.</p></div>
+        <div className="bb-warning-surface rounded-3xl border p-5">
+          <div className="flex items-center gap-2 font-black"><KeyRound size={18} /> قاعدة الأمان</div>
+          <div className="mt-4 space-y-3 text-xs leading-6"><p>لا يتم تخزين مفاتيح API أو كلمات المرور أو أسرار SMTP داخل هذه الإعدادات.</p><p>كل تعديل ناجح يُسجل في Audit Log، بينما إعدادات الأمان تتطلب صلاحية مستقلة فوق settings.manage.</p><p>Production لن يتم تعديلها من هذه المرحلة؛ migration الجديدة تظل للمراجعة والتطبيق على Staging أولًا.</p></div>
         </div>
       </section>
     </div>
   );
+}
+
+function MetricBox({ label, value, note, tone = 'default' }) {
+  const toneColor = tone === 'warning' ? 'var(--bb-warning)' : tone === 'danger' ? 'var(--bb-danger)' : tone === 'success' ? 'var(--bb-success)' : 'var(--bb-text-primary)';
+  return <div className="bb-card rounded-2xl border p-4"><div className="bb-text-tertiary text-[10px]">{label}</div><div className="mt-2 text-lg font-black" style={{ color: toneColor }}>{value}</div><div className="bb-text-disabled mt-1 text-[10px]">{note}</div></div>;
 }
