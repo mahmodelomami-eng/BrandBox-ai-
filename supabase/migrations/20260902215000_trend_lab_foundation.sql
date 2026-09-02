@@ -61,7 +61,7 @@ create table if not exists public.trend_usage_events (
   id uuid primary key default gen_random_uuid(),
   trend_id uuid not null references public.trend_templates(id) on delete cascade,
   user_id uuid references public.profiles(id) on delete set null,
-  project_id uuid references public.projects(id) on delete set null,
+  project_id text references public.projects(id) on delete set null,
   event_type text not null check (event_type in ('open','use','share')),
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
@@ -88,43 +88,40 @@ revoke all on public.trend_usage_events from anon, authenticated;
 
 -- Trend Lab is served through audited server routes only. Browser roles get no direct writes.
 
-do $$
+create or replace function public.set_trend_template_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
 begin
-  if not exists (select 1 from pg_trigger where tgname = 'trend_templates_updated_at_trigger') then
-    create function public.set_trend_template_updated_at()
-    returns trigger
-    language plpgsql
-    set search_path = public
-    as $fn$
-    begin
-      new.updated_at := now();
-      return new;
-    end;
-    $fn$;
-    create trigger trend_templates_updated_at_trigger
-      before update on public.trend_templates
-      for each row execute function public.set_trend_template_updated_at();
-  end if;
+  new.updated_at := now();
+  return new;
+end;
+$$;
 
-  if not exists (select 1 from pg_trigger where tgname = 'trend_briefs_updated_at_trigger') then
-    create function public.set_trend_brief_updated_at()
-    returns trigger
-    language plpgsql
-    set search_path = public
-    as $fn$
-    begin
-      new.updated_at := now();
-      return new;
-    end;
-    $fn$;
-    create trigger trend_briefs_updated_at_trigger
-      before update on public.trend_briefs
-      for each row execute function public.set_trend_brief_updated_at();
-  end if;
-end $$;
+create or replace function public.set_trend_brief_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
 
 revoke all on function public.set_trend_template_updated_at() from public, anon, authenticated;
 revoke all on function public.set_trend_brief_updated_at() from public, anon, authenticated;
+
+drop trigger if exists trend_templates_updated_at_trigger on public.trend_templates;
+create trigger trend_templates_updated_at_trigger
+  before update on public.trend_templates
+  for each row execute function public.set_trend_template_updated_at();
+
+drop trigger if exists trend_briefs_updated_at_trigger on public.trend_briefs;
+create trigger trend_briefs_updated_at_trigger
+  before update on public.trend_briefs
+  for each row execute function public.set_trend_brief_updated_at();
 
 insert into public.trend_templates (
   slug,title_ar,subtitle_ar,description_ar,category,tool,generation_mode,readiness,lifecycle,
