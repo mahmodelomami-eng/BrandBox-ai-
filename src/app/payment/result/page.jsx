@@ -55,38 +55,42 @@ function PaymentResultContent() {
 
   const result = state.data;
 
-  return <main dir="rtl" className="min-h-screen bg-[#07090d] px-4 py-16 text-white">
+  return <main dir="rtl" className="bb-app-canvas min-h-screen px-4 py-16">
     <div className="mx-auto max-w-2xl">
-      <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-6 text-amber-200">
+      <div className="bb-warning-surface mb-5 rounded-2xl border px-4 py-3 text-xs leading-6">
         Ezone Pay يعمل حاليًا في الوضع التجريبي. لا يتم إضافة النقاط أو تفعيل الاشتراك إلا بعد تأكيد الدفع من الخادم.
       </div>
-      <section className="rounded-[28px] border border-white/10 bg-[#10131a] p-7 shadow-2xl sm:p-10">
-        {state.loading && <div className="py-10 text-center"><Loader2 className="mx-auto animate-spin text-[#f31325]" size={34}/><h1 className="mt-5 text-2xl font-black">جاري التحقق من عملية الدفع</h1><p className="mt-2 text-sm text-gray-500">ننتظر تأكيد Ezone Pay ثم ننفذ الإضافة تلقائيًا.</p></div>}
-        {!state.loading && state.error && <div className="py-8 text-center"><XCircle className="mx-auto text-red-400" size={42}/><h1 className="mt-4 text-2xl font-black">تعذر التحقق</h1><p className="mt-3 text-sm text-red-200">{state.error}</p></div>}
-        {!state.loading && result?.state === 'pending' && <div className="py-8 text-center"><Clock3 className="mx-auto text-amber-300" size={42}/><h1 className="mt-4 text-2xl font-black">الدفع قيد التأكيد</h1><p className="mt-3 text-sm leading-6 text-gray-400">إذا أكملت الدفع في Ezone Pay فسيتم تحديث هذه الصفحة تلقائيًا بعد وصول التأكيد.</p></div>}
-        {!state.loading && result?.state === 'failed' && <div className="py-8 text-center"><XCircle className="mx-auto text-red-400" size={42}/><h1 className="mt-4 text-2xl font-black">لم تكتمل عملية الدفع</h1><p className="mt-3 text-sm text-gray-400">لم تتم إضافة أي نقاط ولم يتم تفعيل أي اشتراك.</p></div>}
+      <section className="bb-panel rounded-[28px] border p-7 shadow-[var(--bb-shadow-md)] sm:p-10">
+        {state.loading && <div className="py-10 text-center"><Loader2 className="bb-text-accent mx-auto animate-spin" size={34}/><h1 className="bb-text-primary mt-5 text-2xl font-black">جاري التحقق من عملية الدفع</h1><p className="bb-text-tertiary mt-2 text-sm">ننتظر تأكيد Ezone Pay ثم ننفذ الإضافة تلقائيًا.</p></div>}
+        {!state.loading && state.error && <div className="py-8 text-center"><XCircle className="mx-auto text-[var(--bb-danger)]" size={42}/><h1 className="bb-text-primary mt-4 text-2xl font-black">تعذر التحقق</h1><p className="mt-3 text-sm text-[var(--bb-danger)]">{state.error}</p></div>}
+        {!state.loading && result?.state === 'pending' && <div className="py-8 text-center"><Clock3 className="mx-auto text-[var(--bb-warning)]" size={42}/><h1 className="bb-text-primary mt-4 text-2xl font-black">الدفع قيد التأكيد</h1><p className="bb-text-secondary mt-3 text-sm leading-6">إذا أكملت الدفع في Ezone Pay فسيتم تحديث هذه الصفحة تلقائيًا بعد وصول التأكيد.</p></div>}
+        {!state.loading && result?.state === 'failed' && <div className="py-8 text-center"><XCircle className="mx-auto text-[var(--bb-danger)]" size={42}/><h1 className="bb-text-primary mt-4 text-2xl font-black">لم تكتمل عملية الدفع</h1><p className="bb-text-secondary mt-3 text-sm">لم تتم إضافة أي نقاط ولم يتم تفعيل أي اشتراك.</p></div>}
         {!state.loading && result?.state === 'completed' && <div className="py-4">
-          <CheckCircle2 className="mx-auto text-emerald-400" size={48}/>
-          <h1 className="mt-4 text-center text-2xl font-black">تم الدفع والتفعيل بنجاح</h1>
+          <CheckCircle2 className="mx-auto text-[var(--bb-success)]" size={48}/>
+          <h1 className="bb-text-primary mt-4 text-center text-2xl font-black">تم الدفع والتفعيل بنجاح</h1>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-[#0b0d12] p-4"><div className="text-[10px] text-gray-500">المبلغ المؤكد</div><div className="mt-2 text-lg font-black">{Number(result.amountLYD || 0).toLocaleString('ar-LY')} د.ل</div></div>
-            <div className="rounded-2xl border border-white/10 bg-[#0b0d12] p-4"><div className="text-[10px] text-gray-500">الرصيد الحالي</div><div className="mt-2 text-lg font-black text-emerald-300">{Number(result.newBalance || 0).toLocaleString('ar-LY')} نقطة</div></div>
+            <ResultMetric label="المبلغ المؤكد" value={`${Number(result.amountLYD || 0).toLocaleString('ar-LY')} د.ل`} />
+            <ResultMetric label="الرصيد الحالي" value={`${Number(result.newBalance || 0).toLocaleString('ar-LY')} نقطة`} success />
           </div>
-          {result.itemType === 'subscription' && result.subscription && <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm text-emerald-200">تم تفعيل اشتراك {result.subscription.plan_id} حتى {new Date(result.subscription.current_period_end).toLocaleDateString('ar-LY')}.</div>}
+          {result.itemType === 'subscription' && result.subscription && <div className="mt-4 rounded-2xl border border-[var(--bb-success)] bg-[var(--bb-success-soft)] p-4 text-sm text-[var(--bb-success)]">تم تفعيل اشتراك {result.subscription.plan_id} حتى {new Date(result.subscription.current_period_end).toLocaleDateString('ar-LY')}.</div>}
         </div>}
-        <div className="mt-6 flex flex-wrap justify-center gap-3 border-t border-white/10 pt-5">
-          <Link href="/pricing" className="rounded-xl bg-[#f31325] px-5 py-3 text-xs font-black">العودة إلى الرصيد والباقات</Link>
-          <Link href="/dashboard" className="rounded-xl border border-white/10 px-5 py-3 text-xs font-black text-gray-300">لوحة التحكم</Link>
+        <div className="bb-divider mt-6 flex flex-wrap justify-center gap-3 border-t pt-5">
+          <Link href="/pricing" className="bb-button-primary rounded-xl px-5 py-3 text-xs font-black">العودة إلى الرصيد والباقات</Link>
+          <Link href="/dashboard" className="bb-button-secondary rounded-xl border px-5 py-3 text-xs font-black">لوحة التحكم</Link>
         </div>
       </section>
-      <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-gray-600"><ShieldCheck size={14}/> التحقق والتنفيذ يتمان Server-side فقط.</div>
+      <div className="bb-text-tertiary mt-4 flex items-center justify-center gap-2 text-[11px]"><ShieldCheck size={14}/> التحقق والتنفيذ يتمان Server-side فقط.</div>
     </div>
   </main>;
 }
 
+function ResultMetric({ label, value, success = false }) {
+  return <div className="bb-card rounded-2xl border p-4"><div className="bb-text-tertiary text-[10px]">{label}</div><div className={`mt-2 text-lg font-black ${success ? 'text-[var(--bb-success)]' : 'bb-text-primary'}`}>{value}</div></div>;
+}
+
 function PaymentResultFallback() {
-  return <main dir="rtl" className="grid min-h-screen place-items-center bg-[#07090d] text-white">
-    <div className="flex items-center gap-3 text-sm text-gray-400"><Loader2 className="animate-spin text-[#f31325]" size={20}/> جاري تحميل نتيجة الدفع...</div>
+  return <main dir="rtl" className="bb-app-canvas grid min-h-screen place-items-center">
+    <div className="bb-text-secondary flex items-center gap-3 text-sm"><Loader2 className="bb-text-accent animate-spin" size={20}/> جاري تحميل نتيجة الدفع...</div>
   </main>;
 }
 
