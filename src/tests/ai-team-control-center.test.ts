@@ -37,15 +37,16 @@ assert.ok(uiDesignRoles.includes('UI/UX & Visual Designer Agent -> Frontend & UI
 assert.ok(route.includes("id: 'product-business'"));
 assert.ok(route.includes("name: 'Product & Business Agent'"));
 assert.ok(route.includes("specialty: 'Product Strategy · Pricing · Growth · Customer Value'"));
-assert.ok(route.includes('const productActive ='));
+assert.ok(route.includes('const interfaceReviewActive ='));
+assert.ok(route.includes('const productActive = interfaceReviewActive ||'));
 assert.ok(route.includes("id: 'monitoring-maintenance'"));
 assert.ok(route.includes("name: 'Monitoring & Maintenance Agent'"));
 assert.ok(route.includes("specialty: 'Reliability · Runtime Health · Incidents · Maintenance'"));
-assert.ok(route.includes('const monitoringActive ='));
+assert.ok(route.includes('const monitoringActive = interfaceReviewActive ||'));
 assert.ok(route.includes('const platformFailure ='));
-assert.ok(productMonitoringRoles.includes('Product & Business Agent'));
-assert.ok(productMonitoringRoles.includes('Monitoring & Maintenance Agent'));
-assert.ok(productMonitoringRoles.includes('Product & Business Agent -> AI Tech Lead'));
+assert.ok(productMonitoringRoles.includes('Review every user-facing interface for clarity'));
+assert.ok(productMonitoringRoles.includes('Review user-facing interfaces for loading, empty, error, retry, stale-data'));
+assert.ok(productMonitoringRoles.includes('UI/UX & Visual Designer Agent -> Product & Business Agent -> Frontend & UI Engineer Agent -> Monitoring & Maintenance Agent'));
 
 const agentIds = [...route.matchAll(/id: '([a-z-]+)'/g)].map((match) => match[1]);
 assert.equal(new Set(agentIds).size, 11, 'AI Team Control Center must expose exactly 11 unique permanent agents');

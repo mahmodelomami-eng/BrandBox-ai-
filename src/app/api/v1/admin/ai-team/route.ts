@@ -114,11 +114,12 @@ function deriveAgents(params: {
 
   const frontendActive = /frontend|next\.?js|react|component|responsive|mobile|navigation|workspace|dashboard|rtl|screen|layout|interaction|motion/.test(text);
   const designActive = /design|designer|visual|\bui\b|\bux\b|interface|layout|typography|icon|color|brand|responsive|mobile|rtl|screen|dashboard|workspace/.test(text);
+  const interfaceReviewActive = /\bui\b|\bux\b|interface|screen|layout|navigation|dashboard|responsive|mobile|rtl|cta|copy|loading|empty state|retry|flicker|overflow|accessibility/.test(text);
   const backendActive = /api|backend|auth|store|project|server|scope|payment|credit|route/.test(text);
   const aiActive = [88, 89, 90].includes(issueNumber) || /openrouter|generation|\bchat\b|image|video|model|provider/.test(text);
   const databaseActive = /database|migration|\bdb\b|rls|supabase|schema|index/.test(text);
-  const productActive = /product|business|pricing|plan|subscription|onboarding|conversion|growth|analytics|store|launch|revenue|customer|market|package/.test(text);
-  const monitoringActive = /observability|monitor|runtime|health|incident|error|log|maintenance|uptime|regression|performance|alert|reliability/.test(text);
+  const productActive = interfaceReviewActive || /product|business|pricing|plan|subscription|onboarding|conversion|growth|analytics|store|launch|revenue|customer|market|package/.test(text);
+  const monitoringActive = interfaceReviewActive || /observability|monitor|runtime|health|incident|error|log|maintenance|uptime|regression|performance|alert|reliability/.test(text);
   const platformFailure = releaseState === 'failed' || vercelState === 'failed';
 
   return [
@@ -135,10 +136,10 @@ function deriveAgents(params: {
       name: 'Product & Business Agent',
       specialty: 'Product Strategy · Pricing · Growth · Customer Value',
       status: currentPull && productActive ? 'reviewing' : 'waiting',
-      task: currentPull && productActive ? task : 'بانتظار مهمة منتج أو نمو أو تسعير',
+      task: currentPull && productActive ? task : 'بانتظار مهمة منتج أو مراجعة واجهة',
       note: currentPull && productActive
-        ? 'يراجع أثر التغيير على قيمة المنتج والتسعير والتبني وتجربة العميل'
-        : 'يحافظ على اتساق قرارات المنتج مع نموذج الأعمال وأهداف الإطلاق',
+        ? 'يراجع قيمة المنتج ووضوح CTA والنصوص والاحتكاك داخل الواجهة قبل قبول التغيير'
+        : 'يحافظ على اتساق قرارات المنتج والواجهات مع نموذج الأعمال وأهداف الإطلاق',
     },
     {
       id: 'visual-designer',
@@ -212,7 +213,9 @@ function deriveAgents(params: {
           : 'مراقبة صحة المنصة والاستعداد للصيانة',
       note: platformFailure
         ? 'يركز على الاستعادة ومنع تكرار الأعطال قبل مواصلة الإطلاق'
-        : 'يتابع الاعتمادية والأخطاء والأداء والصيانة الوقائية',
+        : currentPull && monitoringActive
+          ? 'يراجع حالات التحميل والخطأ والـstale data والموبايل وقابلية الاستعادة في الواجهة'
+          : 'يتابع الاعتمادية والأخطاء والأداء والصيانة الوقائية',
     },
     {
       id: 'devops',
