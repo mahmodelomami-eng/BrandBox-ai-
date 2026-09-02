@@ -9,6 +9,7 @@ const pricing = readFileSync(join(root, 'src/app/pricing/page.jsx'), 'utf8');
 const account = readFileSync(join(root, 'src/app/dashboard/account/page.jsx'), 'utf8');
 const plansApi = readFileSync(join(root, 'src/app/api/v1/plans/route.ts'), 'utf8');
 const checkoutApi = readFileSync(join(root, 'src/app/api/v1/ezonepay/payment-links/route.ts'), 'utf8');
+const plansAccessMigration = readFileSync(join(root, 'supabase/migrations/20260902140003_harden_public_plans_catalog_access.sql'), 'utf8');
 
 // Monitoring & Maintenance: stale-user and degraded-state protection.
 assert.ok(dashboard.includes('const [businessLoading, setBusinessLoading]'));
@@ -52,6 +53,13 @@ assert.ok(!plansApi.includes('priceMonthlyLYD: 45'));
 assert.ok(!plansApi.includes('priceMonthlyLYD: 145'));
 assert.ok(!plansApi.includes('priceMonthlyLYD: 395'));
 assert.ok(checkoutApi.includes('mode: getEzonePayMode()'), 'checkout response must report the actual guarded payment mode');
+
+// Public plan catalog must be read-only and must not depend on privileged role helpers for anonymous pricing views.
+assert.ok(plansAccessMigration.includes('REVOKE ALL ON TABLE public.plans FROM anon, authenticated'));
+assert.ok(plansAccessMigration.includes('GRANT SELECT ON TABLE public.plans TO anon, authenticated'));
+assert.ok(plansAccessMigration.includes('TO anon, authenticated'));
+assert.ok(plansAccessMigration.includes('USING (is_active = TRUE)'));
+assert.ok(!plansAccessMigration.includes('get_user_role'), 'anonymous pricing reads must not require privileged role helper execution');
 
 // Mobile navigation reliability and accessibility.
 assert.ok(navigation.includes("if (event.key === 'Escape') setMobileOpen(false)"));
