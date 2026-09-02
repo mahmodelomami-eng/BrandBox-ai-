@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const ThemeContext = createContext(null);
 export const THEME_STORAGE_KEY = 'brandbox-theme';
@@ -16,6 +16,12 @@ function applyTheme(theme) {
   document.documentElement.style.colorScheme = normalized;
 }
 
+function persistTheme(theme) {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {}
+}
+
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState('dark');
 
@@ -25,21 +31,28 @@ export function ThemeProvider({ children }) {
     applyTheme(initialTheme);
   }, []);
 
-  const setTheme = (nextTheme) => {
+  const setTheme = useCallback((nextTheme) => {
     const normalized = normalizeTheme(nextTheme);
     setThemeState(normalized);
     applyTheme(normalized);
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, normalized);
-    } catch {}
-  };
+    persistTheme(normalized);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setThemeState((currentTheme) => {
+      const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+      applyTheme(nextTheme);
+      persistTheme(nextTheme);
+      return nextTheme;
+    });
+  }, []);
 
   const value = useMemo(() => ({
     theme,
     isLight: theme === 'light',
     setTheme,
-    toggleTheme: () => setTheme(theme === 'light' ? 'dark' : 'light'),
-  }), [theme]);
+    toggleTheme,
+  }), [setTheme, theme, toggleTheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
