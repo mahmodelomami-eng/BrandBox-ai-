@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Camera, CheckCheck, X } from 'lucide-react';
 import { createBrowserSupabaseClient } from '../lib/supabase/client';
 
@@ -12,30 +12,32 @@ export default function UserExperienceEnhancer() {
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState('');
 
-  async function getAccessToken() {
+  const getAccessToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || null;
-  }
+  }, [supabase]);
 
-  async function pingPresence() {
+  const pingPresence = useCallback(async () => {
     const token = await getAccessToken();
     if (!token) return;
     await fetch('/api/v1/presence', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
     }).catch(() => null);
-  }
+  }, [getAccessToken]);
 
-  async function loadNotifications() {
+  const loadNotifications = useCallback(async () => {
     const token = await getAccessToken();
     if (!token) return;
     const response = await fetch('/api/v1/notifications', {
       headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
     });
     if (!response.ok) return;
     const result = await response.json();
     setNotifications(Array.isArray(result.notifications) ? result.notifications : []);
-  }
+  }, [getAccessToken]);
 
   async function markAllRead() {
     const token = await getAccessToken();
@@ -52,14 +54,36 @@ export default function UserExperienceEnhancer() {
   }
 
   useEffect(() => {
-    pingPresence();
-    const interval = window.setInterval(pingPresence, 60_000);
-    return () => window.clearInterval(interval);
-  }, []);
+    void pingPresence();
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void pingPresence();
+    }, 60_000);
+
+    const handleFocus = () => { void pingPresence(); };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void pingPresence();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [pingPresence]);
 
   useEffect(() => {
     let bellNode = null;
     let avatarNode = null;
+
+    const handleBellClick = () => {
+      setOpen((value) => !value);
+      void loadNotifications();
+    };
+    const handleAvatarClick = () => inputRef.current?.click();
 
     const attach = () => {
       const nextBell = document.querySelector('svg.lucide-bell');
@@ -81,12 +105,6 @@ export default function UserExperienceEnhancer() {
       }
     };
 
-    const handleBellClick = () => {
-      setOpen((value) => !value);
-      loadNotifications();
-    };
-    const handleAvatarClick = () => inputRef.current?.click();
-
     attach();
     const observer = new MutationObserver(attach);
     observer.observe(document.body, { childList: true, subtree: true });
@@ -96,7 +114,7 @@ export default function UserExperienceEnhancer() {
       bellNode?.removeEventListener('click', handleBellClick);
       avatarNode?.removeEventListener('click', handleAvatarClick);
     };
-  }, []);
+  }, [loadNotifications]);
 
   async function uploadAvatar(event) {
     const file = event.target.files?.[0];
