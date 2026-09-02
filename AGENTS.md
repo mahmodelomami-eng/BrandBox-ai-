@@ -31,8 +31,13 @@ Agents MUST NOT autonomously:
 ### AI Tech Lead
 Owns scope, decomposes issues into the smallest shippable slices, detects cross-cutting risk, and decides which specialist should work next.
 
+### UI/UX & Visual Designer Agent — Theme & Design System Expert
+Owns visual hierarchy, design-system coherence, typography, iconography, spacing, component states, Arabic RTL visual quality and brand consistency. For multi-theme work this agent is the authority on semantic design tokens, light/dark parity, color/elevation systems, WCAG 2.2 AA contrast, accessible interaction states and preview-based visual acceptance.
+
+It MUST treat light mode as an intentionally designed Brand Box expression rather than an inversion or mechanical mapping of dark-mode colors. It MUST reject broad utility-class translation hacks, CSS inversion/filter approaches and growing `!important` exception layers as the primary theme architecture. It MUST define implementation-ready semantic tokens and review every touched screen in both themes on desktop and mobile before visual approval.
+
 ### Frontend Agent
-Owns Next.js UI, responsive behavior, accessibility, Arabic RTL, mobile navigation, loading/error states, and visual consistency.
+Owns Next.js UI, responsive behavior, accessibility, Arabic RTL, mobile navigation, loading/error states, and visual consistency. For theme-sensitive work it implements the semantic design system approved by the UI/UX & Visual Designer Agent, migrates touched screens away from hard-coded theme colors, preserves deterministic theme persistence, and prevents hydration/theme flicker.
 
 ### Backend Agent
 Owns route handlers, server actions, domain services, validation, server-authoritative business rules, and Supabase integration.
@@ -47,13 +52,21 @@ Owns OpenRouter/model integrations, provider adapters, generation flows, retries
 Owns additive/reversible migrations, indexes, RLS, RPCs, constraints, and staging verification. Production-destructive operations are prohibited.
 
 ### QA Agent
-Owns regression coverage, reproduction cases, edge cases, build/lint/test verification, and mobile/desktop acceptance criteria.
+Owns regression coverage, reproduction cases, edge cases, build/lint/test verification, and mobile/desktop acceptance criteria. For theme-sensitive changes, QA must validate dark and light rendered states, contrast, hover/focus/selected/disabled states, overlays, forms and responsive behavior; build success alone is not visual acceptance.
 
 ### Security Reviewer
 Reviews auth, RBAC, RLS, secrets, payments, webhooks, credits, customer data, fulfillment, encryption boundaries, SSR/client exposure, and privilege escalation.
 
 ### DevOps Agent
 Owns CI/CD configuration, preview deployment health, build reliability, and rollback-safe deployment changes. It never copies production secrets into repository files.
+
+## Theme-system policy
+- New or migrated UI surfaces should consume semantic tokens instead of raw dark/light color literals whenever practical.
+- Theme tokens must cover canvas, surfaces, elevation, borders, text hierarchy, brand accent, semantic status colors, controls, focus, hover, selected, pressed and disabled states.
+- Light and dark themes may intentionally differ in shadow/elevation treatment and media/editor canvas behavior.
+- Do not expand broad `[class~=...]` color-translation selectors or `!important` bridges as the primary long-term solution.
+- Preserve no-flash initialization and stored user preference when refactoring theme architecture.
+- Every theme-sensitive PR must include visual acceptance criteria for desktop and mobile in both themes and should include rendered preview evidence when available.
 
 ## Required execution loop
 1. Read the issue, relevant code, tests, migrations, and recent related changes.
@@ -105,7 +118,8 @@ A task is complete only when:
 - no secrets are introduced;
 - no production safety invariant is weakened;
 - the PR contains risk and rollback notes;
-- user-visible Arabic/RTL/mobile behavior is checked when relevant.
+- user-visible Arabic/RTL/mobile behavior is checked when relevant;
+- theme-sensitive changes have rendered visual acceptance in both dark and light modes, not test-only acceptance.
 
 ## Escalation boundary
 Routine implementation should continue without owner intervention. Stop and require owner/platform authorization only for actions that require external credentials, provider contracts, payments/financial commitments, destructive production data changes, domain/DNS ownership changes, or other irreversible external actions.
