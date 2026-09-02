@@ -1,6 +1,6 @@
 import AuthGate from '../../../../components/AuthGate';
-import MediaProjectWorkspace from '../../../../components/MediaProjectWorkspace';
 import ProjectWorkspaceGate from '../../../../components/ProjectWorkspaceGate';
+import VideoProjectWorkspace from '../../../../components/VideoProjectWorkspace';
 
 function stringParam(value) {
   return typeof value === 'string' ? value : '';
@@ -19,8 +19,7 @@ export default async function VideoProjectPage({ searchParams }) {
   return (
     <AuthGate>
       <ProjectWorkspaceGate tool="video" projectId={projectId}>
-        <MediaProjectWorkspace
-          tool="video"
+        <VideoProjectWorkspace
           projectId={projectId}
           initialPrompt={initialPrompt}
           templateSettings={templateSettings}
