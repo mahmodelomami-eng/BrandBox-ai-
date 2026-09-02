@@ -3,7 +3,17 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle2, Clock3, Headphones, Loader2, MessageSquareText, Send, ShieldCheck } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronLeft,
+  Clock3,
+  Headphones,
+  Loader2,
+  MessageSquareText,
+  Send,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { createBrowserSupabaseClient } from '../../lib/supabase/client';
 
@@ -15,6 +25,8 @@ const CATEGORIES = [
   ['print', 'الطباعة والإنتاج'],
 ];
 
+const CATEGORY_LABELS = Object.fromEntries(CATEGORIES);
+
 const STATUS_LABELS = {
   open: 'جديد',
   in_progress: 'قيد المتابعة',
@@ -23,9 +35,18 @@ const STATUS_LABELS = {
 };
 
 function statusStyle(status) {
-  const resolved = ['resolved', 'closed'].includes(status);
-  const color = resolved ? 'var(--bb-success)' : 'var(--bb-warning)';
-  return { color, background: resolved ? 'var(--bb-success-soft)' : 'var(--bb-warning-soft)', borderColor: `color-mix(in srgb, ${color} 25%, transparent)` };
+  if (status === 'open') {
+    return { color: 'var(--bb-info)', background: 'var(--bb-info-soft)', borderColor: 'color-mix(in srgb, var(--bb-info) 25%, transparent)' };
+  }
+  if (status === 'in_progress') {
+    return { color: 'var(--bb-warning)', background: 'var(--bb-warning-soft)', borderColor: 'color-mix(in srgb, var(--bb-warning) 25%, transparent)' };
+  }
+  return { color: 'var(--bb-success)', background: 'var(--bb-success-soft)', borderColor: 'color-mix(in srgb, var(--bb-success) 25%, transparent)' };
+}
+
+function requestNumber(id) {
+  const suffix = String(id || '').replaceAll('-', '').slice(-6).toUpperCase() || '000000';
+  return `#BR-${suffix}`;
 }
 
 function ContactContent() {
@@ -91,62 +112,102 @@ function ContactContent() {
   }
 
   return (
-    <main dir="rtl" className="bb-app-canvas min-h-[calc(100vh-5rem)]">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <section className="bb-dashboard-hero grid gap-8 overflow-hidden rounded-[32px] border p-6 shadow-[var(--bb-shadow-md)] sm:p-9 lg:grid-cols-[1fr_.8fr] lg:p-12">
-          <div>
-            <div className="bb-accent-soft inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black"><Headphones size={15} /> تواصل ودعم Brand Box</div>
-            <h1 className="bb-text-primary mt-6 text-4xl font-black leading-tight sm:text-5xl">طلبك يصل إلى فريق الدعم داخل النظام</h1>
-            <p className="bb-text-secondary mt-5 max-w-2xl text-sm leading-8">بدل نموذج شكلي، كل طلب ترسله هنا يُحفظ في حسابك ويظهر لفريق الإدارة والدعم مع حالته. استخدمه للاستفسارات التقنية، الرصيد والدفع، المتجر أو طلبات الطباعة.</p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <div className="bb-card rounded-2xl border p-5"><ShieldCheck className="bb-text-accent" size={22} /><h2 className="bb-text-primary mt-4 font-black">مرتبط بحسابك</h2><p className="bb-text-tertiary mt-2 text-xs leading-6">لا يمكن لمستخدم آخر الاطلاع على طلباتك.</p></div>
-            <div className="bb-card rounded-2xl border p-5"><Clock3 className="bb-text-accent" size={22} /><h2 className="bb-text-primary mt-4 font-black">حالة واضحة</h2><p className="bb-text-tertiary mt-2 text-xs leading-6">جديد، قيد المتابعة، تم الحل أو مغلق.</p></div>
-          </div>
+    <main dir="rtl" className="bb-app-canvas relative min-h-[calc(100vh-5rem)] overflow-hidden">
+      <div className="pointer-events-none absolute -left-20 top-10 h-72 w-72 rounded-full bg-[#f31325]/10 blur-[100px]" />
+      <div className="pointer-events-none absolute right-8 top-14 h-28 w-28 opacity-25" style={{ backgroundImage: 'radial-gradient(var(--bb-accent) 1px, transparent 1px)', backgroundSize: '10px 10px' }} />
+
+      <div className="relative mx-auto max-w-[1380px] px-4 py-8 sm:px-6 lg:px-8">
+        <section className="text-center">
+          <div className="bb-accent-soft inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black"><Headphones size={15} /> نحن هنا لمساعدتك</div>
+          <h1 className="bb-text-primary mt-5 text-4xl font-black sm:text-5xl">الدعم والتواصل</h1>
+          <p className="bb-text-secondary mx-auto mt-4 max-w-2xl text-sm leading-8">فريق Brand Box جاهز للإجابة على استفساراتك ومساعدتك في كل ما تحتاجه. جميع الطلبات <span className="bb-text-accent font-black">تُدار وتُتابع</span> من داخل حسابك.</p>
+        </section>
+
+        <section className="mx-auto mt-7 grid max-w-4xl gap-4 sm:grid-cols-2">
+          <article className="bb-card rounded-2xl border p-5">
+            <div className="flex items-center gap-4">
+              <span className="bb-accent-soft grid h-12 w-12 shrink-0 place-items-center rounded-xl border"><UserRound size={21} /></span>
+              <div><h2 className="bb-text-primary text-sm font-black">مرتبط بحسابك</h2><p className="bb-text-tertiary mt-1.5 text-xs leading-6">جميع محادثاتك وطلباتك يتم حفظها في حسابك لتسهيل المتابعة والرجوع إليها.</p></div>
+            </div>
+          </article>
+          <article className="bb-card rounded-2xl border p-5">
+            <div className="flex items-center gap-4">
+              <span className="bb-accent-soft grid h-12 w-12 shrink-0 place-items-center rounded-xl border"><Clock3 size={21} /></span>
+              <div><h2 className="bb-text-primary text-sm font-black">حالة واضحة</h2><p className="bb-text-tertiary mt-1.5 text-xs leading-6">كل طلب يحصل على حالة واضحة لتستطيع متابعته خطوة بخطوة حتى الحل.</p></div>
+            </div>
+          </article>
         </section>
 
         {loading ? (
-          <div className="bb-panel mt-6 grid min-h-64 place-items-center rounded-3xl border"><Loader2 className="bb-text-accent animate-spin" /></div>
+          <div className="bb-panel mx-auto mt-7 grid min-h-64 max-w-5xl place-items-center rounded-3xl border"><Loader2 className="bb-text-accent animate-spin" /></div>
         ) : !user ? (
-          <section className="bb-panel mt-6 rounded-3xl border p-8 text-center sm:p-12">
-            <MessageSquareText className="bb-text-accent mx-auto" size={34} />
+          <section className="bb-panel mx-auto mt-7 max-w-3xl rounded-3xl border p-8 text-center sm:p-12">
+            <MessageSquareText className="bb-text-accent mx-auto" size={36} />
             <h2 className="bb-text-primary mt-5 text-2xl font-black">سجّل الدخول لإرسال طلب ومتابعته</h2>
-            <p className="bb-text-tertiary mx-auto mt-3 max-w-xl text-sm leading-7">نربط الطلب بالحساب حتى تستطيع متابعته ولا تضيع تفاصيله بين الرسائل.</p>
+            <p className="bb-text-tertiary mx-auto mt-3 max-w-xl text-sm leading-7">نربط الطلب بحسابك حتى تستطيع معرفة حالته ومتابعة تفاصيله في أي وقت.</p>
             <Link href="/auth?next=%2Fcontact" className="bb-button-primary mt-6 inline-flex rounded-xl px-7 py-3.5 text-sm font-black">تسجيل الدخول</Link>
           </section>
         ) : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_.9fr]">
-            <form onSubmit={submitRequest} className="bb-panel rounded-3xl border p-5 sm:p-7">
-              <h2 className="bb-text-primary text-lg font-black">إرسال طلب جديد</h2>
-              <p className="bb-text-tertiary mt-1 text-xs leading-6">اكتب المشكلة أو الطلب بتفاصيل كافية لمساعدتنا على التعامل معه بسرعة.</p>
-              <label className="bb-text-secondary mt-6 block text-xs font-bold">نوع الطلب
+          <div dir="ltr" className="mt-7 grid gap-5 lg:grid-cols-[.95fr_1.05fr]">
+            <section dir="rtl" className="bb-panel rounded-3xl border p-5 sm:p-6">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3"><span className="bb-accent-soft grid h-10 w-10 place-items-center rounded-xl border"><MessageSquareText size={18} /></span><div><h2 className="bb-text-primary text-lg font-black">طلباتي الأخيرة</h2><p className="bb-text-tertiary mt-1 text-[10px]">آخر الطلبات المرتبطة بحسابك.</p></div></div>
+                <span className="bb-text-accent text-[10px] font-black">{requests.length} طلب</span>
+              </div>
+
+              <div className="space-y-3">
+                {!requestsLoaded ? (
+                  <div className="bb-text-tertiary py-14 text-center text-xs"><Loader2 className="bb-text-accent mx-auto mb-2 animate-spin" size={18} /> جاري تحميل الطلبات...</div>
+                ) : requests.length === 0 ? (
+                  <div className="bb-card bb-text-tertiary rounded-2xl border p-10 text-center text-xs">لا توجد طلبات دعم بعد. سيظهر أول طلب ترسله هنا مباشرة.</div>
+                ) : requests.map((request) => (
+                  <article key={request.id} className="bb-card rounded-2xl border p-4 transition hover:-translate-y-0.5">
+                    <div className="flex items-center gap-3">
+                      <span className="bb-button-secondary grid h-8 w-8 shrink-0 place-items-center rounded-lg border"><ChevronLeft size={14} /></span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="min-w-0"><h3 className="bb-text-primary truncate text-xs font-black sm:text-sm">{request.subject}</h3><div className="bb-text-tertiary mt-1 text-[9px]">{CATEGORY_LABELS[request.category] || request.category}</div></div>
+                          <div className="text-left"><div className="bb-text-tertiary font-mono text-[9px]">{requestNumber(request.id)}</div><div className="bb-text-disabled mt-1 text-[9px]">{new Date(request.created_at).toLocaleString('ar-LY')}</div></div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          <span className="rounded-full border px-2.5 py-1 text-[9px] font-black" style={statusStyle(request.status)}>{STATUS_LABELS[request.status] || request.status}</span>
+                          {request.status === 'resolved' && <span className="flex items-center gap-1 text-[9px] font-bold" style={{ color: 'var(--bb-success)' }}><CheckCircle2 size={11} /> تم الحل</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="bb-surface-1 mt-5 flex flex-col gap-3 rounded-2xl border bb-border-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div><div className="bb-text-primary text-xs font-black">تحتاج مساعدة قبل إرسال الطلب؟</div><div className="bb-text-tertiary mt-1 text-[10px]">اكتب وصفًا واضحًا واذكر الخطوات التي سبقت المشكلة لتسريع المعالجة.</div></div>
+                <ShieldCheck size={20} className="bb-text-accent shrink-0" />
+              </div>
+            </section>
+
+            <form dir="rtl" onSubmit={submitRequest} className="bb-panel rounded-3xl border p-5 sm:p-6">
+              <div className="flex items-center gap-3"><span className="bb-accent-soft grid h-10 w-10 place-items-center rounded-xl border"><Send size={17} /></span><div><h2 className="bb-text-primary text-lg font-black">أرسل طلب دعم جديد</h2><p className="bb-text-tertiary mt-1 text-[10px]">سيتم حفظه في حسابك ومتابعته من فريق الدعم.</p></div></div>
+
+              <label className="bb-text-secondary mt-6 block text-xs font-bold">نوع الطلب <span className="bb-text-accent">*</span>
                 <select value={category} onChange={(event) => setCategory(event.target.value)} className="bb-input mt-2 w-full rounded-xl border px-4 py-3 text-sm outline-none">
                   {CATEGORIES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </label>
-              <label className="bb-text-secondary mt-4 block text-xs font-bold">العنوان
-                <input value={subject} maxLength={160} onChange={(event) => setSubject(event.target.value)} placeholder="مثال: مشكلة في فتح مشروع الصور" className="bb-input mt-2 w-full rounded-xl border px-4 py-3 text-sm outline-none" />
-              </label>
-              <label className="bb-text-secondary mt-4 block text-xs font-bold">التفاصيل
-                <textarea value={message} maxLength={4000} onChange={(event) => setMessage(event.target.value)} placeholder="اشرح ما حدث وما الذي كنت تحاول القيام به..." className="bb-input mt-2 min-h-36 w-full resize-y rounded-xl border px-4 py-3 text-sm leading-7 outline-none" />
-              </label>
-              {notice && <div className="mt-4 rounded-xl border px-4 py-3 text-xs font-bold" style={notice.type === 'success' ? { background: 'var(--bb-success-soft)', color: 'var(--bb-success)', borderColor: 'color-mix(in srgb, var(--bb-success) 25%, transparent)' } : { background: 'var(--bb-danger-soft)', color: 'var(--bb-danger)', borderColor: 'color-mix(in srgb, var(--bb-danger) 25%, transparent)' }}>{notice.text}</div>}
-              <button type="submit" disabled={sending} className="bb-button-primary mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-black disabled:opacity-50">{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} {sending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button>
-            </form>
 
-            <section className="bb-panel rounded-3xl border p-5 sm:p-7">
-              <h2 className="bb-text-primary text-lg font-black">طلباتي الأخيرة</h2>
-              <p className="bb-text-tertiary mt-1 text-xs">آخر 20 طلبًا مرتبطًا بحسابك.</p>
-              <div className="mt-5 space-y-3">
-                {!requestsLoaded ? <div className="bb-text-tertiary py-12 text-center text-xs">جاري تحميل الطلبات...</div> : requests.length === 0 ? <div className="bb-card bb-text-tertiary rounded-2xl border p-8 text-center text-xs">لا توجد طلبات دعم بعد.</div> : requests.map((request) => (
-                  <article key={request.id} className="bb-card rounded-2xl border p-4">
-                    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="bb-text-primary truncate text-sm font-black">{request.subject}</h3><div className="bb-text-disabled mt-1 text-[10px]">{new Date(request.created_at).toLocaleString('ar-LY')}</div></div><span className="shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black" style={statusStyle(request.status)}>{STATUS_LABELS[request.status] || request.status}</span></div>
-                    <p className="bb-text-tertiary mt-3 line-clamp-3 text-xs leading-6">{request.message}</p>
-                    {request.status === 'resolved' && <div className="mt-3 flex items-center gap-2 text-[10px] font-bold" style={{ color: 'var(--bb-success)' }}><CheckCircle2 size={13} /> تم تعليم الطلب كمحلول.</div>}
-                  </article>
-                ))}
-              </div>
-            </section>
+              <label className="bb-text-secondary mt-4 block text-xs font-bold">الموضوع <span className="bb-text-accent">*</span>
+                <input value={subject} maxLength={160} onChange={(event) => setSubject(event.target.value)} placeholder="اكتب موضوع الطلب باختصار" className="bb-input mt-2 w-full rounded-xl border px-4 py-3 text-sm outline-none" />
+              </label>
+
+              <label className="bb-text-secondary mt-4 block text-xs font-bold">تفاصيل الطلب <span className="bb-text-accent">*</span>
+                <textarea value={message} maxLength={4000} onChange={(event) => setMessage(event.target.value)} placeholder="يرجى وصف ما تحتاجه بالتفصيل، مع ذكر أي خطوات قمت بها إن أمكن." className="bb-input mt-2 min-h-44 w-full resize-y rounded-xl border px-4 py-3 text-sm leading-7 outline-none" />
+                <span className="bb-text-disabled mt-1 block text-left text-[9px]">{message.length}/4000</span>
+              </label>
+
+              {notice && <div className="mt-4 rounded-xl border px-4 py-3 text-xs font-bold" style={notice.type === 'success' ? { background: 'var(--bb-success-soft)', color: 'var(--bb-success)', borderColor: 'color-mix(in srgb, var(--bb-success) 25%, transparent)' } : { background: 'var(--bb-danger-soft)', color: 'var(--bb-danger)', borderColor: 'color-mix(in srgb, var(--bb-danger) 25%, transparent)' }}>{notice.text}</div>}
+
+              <button type="submit" disabled={sending} className="bb-button-primary mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-sm font-black disabled:opacity-50">{sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} {sending ? 'جاري الإرسال...' : 'إرسال الطلب'}</button>
+              <p className="bb-text-disabled mt-3 text-center text-[9px]">سيظهر الطلب في هذه الصفحة مباشرة بعد الحفظ.</p>
+            </form>
           </div>
         )}
       </div>
