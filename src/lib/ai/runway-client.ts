@@ -125,7 +125,7 @@ export async function createRunwayVideoTask(
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 45_000);
 
   try {
-    const response = await (options.fetchImpl || fetch)(`${RUNWAY_API_BASE}/v1/image_to_video`, {
+    const response = await (options.fetchImpl || fetch)(`${RUNWAY_API_BASE}/v1/text_to_video`, {
       method: 'POST',
       signal: controller.signal,
       headers: runwayHeaders(apiSecret),

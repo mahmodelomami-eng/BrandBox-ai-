@@ -24,7 +24,7 @@ async function run() {
     },
   });
   assert.equal(created.taskId, 'task_123-test');
-  assert.equal(calls[0].url, 'https://api.dev.runwayml.com/v1/image_to_video');
+  assert.equal(calls[0].url, 'https://api.dev.runwayml.com/v1/text_to_video');
   assert.equal((calls[0].init?.headers as Record<string, string>).Authorization, 'Bearer runway-test-secret');
   assert.equal((calls[0].init?.headers as Record<string, string>)['X-Runway-Version'], RUNWAY_API_VERSION);
   assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {
