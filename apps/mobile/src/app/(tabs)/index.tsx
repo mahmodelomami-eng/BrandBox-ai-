@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { apiRequest } from '@/lib/api';
@@ -12,18 +12,37 @@ type Bootstrap = {
   projects: Array<{ id: string; name: string; type: string; industry: string | null; updatedAt: string }>;
 };
 
+function fetchBootstrap(accessToken: string) {
+  return apiRequest<Bootstrap>('/api/v1/mobile/bootstrap', accessToken);
+}
+
 export default function HomeScreen() {
   const { session, signOut } = useAuth();
+  const accessToken = session?.access_token || '';
   const [data, setData] = useState<Bootstrap | null>(null);
   const [error, setError] = useState('');
-  const load = useCallback(async () => {
-    if (!session?.access_token) return;
-    setError('');
-    try { setData(await apiRequest<Bootstrap>('/api/v1/mobile/bootstrap', session.access_token)); }
-    catch { setError('تعذر تحميل لوحة التطبيق. اسحب أو أعد المحاولة لاحقًا.'); }
-  }, [session?.access_token]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!accessToken) return;
+    let active = true;
+    void fetchBootstrap(accessToken)
+      .then((payload) => {
+        if (!active) return;
+        setData(payload);
+        setError('');
+      })
+      .catch(() => {
+        if (active) setError('تعذر تحميل لوحة التطبيق. اسحب أو أعد المحاولة لاحقًا.');
+      });
+    return () => { active = false; };
+  }, [accessToken]);
+
+  async function retry() {
+    if (!accessToken) return;
+    setError('');
+    try { setData(await fetchBootstrap(accessToken)); }
+    catch { setError('تعذر تحميل لوحة التطبيق. اسحب أو أعد المحاولة لاحقًا.'); }
+  }
 
   return (
     <Screen>
@@ -31,7 +50,7 @@ export default function HomeScreen() {
       <Title>{data ? `مرحبًا ${data.profile.firstName || ''}` : 'مركز النمو الذكي'}</Title>
       <Muted>من الترند إلى فكرة، ومن الفكرة إلى محتوى ومشروع قابل للنشر.</Muted>
       {!data && !error ? <ActivityIndicator color={colors.red} /> : null}
-      {error ? <Card><Text style={styles.error}>{error}</Text><Pressable onPress={() => void load()}><Text style={styles.link}>إعادة المحاولة</Text></Pressable></Card> : null}
+      {error ? <Card><Text style={styles.error}>{error}</Text><Pressable onPress={() => void retry()}><Text style={styles.link}>إعادة المحاولة</Text></Pressable></Card> : null}
       {data ? (
         <>
           <View style={styles.metrics}>
