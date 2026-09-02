@@ -15,6 +15,7 @@ export interface GenerationRequest {
 export interface GenerationExecutionContext {
   unitCredits?: number;
   chatSystemPrompt?: string;
+  imagePromptSuffix?: string;
 }
 
 export interface GenerationResponse {
@@ -165,10 +166,14 @@ export class GenerationEngine {
       const imageResolution = ['512', '1K', '2K', '4K'].includes(String(request.settings?.resolution))
         ? request.settings?.resolution as '512' | '1K' | '2K' | '4K'
         : '1K';
+      const imagePromptSuffix = executionContext.imagePromptSuffix?.trim();
+      const providerImagePrompt = imagePromptSuffix
+        ? `${request.prompt.trim()}\n${imagePromptSuffix}`
+        : request.prompt;
       const imageResult = request.generationType === 'image'
         ? await createOpenRouterImageGeneration({
             model: request.modelId,
-            prompt: request.prompt,
+            prompt: providerImagePrompt,
             aspectRatio: typeof request.settings?.aspectRatio === 'string' ? request.settings.aspectRatio : '1:1',
             count: requestedCount,
             resolution: imageResolution,
