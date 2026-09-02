@@ -34,6 +34,7 @@ export interface VideoGenerationResult {
 
 interface StartVideoContext {
   creditsPerSecond: number;
+  minimumCredits: number;
 }
 
 function safeRequestId(requestId: string): string {
@@ -56,7 +57,15 @@ function assertSafeOutputUrl(raw: string): URL {
   let url: URL;
   try { url = new URL(raw); } catch { throw new Error('VIDEO_OUTPUT_URL_INVALID'); }
   const hostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (url.protocol !== 'https:' || !hostname || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local') || hostname.endsWith('.internal') || isIP(hostname) !== 0) {
+  if (
+    url.protocol !== 'https:'
+    || !hostname
+    || hostname === 'localhost'
+    || hostname.endsWith('.localhost')
+    || hostname.endsWith('.local')
+    || hostname.endsWith('.internal')
+    || isIP(hostname) !== 0
+  ) {
     throw new Error('VIDEO_OUTPUT_URL_INVALID');
   }
   return url;
@@ -64,7 +73,7 @@ function assertSafeOutputUrl(raw: string): URL {
 
 async function downloadRunwayVideo(outputUrl: string, fetchImpl: typeof fetch = fetch): Promise<Buffer> {
   const url = assertSafeOutputUrl(outputUrl);
-  const response = await fetchImpl(url, { method: 'GET', redirect: 'follow' });
+  const response = await fetchImpl(url, { method: 'GET', redirect: 'error' });
   if (!response.ok) throw new Error('VIDEO_OUTPUT_DOWNLOAD_FAILED');
   const contentType = String(response.headers.get('content-type') || '').toLowerCase();
   if (!contentType.startsWith('video/mp4')) throw new Error('VIDEO_OUTPUT_MIME_INVALID');
@@ -118,11 +127,19 @@ export class VideoGenerationService {
     if (!actor?.userId) throw new Error('UNAUTHORIZED');
     const requestId = safeRequestId(request.requestId);
     const creditsPerSecond = Number(context.creditsPerSecond);
+    const minimumCredits = Number(context.minimumCredits);
     const duration = Number(request.settings?.duration);
-    if (!Number.isInteger(creditsPerSecond) || creditsPerSecond < 1 || !Number.isInteger(duration) || duration < 1) {
+    if (
+      !Number.isInteger(creditsPerSecond)
+      || creditsPerSecond < 1
+      || !Number.isInteger(minimumCredits)
+      || minimumCredits < 0
+      || !Number.isInteger(duration)
+      || duration < 1
+    ) {
       throw new Error('VIDEO_PRICING_UNAVAILABLE');
     }
-    const requiredCredits = creditsPerSecond * duration;
+    const requiredCredits = Math.max(minimumCredits, creditsPerSecond * duration);
     const database = createPrivilegedSupabaseClient();
     const startKey = `video_start_${actor.userId}_${requestId}`;
 
@@ -299,7 +316,23 @@ export class VideoGenerationService {
           errorMessage: failure.message,
         };
       }
-      throw providerError;
+      const refund = await refundVideoCredits(actor.userId, id, reserved, failure.code);
+      await database.from('generations').update({
+        status: 'failed',
+        credits_consumed: 0,
+        error_message: failure.code,
+      }).eq('id', id).eq('user_id', actor.userId);
+      return {
+        success: false,
+        generationId: id,
+        status: 'failed',
+        creditsReserved: reserved,
+        creditsConsumed: 0,
+        remainingBalance: refund.success ? refund.newBalance : undefined,
+        errorCode: failure.code,
+        errorMessage: `${failure.message}${refund.success ? ' تم إعادة النقاط تلقائيًا.' : ' تعذر تأكيد إعادة النقاط تلقائيًا.'}`,
+        wasRefunded: refund.success,
+      };
     }
 
     if (task.status === 'queued' || task.status === 'processing') {
@@ -313,7 +346,7 @@ export class VideoGenerationService {
     if (task.status === 'failed' || task.status === 'cancelled') {
       const failureCode = task.status === 'cancelled' ? 'VIDEO_PROVIDER_CANCELLED' : 'VIDEO_PROVIDER_FAILED';
       const refund = await refundVideoCredits(actor.userId, id, reserved, failureCode);
-      const finalStatus = task.status === 'cancelled' ? 'cancelled' : 'failed';
+      const finalStatus: 'failed' | 'cancelled' = task.status === 'cancelled' ? 'cancelled' : 'failed';
       await database.from('generations').update({
         status: finalStatus,
         credits_consumed: 0,
