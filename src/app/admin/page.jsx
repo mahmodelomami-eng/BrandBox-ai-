@@ -8,9 +8,9 @@ import AdminControlCenter from '../../components/AdminControlCenter';
 
 function AdminLoadingState() {
   return (
-    <main dir="rtl" className="grid min-h-[calc(100vh-5rem)] place-items-center bg-[#07090d] px-5 text-white">
-      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#10131a] px-5 py-4 text-sm font-bold text-gray-400 shadow-2xl">
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#f31325] border-t-transparent" />
+    <main dir="rtl" className="bb-app-canvas grid min-h-[calc(100vh-5rem)] place-items-center px-5">
+      <div className="bb-panel bb-text-secondary flex items-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold shadow-[var(--bb-shadow-md)]">
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--bb-accent)] border-t-transparent" />
         جاري تحميل مركز الإدارة الفعلي...
       </div>
     </main>
@@ -22,10 +22,10 @@ export default function AdminPage() {
     <AuthGate>
       <Suspense fallback={<AdminLoadingState />}>
         <AdminControlCenter />
-        <Link href="/admin/ai-team" className="fixed bottom-20 left-5 z-[80] flex items-center gap-2 rounded-2xl border border-cyan-500/30 bg-[#11131a] px-4 py-3 text-xs font-black text-white shadow-2xl transition hover:border-cyan-400 hover:bg-cyan-500/10" title="مراقبة فريق البرمجة الآلي">
+        <Link href="/admin/ai-team" className="bb-surface-elevated fixed bottom-20 left-5 z-[80] flex items-center gap-2 rounded-2xl border border-[var(--bb-info)] px-4 py-3 text-xs font-black text-[var(--bb-info)] shadow-[var(--bb-shadow-lg)] transition hover:bg-[var(--bb-info-soft)]" title="مراقبة فريق البرمجة الآلي">
           <Bot size={17} /> فريق AI
         </Link>
-        <Link href="/admin/support" className="fixed bottom-5 left-5 z-[80] flex items-center gap-2 rounded-2xl border border-[#f31325]/35 bg-[#11131a] px-4 py-3 text-xs font-black text-white shadow-2xl transition hover:border-[#f31325] hover:bg-[#f31325]" title="فتح طلبات الدعم">
+        <Link href="/admin/support" className="bb-button-primary fixed bottom-5 left-5 z-[80] flex items-center gap-2 rounded-2xl px-4 py-3 text-xs font-black shadow-[var(--bb-shadow-lg)]" title="فتح طلبات الدعم">
           <Headphones size={17} /> طلبات الدعم
         </Link>
       </Suspense>
