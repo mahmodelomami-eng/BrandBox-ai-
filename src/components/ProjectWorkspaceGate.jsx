@@ -35,28 +35,19 @@ export default function ProjectWorkspaceGate({ tool = 'images', projectId, child
 
           const project = projects.find((item) => item.id === projectId) || null;
           if (!project) {
-            setState({
-              status: 'invalid',
-              message: 'المشروع غير موجود أو لا تملك صلاحية الوصول إليه.',
-            });
+            setState({ status: 'invalid', message: 'المشروع غير موجود أو لا تملك صلاحية الوصول إليه.' });
             return;
           }
 
           if (projectToolFromType(project.type) !== tool) {
-            setState({
-              status: 'mismatch',
-              message: `هذا المشروع لا ينتمي إلى مساحة ${meta.label}. افتحه من الأداة الصحيحة.`,
-            });
+            setState({ status: 'mismatch', message: `هذا المشروع لا ينتمي إلى مساحة ${meta.label}. افتحه من الأداة الصحيحة.` });
             return;
           }
 
           setState({ status: 'ready', message: '' });
         } catch (error) {
           if (!cancelled) {
-            setState({
-              status: 'error',
-              message: error instanceof Error ? error.message : 'تعذر التحقق من المشروع.',
-            });
+            setState({ status: 'error', message: error instanceof Error ? error.message : 'تعذر التحقق من المشروع.' });
           }
         }
       })();
@@ -72,9 +63,9 @@ export default function ProjectWorkspaceGate({ tool = 'images', projectId, child
 
   if (state.status === 'loading') {
     return (
-      <main dir="rtl" className="grid min-h-[calc(100vh-5rem)] place-items-center bg-[#050506] px-5 text-white">
-        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#10131a] px-5 py-4 text-sm font-bold text-gray-400">
-          <Loader2 size={18} className="animate-spin text-[#f31325]" />
+      <main dir="rtl" className="bb-app-canvas grid min-h-[calc(100vh-5rem)] place-items-center px-5">
+        <div className="bb-panel bb-text-secondary flex items-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold">
+          <Loader2 size={18} className="bb-text-accent animate-spin" />
           جارٍ التحقق من المشروع...
         </div>
       </main>
@@ -82,25 +73,25 @@ export default function ProjectWorkspaceGate({ tool = 'images', projectId, child
   }
 
   return (
-    <main dir="rtl" className="grid min-h-[calc(100vh-5rem)] place-items-center bg-[#050506] px-5 py-10 text-white">
-      <section className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#0d1016] p-7 text-center shadow-2xl">
-        <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-[#f31325]/25 bg-[#f31325]/10 text-[#ff3344]">
+    <main dir="rtl" className="bb-app-canvas grid min-h-[calc(100vh-5rem)] place-items-center px-5 py-10">
+      <section className="bb-panel w-full max-w-xl rounded-3xl border p-7 text-center">
+        <span className="bb-accent-soft mx-auto grid h-16 w-16 place-items-center rounded-2xl border">
           <AlertTriangle size={30} />
         </span>
-        <h1 className="mt-5 text-2xl font-black">تعذر فتح مساحة المشروع</h1>
-        <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-gray-400">{state.message}</p>
+        <h1 className="bb-text-primary mt-5 text-2xl font-black">تعذر فتح مساحة المشروع</h1>
+        <p className="bb-text-secondary mx-auto mt-3 max-w-md text-sm leading-7">{state.message}</p>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <Link href={meta.listHref} className="flex items-center justify-center gap-2 rounded-xl bg-[#f31325] px-4 py-3 text-sm font-black transition hover:bg-[#ff2637]">
+          <Link href={meta.listHref} className="bb-button-primary flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition">
             <FolderOpen size={17} /> مشاريع {meta.label}
           </Link>
-          <Link href="/projects" className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#151820] px-4 py-3 text-sm font-black text-gray-300 transition hover:text-white">
+          <Link href="/projects" className="bb-button-secondary flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-black transition">
             <ArrowLeft size={17} className="rotate-180" /> كل الأدوات
           </Link>
         </div>
 
         {state.status === 'error' && (
-          <button type="button" onClick={() => setReloadKey((value) => value + 1)} className="mt-4 text-xs font-black text-[#ff6674] hover:text-white">
+          <button type="button" onClick={() => setReloadKey((value) => value + 1)} className="bb-text-danger bb-hoverable mt-4 rounded-lg px-3 py-2 text-xs font-black">
             إعادة المحاولة
           </button>
         )}
