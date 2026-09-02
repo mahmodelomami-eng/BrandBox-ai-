@@ -11,7 +11,8 @@ const generationEngine = readFileSync(join(root, 'src/lib/generations/generation
 assert.ok(integration.includes('ensureStagingTestUser'));
 assert.ok(bootstrap.includes("email.includes('test.staging')"));
 assert.ok(integration.includes("email.includes('test.staging')"));
-assert.ok(stagingClient.includes("TEST_DATABASE_MODE !== 'staging'"));
+assert.ok(stagingClient.includes("const dbMode = process.env.TEST_DATABASE_MODE"));
+assert.ok(stagingClient.includes("dbMode !== 'staging'"));
 assert.ok(stagingClient.includes("lowerUrl.includes('prod')"));
 assert.ok(stagingClient.includes("lowerUrl.includes('brandbox-ai.com')"));
 
