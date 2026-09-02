@@ -128,12 +128,5 @@ export async function POST(request: NextRequest) {
   });
   if (usageError) return NextResponse.json({ error: 'TREND_USAGE_NOT_RECORDED' }, { status: 503 });
 
-  if (eventType === 'use') {
-    const { data: current } = await database.from('trend_templates').select('use_count').eq('id', body.trendId).maybeSingle();
-    if (current) {
-      await database.from('trend_templates').update({ use_count: Number(current.use_count || 0) + 1 }).eq('id', body.trendId);
-    }
-  }
-
   return NextResponse.json({ success: true });
 }
