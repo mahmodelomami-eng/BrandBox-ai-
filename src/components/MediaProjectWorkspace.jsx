@@ -187,10 +187,10 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#050506] pt-24 text-white" dir="rtl">
+      <main className="bb-app-canvas min-h-screen pt-24" dir="rtl">
         <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#0d1016] px-5 py-4 text-sm font-bold text-gray-300">
-            <Loader2 className="h-5 w-5 animate-spin text-[#f31325]" /> جاري تحميل مساحة {tool === 'video' ? 'الفيديو' : 'الصوت'}...
+          <div className="bb-panel bb-text-secondary flex items-center gap-3 rounded-2xl border px-5 py-4 text-sm font-bold">
+            <Loader2 className="bb-text-accent h-5 w-5 animate-spin" /> جاري تحميل مساحة {tool === 'video' ? 'الفيديو' : 'الصوت'}...
           </div>
         </div>
       </main>
@@ -199,15 +199,15 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
 
   if (workspaceError || !project) {
     return (
-      <main className="min-h-screen bg-[#050506] pt-24 text-white" dir="rtl">
+      <main className="bb-app-canvas min-h-screen pt-24" dir="rtl">
         <div className="mx-auto flex min-h-[60vh] max-w-xl items-center justify-center px-4">
-          <div className="w-full rounded-3xl border border-red-500/20 bg-[#0d1016] p-6 text-center">
-            <AlertTriangle className="mx-auto h-9 w-9 text-red-300" />
-            <h1 className="mt-4 text-lg font-black">تعذر فتح مساحة المشروع</h1>
-            <p className="mt-2 text-sm leading-7 text-gray-400">{workspaceError || 'المشروع غير متاح.'}</p>
+          <div className="bb-panel w-full rounded-3xl border p-6 text-center">
+            <span className="bb-danger-surface mx-auto grid h-14 w-14 place-items-center rounded-2xl border"><AlertTriangle size={25} /></span>
+            <h1 className="bb-text-primary mt-4 text-lg font-black">تعذر فتح مساحة المشروع</h1>
+            <p className="bb-text-secondary mt-2 text-sm leading-7">{workspaceError || 'المشروع غير متاح.'}</p>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <button type="button" onClick={() => void loadWorkspace()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#f31325] px-5 py-3 text-sm font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6573]"><RefreshCw size={16} /> إعادة المحاولة</button>
-              <Link href={config.listHref} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/10 px-5 py-3 text-sm font-black text-gray-300 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6573]">العودة إلى المشاريع</Link>
+              <button type="button" onClick={() => void loadWorkspace()} className="bb-button-primary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black"><RefreshCw size={16} /> إعادة المحاولة</button>
+              <Link href={config.listHref} className="bb-button-secondary inline-flex min-h-11 items-center justify-center rounded-xl border px-5 py-3 text-sm font-black">العودة إلى المشاريع</Link>
             </div>
           </div>
         </div>
@@ -216,89 +216,86 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
   }
 
   const messageClass = message?.type === 'error'
-    ? 'border-red-500/20 bg-red-500/8 text-red-200'
+    ? 'bb-danger-surface'
     : message?.type === 'success'
-      ? 'border-emerald-500/20 bg-emerald-500/8 text-emerald-200'
-      : 'border-white/10 bg-[#11141a] text-gray-300';
+      ? 'border-[color-mix(in_srgb,var(--bb-success)_25%,transparent)] bg-[var(--bb-success-soft)] text-[var(--bb-success)]'
+      : 'bb-accent-soft';
 
   return (
-    <main dir="rtl" className="min-h-screen bg-[#050506] text-white">
+    <main dir="rtl" className="bb-app-canvas min-h-screen">
       <ProjectToolNav activeTool={tool} />
       <div className="mx-auto grid max-w-[1700px] gap-5 px-4 py-6 lg:px-6 xl:grid-cols-[1fr_390px]">
-        <section className="order-2 overflow-hidden rounded-3xl border border-white/10 bg-[#0b0d12] xl:order-1">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+        <section className="bb-panel order-2 overflow-hidden rounded-3xl border xl:order-1">
+          <div className="bb-divider flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
             <div>
-              <div className="text-xs font-black text-[#ff3344]">{config.projectLabel}</div>
-              <h1 className="mt-1 text-xl font-black">{project.name || config.projectLabel}</h1>
+              <div className="bb-text-accent text-xs font-black">{config.projectLabel}</div>
+              <h1 className="bb-text-primary mt-1 text-xl font-black">{project.name || config.projectLabel}</h1>
             </div>
-            <Link href={config.listHref} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-black text-gray-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6573]">كل مشاريع {tool === 'video' ? 'الفيديو' : 'الصوت'}</Link>
+            <Link href={config.listHref} className="bb-button-secondary rounded-xl border px-3 py-2 text-xs font-black">كل مشاريع {tool === 'video' ? 'الفيديو' : 'الصوت'}</Link>
           </div>
 
           <div className="p-5">
-            <div className="mb-5 rounded-2xl border border-amber-500/25 bg-amber-500/8 p-4 text-xs leading-6 text-amber-200">
-              <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0 text-amber-400" /><div><div className="font-black">التوليد المباشر غير مفعل بعد</div><p className="mt-1 text-amber-100/70">{config.notice}</p></div></div>
+            <div className="bb-warning-surface mb-5 rounded-2xl border p-4 text-xs leading-6">
+              <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير مفعل بعد</div><p className="bb-text-secondary mt-1">{config.notice}</p></div></div>
             </div>
 
-            <div className="min-h-[470px] rounded-3xl border border-dashed border-white/10 bg-[#080a0e] p-5">
+            <div className="bb-surface-1 bb-border min-h-[470px] rounded-3xl border border-dashed p-5">
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2"><h2 className="text-sm font-black">سجل المشروع</h2>{itemsLoading && <Loader2 size={14} className="animate-spin text-[#ff3344]" />}</div>
-                <div className="flex items-center gap-2"><span className="text-[11px] text-gray-600">{visibleItems.length} عنصر محفوظ</span><button type="button" onClick={() => void loadItems(projectId)} disabled={itemsLoading} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-gray-500 transition hover:text-white disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6573]" aria-label="تحديث سجل المشروع"><RefreshCw size={14} className={itemsLoading ? 'animate-spin' : ''} /></button></div>
+                <div className="flex items-center gap-2"><h2 className="bb-text-primary text-sm font-black">سجل المشروع</h2>{itemsLoading && <Loader2 size={14} className="bb-text-accent animate-spin" />}</div>
+                <div className="flex items-center gap-2"><span className="bb-text-tertiary text-[11px]">{visibleItems.length} عنصر محفوظ</span><button type="button" onClick={() => void loadItems(projectId)} disabled={itemsLoading} className="bb-button-secondary inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-[11px] font-black disabled:opacity-50"><RefreshCw size={13} /> تحديث</button></div>
               </div>
 
               {itemsError && (
-                <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/8 p-4 text-xs leading-6 text-amber-100 sm:flex-row sm:items-center sm:justify-between">
-                  <span>{itemsError}</span>
-                  <button type="button" onClick={() => void loadItems(projectId)} disabled={itemsLoading} className="shrink-0 rounded-xl border border-amber-300/20 px-3 py-2 font-black transition hover:bg-amber-500/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">إعادة تحميل السجل</button>
+                <div className="bb-danger-surface mb-4 flex flex-col gap-3 rounded-xl border px-3 py-3 text-xs font-bold sm:flex-row sm:items-center sm:justify-between" role="alert">
+                  <span>{itemsError}</span><button type="button" onClick={() => void loadItems(projectId)} className="bb-button-secondary inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 font-black"><RefreshCw size={13} /> إعادة تحميل السجل</button>
                 </div>
               )}
 
-              {!itemsLoading && !itemsError && visibleItems.length === 0 ? (
-                <div className="flex min-h-[360px] flex-col items-center justify-center text-center">
-                  <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#171a21] text-[#ff3344]"><Icon size={30} /></span>
-                  <h3 className="mt-5 text-lg font-black">لا توجد مسودات محفوظة بعد</h3>
-                  <p className="mt-2 max-w-md text-sm leading-7 text-gray-500">جهّز أول وصف وإعداداته من لوحة الأدوات، ثم احفظ نسخة داخل هذا المشروع.</p>
-                </div>
-              ) : visibleItems.length > 0 ? (
+              {itemsLoading && visibleItems.length === 0 ? (
+                <div className="bb-text-secondary flex min-h-[330px] items-center justify-center gap-3 text-sm font-bold"><Loader2 className="bb-text-accent h-5 w-5 animate-spin" /> جاري تحميل السجل...</div>
+              ) : visibleItems.length === 0 ? (
+                <div className="flex min-h-[330px] flex-col items-center justify-center text-center"><span className="bb-accent-soft flex h-16 w-16 items-center justify-center rounded-2xl border"><Icon size={28} /></span><h3 className="bb-text-primary mt-5 text-lg font-black">لا توجد مسودات محفوظة بعد</h3><p className="bb-text-secondary mt-2 max-w-md text-sm leading-7">جهّز النص والإعدادات من اللوحة الجانبية ثم احفظ نسخة داخل المشروع دون تشغيل أي مزود أو خصم نقاط.</p></div>
+              ) : (
                 <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                   {visibleItems.map((item) => (
-                    <article key={item.id} className="rounded-2xl border border-white/10 bg-[#11141a] p-4">
-                      <div className="flex items-center justify-between gap-3"><span className="rounded-lg bg-[#f31325]/10 px-2 py-1 text-[10px] font-black text-[#ff3344]">مسودة</span><span className="flex items-center gap-1 text-[10px] text-gray-600"><Clock3 size={12} /> {item.created_at ? new Date(item.created_at).toLocaleString('ar-LY') : ''}</span></div>
-                      <p className="mt-4 line-clamp-5 text-sm leading-7 text-gray-300">{item.prompt}</p>
-                      <div className="mt-4 flex flex-wrap gap-1.5">{Object.entries(item.settings || {}).map(([key, value]) => <span key={key} className="rounded-lg border border-white/[.07] bg-[#0b0d12] px-2 py-1 text-[10px] text-gray-500">{String(value)}</span>)}</div>
-                      <button type="button" onClick={() => reuseDraft(item)} className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-black text-gray-300 transition hover:border-[#f31325]/35 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6573]"><PencilLine size={14} /> استخدام كنقطة بداية</button>
+                    <article key={item.id} className="bb-card rounded-2xl border p-4">
+                      <div className="flex items-center justify-between gap-3"><span className="bb-accent-soft rounded-lg border px-2 py-1 text-[10px] font-black">مسودة</span><span className="bb-text-tertiary flex items-center gap-1 text-[10px]"><Clock3 size={12} /> {item.created_at ? new Date(item.created_at).toLocaleString('ar-LY') : ''}</span></div>
+                      <p className="bb-text-secondary mt-4 line-clamp-5 text-sm leading-7">{item.prompt}</p>
+                      <div className="mt-4 flex flex-wrap gap-1.5">{Object.entries(item.settings || {}).map(([key, value]) => <span key={key} className="bb-button-secondary rounded-lg border px-2 py-1 text-[10px]">{String(value)}</span>)}</div>
+                      <button type="button" onClick={() => reuseDraft(item)} className="bb-button-secondary mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black"><PencilLine size={14} /> استخدام كنقطة بداية</button>
                     </article>
                   ))}
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
         </section>
 
-        <aside id="media-draft-composer" className="order-1 h-fit scroll-mt-28 rounded-3xl border border-white/10 bg-[#0d1016] p-5 xl:order-2 xl:sticky xl:top-[150px]">
-          <div className="flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#f31325]/12 text-[#ff3344]"><Icon size={22} /></span><div><div className="text-sm font-black">أدوات {config.label}</div><div className="text-[11px] text-gray-500">{config.model}</div></div></div>
-          <div className="mt-6 flex items-center justify-between gap-3"><label htmlFor="media-draft-prompt" className="text-xs font-black text-gray-400">{config.promptLabel}</label><span className="text-[10px] text-gray-600">{prompt.length} / 4000</span></div>
-          <textarea id="media-draft-prompt" maxLength={4000} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={config.placeholder} className="mt-2 min-h-44 w-full resize-none rounded-2xl border border-white/10 bg-[#171a21] p-4 text-sm leading-7 outline-none placeholder:text-gray-600 focus:border-[#f31325]/55 focus-visible:ring-2 focus-visible:ring-[#f31325]/20" />
+        <aside id="media-draft-composer" className="bb-panel order-1 h-fit scroll-mt-28 rounded-3xl border p-5 xl:order-2 xl:sticky xl:top-[150px]">
+          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Icon size={22} /></span><div><div className="bb-text-primary text-sm font-black">أدوات {config.label}</div><div className="bb-text-tertiary text-[11px]">{config.model}</div></div></div>
+          <div className="mt-6 flex items-center justify-between gap-3"><label htmlFor="media-draft-prompt" className="bb-text-secondary text-xs font-black">{config.promptLabel}</label><span className="bb-text-tertiary text-[10px]">{prompt.length} / 4000</span></div>
+          <textarea id="media-draft-prompt" maxLength={4000} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={config.placeholder} className="bb-input mt-2 min-h-44 w-full resize-none rounded-2xl border p-4 text-sm leading-7 outline-none" />
 
           <div className="mt-5 space-y-4">
             {config.settings.map((field) => (
               <label key={field.key} className="block">
-                <span className="mb-2 block text-xs font-black text-gray-400">{field.label}</span>
+                <span className="bb-text-secondary mb-2 block text-xs font-black">{field.label}</span>
                 <div className="relative">
-                  <select value={settings[field.key]} onChange={(event) => setSettings((current) => ({ ...current, [field.key]: event.target.value }))} className="w-full appearance-none rounded-xl border border-white/10 bg-[#171a21] px-4 py-3 text-sm font-bold outline-none focus:border-[#f31325]/55 focus-visible:ring-2 focus-visible:ring-[#f31325]/20">
+                  <select value={settings[field.key]} onChange={(event) => setSettings((current) => ({ ...current, [field.key]: event.target.value }))} className="bb-input w-full appearance-none rounded-xl border px-4 py-3 text-sm font-bold outline-none">
                     {field.values.map((value) => <option key={value} value={value}>{value}</option>)}
                   </select>
-                  <ChevronDown size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
+                  <ChevronDown size={15} className="bb-text-tertiary pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
                 </div>
               </label>
             ))}
           </div>
 
-          {message && <div className={`mt-4 rounded-xl border px-3 py-2 text-xs leading-5 ${messageClass}`}>{message.text}</div>}
-          <button type="button" onClick={saveDraft} disabled={saving || !prompt.trim()} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#f31325] py-4 text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6573]">
+          {message && <div className={`mt-4 rounded-xl border px-3 py-2 text-xs leading-5 ${messageClass}`} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</div>}
+          <button type="button" onClick={saveDraft} disabled={saving || !prompt.trim()} className="bb-button-primary mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-black transition disabled:opacity-50">
             {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} حفظ نسخة مسودة
           </button>
-          <p className="mt-2 text-center text-[10px] leading-5 text-gray-600">حفظ المسودة لا يشغّل مزودًا خارجيًا ولا يخصم نقاطًا.</p>
-          <button type="button" disabled className="mt-2 flex min-h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#15171d] py-4 text-sm font-black text-gray-600"><Sparkles size={18} /> التوليد غير متاح حتى تفعيل المزود</button>
+          <p className="bb-text-tertiary mt-2 text-center text-[10px] leading-5">حفظ المسودة لا يشغّل مزودًا خارجيًا ولا يخصم نقاطًا.</p>
+          <button type="button" disabled className="bb-button-secondary bb-text-disabled mt-2 flex min-h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border py-4 text-sm font-black"><Sparkles size={18} /> التوليد غير متاح حتى تفعيل المزود</button>
         </aside>
       </div>
     </main>
