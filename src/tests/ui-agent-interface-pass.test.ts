@@ -5,6 +5,11 @@ import { join } from 'node:path';
 const root = process.cwd();
 const dashboard = readFileSync(join(root, 'src/components/StableUserDashboard.jsx'), 'utf8');
 const navigation = readFileSync(join(root, 'src/components/GlobalNavigation.jsx'), 'utf8');
+const pricing = readFileSync(join(root, 'src/app/pricing/page.jsx'), 'utf8');
+const account = readFileSync(join(root, 'src/app/dashboard/account/page.jsx'), 'utf8');
+const plansApi = readFileSync(join(root, 'src/app/api/v1/plans/route.ts'), 'utf8');
+const checkoutApi = readFileSync(join(root, 'src/app/api/v1/ezonepay/payment-links/route.ts'), 'utf8');
+const plansAccessMigration = readFileSync(join(root, 'supabase/migrations/20260902140003_harden_public_plans_catalog_access.sql'), 'utf8');
 
 // Monitoring & Maintenance: stale-user and degraded-state protection.
 assert.ok(dashboard.includes('const [businessLoading, setBusinessLoading]'));
@@ -27,6 +32,34 @@ assert.ok(dashboard.includes("const planAction = subscription ? 'عرض البا
 assert.ok(dashboard.includes('ابدأ أول توليد'));
 assert.ok(dashboard.includes('فتح المساحة'));
 assert.ok(dashboard.includes('المشاريع النشطة فقط'));
+
+// Pricing/account launch truth: live subscriptions and top-ups are distinct experiences.
+assert.ok(pricing.includes("fetch('/api/v1/plans'"), 'pricing must load the live plan catalog');
+assert.ok(pricing.includes("startCheckout('subscription', plan.id)"), 'paid plans must use subscription checkout');
+assert.ok(pricing.includes("startCheckout('purchase', pkg.id)"), 'credit top-ups must remain purchase checkout');
+assert.ok(pricing.includes('الباقات الشهرية'));
+assert.ok(pricing.includes('تحتاج رصيدًا إضافيًا؟'));
+assert.ok(pricing.includes("result.error === 'PAYMENT_PROFILE_INCOMPLETE'"), 'checkout must route incomplete profiles to account setup');
+assert.ok(account.includes(".from('subscriptions')"), 'account must resolve the active subscription');
+assert.ok(account.includes(".from('plans')"), 'account must resolve a human-readable plan');
+assert.ok(account.includes('إدارة الباقات والرصيد'));
+assert.ok(account.includes('الخطة الحالية'));
+
+// Never return stale hard-coded commercial pricing when the database catalog is unavailable.
+assert.ok(plansApi.includes('createServerSupabaseClient'), 'public active plans should rely on RLS, not service-role access');
+assert.ok(plansApi.includes("{ error: 'PLAN_CATALOG_UNAVAILABLE', plans: [] }"));
+assert.ok(!plansApi.includes('FALLBACK_PLANS'), 'stale fallback pricing must not be shown to users');
+assert.ok(!plansApi.includes('priceMonthlyLYD: 45'));
+assert.ok(!plansApi.includes('priceMonthlyLYD: 145'));
+assert.ok(!plansApi.includes('priceMonthlyLYD: 395'));
+assert.ok(checkoutApi.includes('mode: getEzonePayMode()'), 'checkout response must report the actual guarded payment mode');
+
+// Public plan catalog must be read-only and must not depend on privileged role helpers for anonymous pricing views.
+assert.ok(plansAccessMigration.includes('REVOKE ALL ON TABLE public.plans FROM anon, authenticated'));
+assert.ok(plansAccessMigration.includes('GRANT SELECT ON TABLE public.plans TO anon, authenticated'));
+assert.ok(plansAccessMigration.includes('TO anon, authenticated'));
+assert.ok(plansAccessMigration.includes('USING (is_active = TRUE)'));
+assert.ok(!plansAccessMigration.includes('get_user_role'), 'anonymous pricing reads must not require privileged role helper execution');
 
 // Mobile navigation reliability and accessibility.
 assert.ok(navigation.includes("if (event.key === 'Escape') setMobileOpen(false)"));
