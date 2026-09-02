@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Boxes, PackageCheck, ShieldCheck, ShoppingBag } from 'lucide-react';
 import StoreCatalogClient from '../../components/StoreCatalogClient';
@@ -53,7 +54,7 @@ export default async function StorePage() {
   );
 }
 
-function StoreAssurance({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+function StoreAssurance({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return (
     <div className="bb-card flex items-start gap-3 rounded-2xl border p-4">
       <span className="mt-0.5 shrink-0">{icon}</span>
