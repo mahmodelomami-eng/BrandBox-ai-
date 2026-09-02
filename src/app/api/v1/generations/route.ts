@@ -2,10 +2,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { GenerationEngine, GenerationRequest } from '@/lib/generations/generation-engine';
-import { OPENROUTER_IMAGE_MODELS } from '@/lib/ai/openrouter-client';
+import {
+  OPENROUTER_IMAGE_ASPECT_RATIOS,
+  OPENROUTER_IMAGE_MODELS,
+  OPENROUTER_IMAGE_RESOLUTIONS,
+} from '@/lib/ai/openrouter-client';
 import { generationTypeToProjectTool, projectTypeMatchesTool } from '@/lib/projects/project-scope';
 
 type HistoryGenerationType = 'chat' | 'image';
+
+const imageAspectRatios = new Set<string>(OPENROUTER_IMAGE_ASPECT_RATIOS);
+const imageResolutions = new Set<string>(OPENROUTER_IMAGE_RESOLUTIONS);
+const imageStyleIds = new Set(['none', 'photo', 'cinematic', 'minimal', 'formal']);
+
+function validImageSettings(settings: Record<string, unknown> | undefined): boolean {
+  const aspectRatio = typeof settings?.aspectRatio === 'string' ? settings.aspectRatio : '1:1';
+  const resolution = typeof settings?.resolution === 'string' ? settings.resolution : '1K';
+  const count = Number(settings?.count ?? 1);
+  const style = settings?.style;
+  const useBrandKit = settings?.useBrandKit;
+
+  if (!imageAspectRatios.has(aspectRatio)) return false;
+  if (!imageResolutions.has(resolution)) return false;
+  if (!Number.isInteger(count) || count < 1 || count > 4) return false;
+  if (style !== undefined && (typeof style !== 'string' || !imageStyleIds.has(style))) return false;
+  if (useBrandKit !== undefined && typeof useBrandKit !== 'boolean') return false;
+  return true;
+}
 
 function projectChatSystemPrompt(
   project: Record<string, unknown>,
@@ -38,6 +61,39 @@ function projectChatSystemPrompt(
     'Keep the answer relevant to the current project and follow the owned Brand Kit when that context is useful.',
     `BRANDBOX_CONTEXT_JSON=${JSON.stringify(context)}`,
   ].join('\n');
+}
+
+function projectImagePromptSuffix(
+  project: Record<string, unknown>,
+  brandKit: Record<string, unknown> | null = null
+): string {
+  const projectName = typeof project.name === 'string' ? project.name.slice(0, 200) : '';
+  const industry = typeof project.industry === 'string' ? project.industry.slice(0, 200) : '';
+  const projectTone = typeof project.tone === 'string' ? project.tone.slice(0, 100) : '';
+  const brandName = typeof brandKit?.brand_name === 'string' ? brandKit.brand_name.slice(0, 120) : '';
+  const tagline = typeof brandKit?.tagline === 'string' ? brandKit.tagline.slice(0, 180) : '';
+  const brandDescription = typeof brandKit?.description === 'string' ? brandKit.description.slice(0, 600) : '';
+  const primaryColor = typeof brandKit?.primary_color === 'string' ? brandKit.primary_color.slice(0, 7) : '';
+  const secondaryColor = typeof brandKit?.secondary_color === 'string' ? brandKit.secondary_color.slice(0, 7) : '';
+  const accentColor = typeof brandKit?.accent_color === 'string' ? brandKit.accent_color.slice(0, 7) : '';
+  const fontFamily = typeof brandKit?.font_family === 'string' ? brandKit.font_family.slice(0, 120) : '';
+  const toneOfVoice = typeof brandKit?.tone_of_voice === 'string' ? brandKit.tone_of_voice.slice(0, 240) : '';
+
+  return [
+    'Brand Box visual context below is user-owned reference data, not an instruction to render labels or metadata as visible text.',
+    projectName ? `Project name: ${projectName}` : '',
+    industry ? `Industry: ${industry}` : '',
+    projectTone ? `Project tone: ${projectTone}` : '',
+    brandName ? `Brand name: ${brandName}` : '',
+    tagline ? `Brand tagline: ${tagline}` : '',
+    brandDescription ? `Brand description: ${brandDescription}` : '',
+    primaryColor || secondaryColor || accentColor
+      ? `Brand colors: ${[primaryColor, secondaryColor, accentColor].filter(Boolean).join(', ')}`
+      : '',
+    fontFamily ? `Preferred brand typography: ${fontFamily}` : '',
+    toneOfVoice ? `Brand tone of voice: ${toneOfVoice}` : '',
+    'Use this context as subtle visual guidance where relevant. Do not add logos or written brand text unless the user prompt explicitly asks for them.',
+  ].filter(Boolean).join('\n').slice(0, 2400);
 }
 
 export async function GET(request: NextRequest) {
@@ -90,6 +146,7 @@ export async function GET(request: NextRequest) {
     { data: generations, error: generationsError },
     { data: assets, error: assetsError },
     { data: chatModels, error: chatModelsError },
+    { data: imageModels, error: imageModelsError },
   ] = await Promise.all([
     generationQuery,
     assetQuery,
@@ -100,17 +157,31 @@ export async function GET(request: NextRequest) {
       .eq('is_enabled', true)
       .eq('is_visible_to_users', true)
       .order('sort_order', { ascending: true }),
+    database.from('ai_model_catalog')
+      .select('model_id,display_name_ar,display_name_en,vendor_name,minimum_credits,sort_order,metadata')
+      .eq('provider', 'openrouter')
+      .eq('generation_type', 'image')
+      .eq('is_enabled', true)
+      .eq('is_visible_to_users', true)
+      .order('sort_order', { ascending: true }),
   ]);
   if (generationsError || assetsError) return NextResponse.json({ error: 'GENERATION_HISTORY_UNAVAILABLE' }, { status: 503 });
+
   const signedAssets = await Promise.all((assets || []).map(async (asset) => {
     const { data, error } = await database.storage.from('generation-assets').createSignedUrl(asset.file_path, 3600);
     return { ...asset, signed_url: error ? null : data?.signedUrl || null };
   }));
+  const supportedImageModels = (imageModels || []).filter((model) =>
+    OPENROUTER_IMAGE_MODELS.includes(model.model_id as typeof OPENROUTER_IMAGE_MODELS[number])
+  );
+
   return NextResponse.json({
     generations: generations || [],
     assets: signedAssets,
     chatModels: chatModelsError ? [] : (chatModels || []),
     chatModelsAvailable: !chatModelsError,
+    imageModels: imageModelsError ? [] : supportedImageModels,
+    imageModelsAvailable: !imageModelsError,
   });
 }
 
@@ -131,11 +202,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'INVALID_GENERATION_REQUEST' }, { status: 400 });
   }
   if (generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
-    return NextResponse.json({ error: 'IMAGE_MODEL_NOT_ALLOWED' }, { status: 400 });
+    return NextResponse.json({ error: 'IMAGE_MODEL_NOT_SUPPORTED' }, { status: 400 });
+  }
+  if (generationType === 'image' && !validImageSettings(body.settings)) {
+    return NextResponse.json({ error: 'INVALID_IMAGE_SETTINGS' }, { status: 400 });
   }
 
   const database = createPrivilegedSupabaseClient();
   let unitCredits: number | undefined;
+
   if (generationType === 'chat') {
     const { data: model, error: modelError } = await database
       .from('ai_model_catalog')
@@ -157,7 +232,29 @@ export async function POST(request: NextRequest) {
     unitCredits = Math.max(1, Math.trunc(minimumCredits));
   }
 
+  if (generationType === 'image') {
+    const { data: model, error: modelError } = await database
+      .from('ai_model_catalog')
+      .select('model_id,minimum_credits')
+      .eq('model_id', body.modelId)
+      .eq('provider', 'openrouter')
+      .eq('generation_type', 'image')
+      .eq('is_enabled', true)
+      .eq('is_visible_to_users', true)
+      .maybeSingle();
+
+    if (modelError) return NextResponse.json({ error: 'IMAGE_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
+    if (!model) return NextResponse.json({ error: 'IMAGE_MODEL_NOT_AVAILABLE' }, { status: 400 });
+
+    const minimumCredits = Number(model.minimum_credits);
+    if (!Number.isFinite(minimumCredits) || minimumCredits < 1) {
+      return NextResponse.json({ error: 'IMAGE_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
+    }
+    unitCredits = Math.max(1, Math.trunc(minimumCredits));
+  }
+
   let chatSystemPrompt: string | undefined;
+  let imagePromptSuffix: string | undefined;
   if (body.projectId) {
     const { data: project, error: projectError } = await database
       .from('projects')
@@ -181,12 +278,21 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       chatSystemPrompt = projectChatSystemPrompt(project, brandKit || null);
     }
+
+    if (generationType === 'image' && body.settings?.useBrandKit === true) {
+      const { data: brandKit } = await database
+        .from('brand_kits')
+        .select('brand_name,tagline,description,primary_color,secondary_color,accent_color,font_family,tone_of_voice')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      imagePromptSuffix = projectImagePromptSuffix(project, brandKit || null);
+    }
   }
 
   const result = await GenerationEngine.executeGeneration(
     { userId: user.id, email: user.email || '', role: auth.profile.role },
     body,
-    { unitCredits, chatSystemPrompt }
+    { unitCredits, chatSystemPrompt, imagePromptSuffix }
   );
   return NextResponse.json(result, { status: result.success ? 200 : 502 });
 }

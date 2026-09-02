@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   ChevronDown,
   Copy,
@@ -23,30 +23,6 @@ import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import { createUserProject, listUserProjects } from '../lib/projects/projects-service';
 import { useAuth } from '../context/AuthContext';
 
-const IMAGE_MODELS = [
-  {
-    id: 'openai/gpt-image-2',
-    name: 'BRAND BOX Pro',
-    provider: 'OpenAI · GPT Image 2',
-    cost: 6,
-    badge: 'الأفضل',
-  },
-  {
-    id: 'bytedance-seed/seedream-5-0-lite',
-    name: 'Seedream 5 Lite',
-    provider: 'ByteDance',
-    cost: 4,
-    badge: 'سريع',
-  },
-  {
-    id: 'google/gemini-3.1-flash-lite-image',
-    name: 'Nano Banana 2 Lite',
-    provider: 'Google',
-    cost: 4,
-    badge: 'اقتصادي',
-  },
-];
-
 const STYLE_OPTIONS = [
   { id: 'none', label: 'لا شيء', prompt: '', background: 'linear-gradient(135deg,#15181f,#08090d)' },
   { id: 'photo', label: 'فوتوغرافي', prompt: 'تصوير فوتوغرافي احترافي، إضاءة واقعية، تفاصيل عالية', background: 'linear-gradient(135deg,#512119,#c97646 55%,#20130f)' },
@@ -64,8 +40,8 @@ const ASPECTS = [
 ];
 
 const RESOLUTIONS = [
-  { value: '512', label: '768p' },
-  { value: '1K', label: '1024p' },
+  { value: '512', label: '512px' },
+  { value: '1K', label: '1K' },
   { value: '2K', label: '2K' },
   { value: '4K', label: '4K' },
 ];
@@ -100,8 +76,19 @@ function normalizeAsset(asset) {
   };
 }
 
+function normalizeImageModel(model) {
+  const metadata = model?.metadata && typeof model.metadata === 'object' ? model.metadata : {};
+  const cost = Number(model?.minimum_credits);
+  return {
+    id: model?.model_id || '',
+    name: model?.display_name_ar || model?.display_name_en || model?.model_id || 'نموذج صور',
+    provider: model?.vendor_name || 'OpenRouter',
+    cost: Number.isFinite(cost) ? cost : 0,
+    badge: typeof metadata.brandbox_badge === 'string' ? metadata.brandbox_badge : 'متاح',
+  };
+}
+
 export default function ImageStudioWorkspace() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { creditBalance, refreshProfile } = useAuth();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
@@ -115,8 +102,10 @@ export default function ImageStudioWorkspace() {
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(projectFromUrl);
   const [gallery, setGallery] = useState([]);
+  const [imageModels, setImageModels] = useState([]);
+  const [imageModelsAvailable, setImageModelsAvailable] = useState(true);
   const [prompt, setPrompt] = useState(promptFromUrl.slice(0, 1000));
-  const [selectedModelId, setSelectedModelId] = useState(IMAGE_MODELS[0].id);
+  const [selectedModelId, setSelectedModelId] = useState('');
   const [styleId, setStyleId] = useState(initialStyleId);
   const [aspectRatio, setAspectRatio] = useState(initialAspectRatio);
   const [resolution, setResolution] = useState('2K');
@@ -135,7 +124,7 @@ export default function ImageStudioWorkspace() {
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
     [projects, selectedProjectId],
   );
-  const selectedModel = IMAGE_MODELS.find((model) => model.id === selectedModelId) || IMAGE_MODELS[0];
+  const selectedModel = imageModels.find((model) => model.id === selectedModelId) || imageModels[0] || null;
   const selectedStyle = STYLE_OPTIONS.find((style) => style.id === styleId) || STYLE_OPTIONS[0];
 
   const getToken = useCallback(async () => {
@@ -152,13 +141,20 @@ export default function ImageStudioWorkspace() {
     try {
       const token = await getToken();
       if (!token) throw new Error('انتهت جلسة الدخول. أعد تسجيل الدخول.');
-      const response = await fetch('/api/v1/generations', {
+      const query = new URLSearchParams({ projectId, generationType: 'image' });
+      const response = await fetch(`/api/v1/generations?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) throw new Error('تعذر تحميل الصور المولدة.');
       const payload = await response.json();
+      const models = (Array.isArray(payload.imageModels) ? payload.imageModels : [])
+        .map(normalizeImageModel)
+        .filter((model) => model.id && model.cost > 0);
+      setImageModels(models);
+      setImageModelsAvailable(payload.imageModelsAvailable !== false);
+      setSelectedModelId((current) => models.some((model) => model.id === current) ? current : (models[0]?.id || ''));
       const images = (Array.isArray(payload.assets) ? payload.assets : [])
-        .filter((asset) => asset.project_id === projectId && asset.signed_url)
+        .filter((asset) => asset.signed_url)
         .map(normalizeAsset);
       setGallery(images);
     } catch (error) {
@@ -258,6 +254,10 @@ export default function ImageStudioWorkspace() {
   const generateImages = async () => {
     if (!activeProject) {
       setMessage({ type: 'error', text: 'أنشئ مشروع صور أولاً.' });
+      return;
+    }
+    if (!imageModelsAvailable || !selectedModel) {
+      setMessage({ type: 'error', text: 'نماذج الصور غير متاحة مؤقتًا. أعد المحاولة بعد قليل.' });
       return;
     }
     if (!prompt.trim()) {
@@ -413,14 +413,20 @@ export default function ImageStudioWorkspace() {
 
             <div className="relative">
               <label className="mb-2 block text-xs font-black text-gray-300">النموذج (Model)</label>
-              <button type="button" onClick={() => setModelOpen((value) => !value)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[#11141b] p-3 text-right transition hover:border-[#f31325]/35">
-                <span className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/20 to-white/5"><Sparkles className="h-4 w-4 text-white" /></span><span className="min-w-0"><span className="flex items-center gap-2"><span className="truncate text-xs font-black text-white">{selectedModel.name}</span><span className="rounded-full bg-[#f31325]/15 px-2 py-0.5 text-[9px] font-black text-[#ff6573]">{selectedModel.badge}</span></span><span className="mt-1 block truncate text-[9px] text-gray-500">{selectedModel.provider} · {selectedModel.cost} نقاط</span></span></span><ChevronDown className={`h-4 w-4 shrink-0 text-gray-500 transition ${modelOpen ? 'rotate-180' : ''}`} />
+              <button type="button" disabled={!imageModelsAvailable || !selectedModel} onClick={() => setModelOpen((value) => !value)} className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-[#11141b] p-3 text-right transition hover:border-[#f31325]/35 disabled:cursor-not-allowed disabled:opacity-55">
+                {selectedModel ? (
+                  <span className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/20 to-white/5"><Sparkles className="h-4 w-4 text-white" /></span><span className="min-w-0"><span className="flex items-center gap-2"><span className="truncate text-xs font-black text-white">{selectedModel.name}</span><span className="rounded-full bg-[#f31325]/15 px-2 py-0.5 text-[9px] font-black text-[#ff6573]">{selectedModel.badge}</span></span><span className="mt-1 block truncate text-[9px] text-gray-500">{selectedModel.provider} · {selectedModel.cost} نقاط</span></span></span>
+                ) : (
+                  <span className="text-xs font-bold text-gray-500">لا يوجد نموذج صور مفعّل حاليًا</span>
+                )}
+                <ChevronDown className={`h-4 w-4 shrink-0 text-gray-500 transition ${modelOpen ? 'rotate-180' : ''}`} />
               </button>
-              {modelOpen && (
+              {modelOpen && imageModels.length > 0 && (
                 <div className="absolute inset-x-0 top-full z-50 mt-2 rounded-xl border border-white/10 bg-[#151820] p-1.5 shadow-2xl">
-                  {IMAGE_MODELS.map((model) => <button key={model.id} type="button" onClick={() => { setSelectedModelId(model.id); setModelOpen(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-right ${selectedModel.id === model.id ? 'bg-[#f31325]/12' : 'hover:bg-white/5'}`}><span><span className="block text-xs font-black text-white">{model.name}</span><span className="mt-0.5 block text-[9px] text-gray-500">{model.provider}</span></span><span className="text-[10px] font-black text-[#ff6573]">{model.cost} نقاط</span></button>)}
+                  {imageModels.map((model) => <button key={model.id} type="button" onClick={() => { setSelectedModelId(model.id); setModelOpen(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-right ${selectedModel?.id === model.id ? 'bg-[#f31325]/12' : 'hover:bg-white/5'}`}><span><span className="block text-xs font-black text-white">{model.name}</span><span className="mt-0.5 block text-[9px] text-gray-500">{model.provider}</span></span><span className="text-[10px] font-black text-[#ff6573]">{model.cost} نقاط</span></button>)}
                 </div>
               )}
+              {(!imageModelsAvailable || imageModels.length === 0) && <p className="mt-2 text-[10px] leading-5 text-amber-300/80">نماذج الصور غير متاحة مؤقتًا. لن يتم خصم نقاط حتى يعود كتالوج النماذج.</p>}
             </div>
 
             <div>
@@ -445,8 +451,8 @@ export default function ImageStudioWorkspace() {
 
             <button type="button" onClick={() => setUseBrandKit((value) => !value)} className="flex w-full items-center justify-between rounded-xl border border-white/[.08] bg-[#11141b] p-3 text-xs font-bold text-gray-300"><span className="flex items-center gap-2"><Palette className="h-4 w-4 text-[#ff3344]" />تطبيق هوية المشروع</span><span className={`relative h-5 w-9 rounded-full transition ${useBrandKit ? 'bg-[#f31325]' : 'bg-[#343847]'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${useBrandKit ? 'right-0.5' : 'right-[18px]'}`} /></span></button>
 
-            <button type="button" onClick={generateImages} disabled={generating || !activeProject} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-[#c50f1d] to-[#f31325] py-3.5 text-sm font-black text-white shadow-[0_12px_35px_rgba(243,19,37,.18)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"><Sparkles className="h-4 w-4" />{generating ? 'جاري توليد الصور...' : `توليد ${count === 1 ? 'الصورة' : `${count} صور`}`}</button>
-            <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-600"><span>سيستهلك تقريباً</span><strong className="text-gray-400">{selectedModel.cost * count}</strong><span>نقطة</span>{currentBalance !== null && <><span>· رصيدك</span><strong className="text-[#ff6573]">{currentBalance}</strong></>}</div>
+            <button type="button" onClick={generateImages} disabled={generating || !activeProject || !selectedModel || !imageModelsAvailable} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-[#c50f1d] to-[#f31325] py-3.5 text-sm font-black text-white shadow-[0_12px_35px_rgba(243,19,37,.18)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"><Sparkles className="h-4 w-4" />{generating ? 'جاري توليد الصور...' : `توليد ${count === 1 ? 'الصورة' : `${count} صور`}`}</button>
+            {selectedModel && <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-600"><span>سيستهلك</span><strong className="text-gray-400">{selectedModel.cost * count}</strong><span>نقطة حسب كتالوج المنصة</span>{currentBalance !== null && <><span>· رصيدك</span><strong className="text-[#ff6573]">{currentBalance}</strong></>}</div>}
 
             {message && <div className={`rounded-xl border px-3 py-2.5 text-xs leading-5 ${message.type === 'error' ? 'border-red-500/25 bg-red-500/8 text-red-200' : 'border-emerald-500/20 bg-emerald-500/8 text-emerald-200'}`}>{message.text}</div>}
           </div>

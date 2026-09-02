@@ -25,7 +25,9 @@ assert.ok(postRoute.includes(".from('brand_kits')"), 'chat context must load Bra
 assert.ok(postRoute.includes(".eq('user_id', user.id)"), 'Brand Kit context must remain tenant-scoped');
 assert.ok(postRoute.includes(".eq('owner_id', user.id)"));
 assert.ok(postRoute.includes(".is('deleted_at', null)"));
-assert.ok(postRoute.includes('{ unitCredits, chatSystemPrompt }'));
+const executionContext = postRoute.slice(postRoute.lastIndexOf('GenerationEngine.executeGeneration'));
+assert.ok(executionContext.includes('unitCredits'), 'chat execution must keep server-authoritative unit credits');
+assert.ok(executionContext.includes('chatSystemPrompt'), 'chat execution must keep the trusted server-built project context');
 
 const getRoute = route.slice(route.indexOf('export async function GET'), route.indexOf('export async function POST'));
 assert.ok(getRoute.includes("searchParams.get('projectId')"));

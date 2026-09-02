@@ -84,7 +84,7 @@ async function run() {
     prompt: '  a red poster  ',
     aspectRatio: '4:5',
     count: 2,
-    resolution: '1K',
+    resolution: '4K',
   }, {
     apiKey: 'test-key',
     fetchImpl: async (input, init) => {
@@ -100,7 +100,7 @@ async function run() {
   });
   assert.equal(imageCalls[0].url, 'https://openrouter.ai/api/v1/images');
   assert.deepEqual(JSON.parse(String(imageCalls[0].init?.body)), {
-    model: 'openai/gpt-image-2', prompt: 'a red poster', aspect_ratio: '4:5', resolution: '1K', n: 2,
+    model: 'openai/gpt-image-2', prompt: 'a red poster', aspect_ratio: '4:5', resolution: '4K', n: 2,
   });
   assert.deepEqual(imageResult.images, [
     { base64: 'aW1hZ2Ux', mediaType: 'image/png' },
@@ -110,15 +110,42 @@ async function run() {
 
   await assert.rejects(
     () => createOpenRouterImageGeneration({ model: 'unknown/image-model', prompt: 'hello' }, { apiKey: 'test-key', fetchImpl }),
-    /OPENROUTER_IMAGE_MODEL_NOT_ALLOWED/
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_MODEL_NOT_ALLOWED'
+  );
+  await assert.rejects(
+    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello', resolution: '4K', count: 5 }, { apiKey: 'test-key', fetchImpl }),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_IMAGE_COUNT'
+  );
+
+  await assert.rejects(
+    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello' }, {
+      apiKey: 'test-key',
+      fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'do not leak quota internals' } }), { status: 429 }),
+    }),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_RATE_LIMITED'
   );
   await assert.rejects(
     () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello' }, {
       apiKey: 'test-key',
-      fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'provider down' } }), { status: 503 }),
+      fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'do not leak provider stack' } }), { status: 503 }),
     }),
-    /OPENROUTER_IMAGE_HTTP_503: provider down/
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_PROVIDER_UNAVAILABLE'
   );
+  await assert.rejects(
+    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello' }, {
+      apiKey: 'test-key',
+      fetchImpl: async () => new Response('not-json', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    }),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_INVALID_RESPONSE'
+  );
+  await assert.rejects(
+    () => createOpenRouterImageGeneration(
+      { model: 'openai/gpt-image-2', prompt: 'hello' },
+      { apiKey: 'test-key', fetchImpl: timeoutFetch, timeoutMs: 1 }
+    ),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_TIMEOUT'
+  );
+
   console.log('OpenRouter client tests passed.');
 }
 
