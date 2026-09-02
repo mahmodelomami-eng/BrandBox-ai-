@@ -9,6 +9,28 @@ type Actor = {
   role: AdminRole;
 };
 
+type QueryResult<T> = { data: T[] | null; error: { message?: string } | null };
+
+const restrictedResult = <T>(): Promise<QueryResult<T>> => Promise.resolve({ data: [], error: null });
+
+function canEnterControlCenter(role: AdminRole) {
+  return checkPermission(role, 'analytics.read')
+    || checkPermission(role, 'users.read')
+    || checkPermission(role, 'projects.read')
+    || checkPermission(role, 'subscriptions.read')
+    || checkPermission(role, 'payments.read')
+    || checkPermission(role, 'credits.read')
+    || checkPermission(role, 'plans.read')
+    || checkPermission(role, 'packages.read')
+    || checkPermission(role, 'providers.read')
+    || checkPermission(role, 'models.read')
+    || checkPermission(role, 'generations.read')
+    || checkPermission(role, 'assets.read')
+    || checkPermission(role, 'audit.read')
+    || checkPermission(role, 'settings.read')
+    || checkPermission(role, 'support.read');
+}
+
 async function actorFromRequest(request: NextRequest): Promise<Actor | null> {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -23,10 +45,9 @@ async function actorFromRequest(request: NextRequest): Promise<Actor | null> {
     .eq('id', data.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || profile.status === 'suspended') return null;
+  if (profileError || !profile || profile.status !== 'active') return null;
   const role = (profile.role || 'USER') as AdminRole;
-  if (!isKnownRole(role)) return null;
-  if (!checkPermission(role, 'analytics.read') && !checkPermission(role, 'users.read') && !checkPermission(role, 'settings.read') && !checkPermission(role, 'providers.read') && !checkPermission(role, 'models.read')) return null;
+  if (!isKnownRole(role) || !canEnterControlCenter(role)) return null;
 
   return {
     userId: data.user.id,
@@ -44,10 +65,22 @@ export async function GET(request: NextRequest) {
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
   const database = createPrivilegedSupabaseClient();
-  const canViewCommercial = checkPermission(actor.role, 'plans.read') || checkPermission(actor.role, 'packages.read');
-  const canViewAudit = checkPermission(actor.role, 'audit.read');
+  const canViewUsers = checkPermission(actor.role, 'users.read');
+  const canViewProjects = checkPermission(actor.role, 'projects.read');
+  const canViewSubscriptions = checkPermission(actor.role, 'subscriptions.read');
+  const canViewPayments = checkPermission(actor.role, 'payments.read');
   const canViewCredits = checkPermission(actor.role, 'credits.read');
-  const canViewAI = checkPermission(actor.role, 'providers.read') || checkPermission(actor.role, 'models.read') || checkPermission(actor.role, 'generations.read');
+  const canViewPlans = checkPermission(actor.role, 'plans.read');
+  const canViewPackages = checkPermission(actor.role, 'packages.read');
+  const canViewCommercial = canViewPlans || canViewPackages;
+  const canViewProviders = checkPermission(actor.role, 'providers.read');
+  const canViewModels = checkPermission(actor.role, 'models.read');
+  const canViewGenerations = checkPermission(actor.role, 'generations.read');
+  const canViewAssets = checkPermission(actor.role, 'assets.read');
+  const canViewAI = canViewProviders || canViewModels || canViewGenerations || canViewAssets;
+  const canViewAudit = checkPermission(actor.role, 'audit.read');
+  const canViewSettings = checkPermission(actor.role, 'settings.read');
+  const canViewSupport = checkPermission(actor.role, 'support.read');
 
   const [
     profilesResult,
@@ -61,79 +94,87 @@ export async function GET(request: NextRequest) {
     packagesResult,
     auditResult,
   ] = await Promise.all([
-    database
-      .from('profiles')
-      .select('id,email,first_name,last_name,phone,avatar_url,role,status,credit_balance,last_seen_at,created_at,updated_at')
-      .order('created_at', { ascending: false })
-      .limit(1000),
-    database
-      .from('projects')
-      .select('id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,is_favorite,created_at,updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(250),
-    database
-      .from('subscriptions')
-      .select('id,user_id,plan_id,status,provider,current_period_start,current_period_end,auto_renew,cancelled_at,created_at,updated_at')
-      .order('created_at', { ascending: false })
-      .limit(250),
-    database
-      .from('payment_transactions')
-      .select('id,order_reference,user_id,provider,provider_tx_id,amount_lyd,currency,status,item_type,created_at,updated_at')
-      .order('created_at', { ascending: false })
-      .limit(250),
-    canViewAI
+    canViewUsers
+      ? database
+          .from('profiles')
+          .select('id,email,first_name,last_name,phone,avatar_url,role,status,credit_balance,last_seen_at,created_at,updated_at')
+          .order('created_at', { ascending: false })
+          .limit(1000)
+      : restrictedResult<Record<string, unknown>>(),
+    canViewProjects
+      ? database
+          .from('projects')
+          .select('id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,is_favorite,created_at,updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(250)
+      : restrictedResult<Record<string, unknown>>(),
+    canViewSubscriptions
+      ? database
+          .from('subscriptions')
+          .select('id,user_id,plan_id,status,provider,current_period_start,current_period_end,auto_renew,cancelled_at,created_at,updated_at')
+          .order('created_at', { ascending: false })
+          .limit(250)
+      : restrictedResult<Record<string, unknown>>(),
+    canViewPayments
+      ? database
+          .from('payment_transactions')
+          .select('id,order_reference,user_id,provider,provider_tx_id,amount_lyd,currency,status,item_type,created_at,updated_at')
+          .order('created_at', { ascending: false })
+          .limit(250)
+      : restrictedResult<Record<string, unknown>>(),
+    canViewGenerations
       ? database
           .from('generations')
           .select('id,user_id,project_id,generation_type,provider,model,prompt,status,credits_consumed,result_url,error_message,duration_ms,created_at,provider_cost_usd,total_tokens')
           .order('created_at', { ascending: false })
           .limit(250)
-      : Promise.resolve({ data: [], error: null }),
-    canViewAI
+      : restrictedResult<Record<string, unknown>>(),
+    canViewAssets
       ? database
           .from('assets')
           .select('id,user_id,project_id,generation_id,name,file_path,mime_type,width,height,created_at')
           .order('created_at', { ascending: false })
           .limit(250)
-      : Promise.resolve({ data: [], error: null }),
+      : restrictedResult<Record<string, unknown>>(),
     canViewCredits
       ? database
           .from('credit_transactions')
           .select('id,user_id,amount,transaction_type,description,reference_type,reference_id,actor_id,created_at')
           .order('created_at', { ascending: false })
           .limit(250)
-      : Promise.resolve({ data: [], error: null }),
-    canViewCommercial
+      : restrictedResult<Record<string, unknown>>(),
+    canViewPlans
       ? database
           .from('plans')
           .select('id,name,description,price_monthly_lyd,price_monthly_usd,monthly_credits,max_projects,video_access,brand_kit_access,commercial_usage,is_active,created_at,updated_at')
           .order('price_monthly_lyd', { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
-    canViewCommercial
+      : restrictedResult<Record<string, unknown>>(),
+    canViewPackages
       ? database
           .from('credit_packages')
           .select('id,name,credits,purchased_credits,bonus_credits,bonus_valid_days,price_lyd,is_featured,is_active,sort_order,created_at,updated_at')
           .order('sort_order', { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
+      : restrictedResult<Record<string, unknown>>(),
     canViewAudit
       ? database
           .from('audit_logs')
           .select('id,actor_id,actor_role,action,resource,resource_id,before_state,after_state,metadata,created_at')
           .order('created_at', { ascending: false })
           .limit(250)
-      : Promise.resolve({ data: [], error: null }),
+      : restrictedResult<Record<string, unknown>>(),
   ]);
 
   const sources = {
-    profiles: profilesResult.error ? 'error' : 'ok',
-    projects: projectsResult.error ? 'error' : 'ok',
-    subscriptions: subscriptionsResult.error ? 'error' : 'ok',
-    payments: paymentsResult.error ? 'error' : 'ok',
-    generations: generationsResult.error ? 'error' : 'ok',
-    assets: assetsResult.error ? 'error' : 'ok',
-    credits: creditsResult.error ? 'error' : 'ok',
-    plans: plansResult.error ? 'error' : 'ok',
-    packages: packagesResult.error ? 'error' : 'ok',
-    audit: auditResult.error ? 'error' : 'ok',
+    profiles: canViewUsers ? (profilesResult.error ? 'error' : 'ok') : 'restricted',
+    projects: canViewProjects ? (projectsResult.error ? 'error' : 'ok') : 'restricted',
+    subscriptions: canViewSubscriptions ? (subscriptionsResult.error ? 'error' : 'ok') : 'restricted',
+    payments: canViewPayments ? (paymentsResult.error ? 'error' : 'ok') : 'restricted',
+    generations: canViewGenerations ? (generationsResult.error ? 'error' : 'ok') : 'restricted',
+    assets: canViewAssets ? (assetsResult.error ? 'error' : 'ok') : 'restricted',
+    credits: canViewCredits ? (creditsResult.error ? 'error' : 'ok') : 'restricted',
+    plans: canViewPlans ? (plansResult.error ? 'error' : 'ok') : 'restricted',
+    packages: canViewPackages ? (packagesResult.error ? 'error' : 'ok') : 'restricted',
+    audit: canViewAudit ? (auditResult.error ? 'error' : 'ok') : 'restricted',
   };
 
   const profiles = profilesResult.data || [];
@@ -160,19 +201,23 @@ export async function GET(request: NextRequest) {
       role: actor.role,
     },
     permissions: {
+      viewUsers: canViewUsers,
+      viewProjects: canViewProjects,
+      viewSubscriptions: canViewSubscriptions,
+      viewPayments: canViewPayments,
+      viewCredits: canViewCredits,
+      viewCommercial: canViewCommercial,
+      viewAI: canViewAI,
+      viewAudit: canViewAudit,
+      viewSettings: canViewSettings,
+      viewSupport: canViewSupport,
       manageUsers: checkPermission(actor.role, 'users.manage'),
       manageCredits: checkPermission(actor.role, 'credits.adjust'),
       changeRoles: checkPermission(actor.role, 'roles.assign'),
       deleteUsers: checkPermission(actor.role, 'users.delete'),
-      viewCommercial: canViewCommercial,
-      viewPayments: checkPermission(actor.role, 'payments.read'),
-      viewAudit: canViewAudit,
-      viewCredits: canViewCredits,
-      viewAI: canViewAI,
       manageProviders: checkPermission(actor.role, 'providers.manage'),
       manageModels: checkPermission(actor.role, 'models.manage'),
       manageModelPricing: checkPermission(actor.role, 'models.pricing_manage'),
-      viewSettings: checkPermission(actor.role, 'settings.read'),
       manageSettings: checkPermission(actor.role, 'settings.manage'),
     },
     metrics: {
