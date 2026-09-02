@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { EzonePayClient } from '@/lib/payments/ezonepay-client';
+import { getEzonePayMode } from '@/lib/payments/ezonepay-mode';
 import { createEzonePayOrderReference } from '@/lib/payments/ezonepay-order-reference';
 
 type CheckoutRequest = { itemType?: 'subscription' | 'purchase'; itemId?: string };
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     const payment = await EzonePayClient.createPaymentLink({ title: `BrandBox - ${String(item.name)}`, orderReference,
       internalReference: `${body.itemType}:${body.itemId}`, amount, redirectUrl: `${new URL(request.url).origin}/payment/result?order=${encodeURIComponent(orderReference)}`,
       customer: { firstName: profile.first_name.trim(), lastName: profile.last_name.trim(), phoneNumber: profile.phone.trim() } });
-    return NextResponse.json({ paymentUrl: payment.link, paymentLinkId: payment.id, orderReference, mode: 'sandbox' });
+    return NextResponse.json({ paymentUrl: payment.link, paymentLinkId: payment.id, orderReference, mode: getEzonePayMode() });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'EZONEPAY_CHECKOUT_FAILED';
     console.error('[ezonepay/payment-links] checkout failed', {
