@@ -1,0 +1,71 @@
+name: Staging credit economy proof
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/staging-credit-proof.yml'
+      - 'src/tests/integration/credit-integration.test.ts'
+      - 'src/tests/bootstrap-staging-test-user.ts'
+      - 'src/lib/supabase/test-client.ts'
+      - 'src/lib/supabase/test-db-reset.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-credit-proof
+  cancel-in-progress: false
+
+jobs:
+  prove-credit-economy:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'test/credit-economy-staging-proof-final'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TEST_DATABASE_MODE: staging
+      SUPABASE_URL: https://coiprfontulttcjhnhlp.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      STAGING_TEST_USER_EMAIL: store.test.staging@brandbox.ai
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Require staging service credential
+        shell: bash
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo 'STAGING_SERVICE_ROLE_SECRET_NOT_CONFIGURED'
+            exit 1
+          fi
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Bootstrap isolated staging test user
+        shell: bash
+        run: |
+          output="$(npm run --silent test:staging-user)"
+          user_id="$(printf '%s\n' "$output" | sed -n 's/^STAGING_TEST_USER_ID=//p' | tail -n 1)"
+          if ! [[ "$user_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            echo 'STAGING_TEST_USER_BOOTSTRAP_FAILED'
+            exit 1
+          fi
+          echo "STAGING_TEST_USER_ID=$user_id" >> "$GITHUB_ENV"
+
+      - name: Run isolated credit ledger proof
+        run: >-
+          npx tsx -e "import('./src/tests/integration/credit-integration.test.ts').then(async (m) => {
+          const result = await m.runStagingCreditIntegrationTests();
+          console.table(result.results);
+          if (!result.allPassed) process.exit(1);
+          }).catch((error) => { console.error(error instanceof Error ? error.message : String(error)); process.exit(1); })"
+
+      - name: Clean isolated staging test data
+        if: always()
+        run: npm run db:test-reset
