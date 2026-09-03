@@ -156,8 +156,8 @@ export default function PlannerScreen() {
   async function schedulePost(post: SocialPost) {
     if (!accessToken || busyPost) return;
     const scheduledAt = scheduleIso();
-    if (!scheduledAt || new Date(scheduledAt).getTime() <= Date.now() + 60_000) {
-      setMessage('اختر تاريخًا ووقتًا صحيحين بعد أكثر من دقيقة من الآن.');
+    if (!scheduledAt) {
+      setMessage('اختر تاريخًا ووقتًا صحيحين. يتحقق الخادم من أن الموعد آمن ومسموح قبل إنشاء Jobs.');
       return;
     }
     if (!post.target_providers.length) {
@@ -185,7 +185,7 @@ export default function PlannerScreen() {
       setMessage('تمت الجدولة وإنشاء Job مستقل وآمن لكل قناة.');
       await reload();
     } catch {
-      setMessage('لم تُنفذ الجدولة. تأكد من تفعيل Scheduler وصلاحية النشر للحسابات المحددة.');
+      setMessage('لم تُنفذ الجدولة. تحقق الخادم من الموعد والحسابات والصلاحيات ولم يعتمد الطلب.');
     } finally {
       setBusyPost('');
     }
@@ -221,7 +221,7 @@ export default function PlannerScreen() {
     <Screen>
       <Eyebrow>SOCIAL PLANNER</Eyebrow>
       <Title>خطّط مرة، ثم راقب كل قناة بشكل مستقل.</Title>
-      <Muted>المسودة لا تُنشر تلقائيًا. الجدولة تمر عبر حساب متصل وصلاحيات معتمدة، والـWorker لا يعمل إلا بعد تفعيل ثلاث بوابات أمان على الخادم.</Muted>
+      <Muted>المسودة لا تُنشر تلقائيًا. الجدولة تمر عبر حساب متصل وصلاحيات معتمدة، والـWorker لا يعمل إلا بعد تفعيل طبقات الأمان على الخادم.</Muted>
 
       <TextInput
         multiline
