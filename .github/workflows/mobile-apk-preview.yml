@@ -46,7 +46,7 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Validate Expo project
-        run: npx expo-doctor
+        run: npx --yes expo-doctor
 
       - name: Typecheck mobile app
         run: npm run typecheck
@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          npx eas-cli@latest build --platform android --profile preview --non-interactive 2>&1 | tee eas-build.log
+          npx --yes eas-cli@latest build --platform android --profile preview --non-interactive 2>&1 | tee eas-build.log
 
       - name: Write build summary
         if: always()
