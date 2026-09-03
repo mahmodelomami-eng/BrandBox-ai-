@@ -60,3 +60,5 @@ jobs:
         run: node ../../src/tests/mobile-product-qa.guard.cjs
       - name: Social draft review guard
         run: node ../../src/tests/mobile-social-draft-review.guard.cjs
+      - name: Project workspace guard
+        run: node ../../src/tests/mobile-project-workspace.guard.cjs
