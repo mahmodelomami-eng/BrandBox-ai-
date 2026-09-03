@@ -49,7 +49,7 @@ jobs:
       - name: Install mobile dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Expo dependency health check
-        run: npx expo-doctor
+        run: npx --yes expo-doctor
       - name: Typecheck mobile app
         run: npm run typecheck
       - name: Campaign Composer security guard
