@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
 import { apiRequest } from '@/lib/api';
 import { useAuth } from '@/providers/auth-provider';
 import { Card, Eyebrow, Muted, PrimaryButton, Screen, Title } from '@/components/ui';
@@ -176,14 +177,20 @@ export default function ProjectsScreen() {
       ) : null}
 
       {projects.map((project) => (
-        <Card key={project.id}>
-          <Text style={styles.name}>{project.name}</Text>
-          <Muted>{project.industry || project.type}</Muted>
-          <View style={styles.metaRow}>
-            <Text style={styles.kind}>{project.type}</Text>
-            <Text style={styles.meta}>{new Date(project.updatedAt).toLocaleDateString('ar-LY')}</Text>
-          </View>
-        </Card>
+        <Pressable
+          key={project.id}
+          onPress={() => router.push({ pathname: '/project/[projectId]', params: { projectId: project.id } })}
+        >
+          <Card>
+            <Text style={styles.name}>{project.name}</Text>
+            <Muted>{project.industry || project.type}</Muted>
+            <View style={styles.metaRow}>
+              <Text style={styles.kind}>{project.type}</Text>
+              <Text style={styles.meta}>{new Date(project.updatedAt).toLocaleDateString('ar-LY')}</Text>
+            </View>
+            <Text style={styles.open}>فتح مساحة المشروع ←</Text>
+          </Card>
+        </Pressable>
       ))}
     </Screen>
   );
@@ -208,5 +215,6 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', gap: space.sm, alignItems: 'center' },
   kind: { color: colors.info, fontSize: 11, fontWeight: '800' },
   meta: { color: colors.textMuted, fontSize: 12, textAlign: 'right' },
+  open: { color: colors.red, fontWeight: '900', fontSize: 12, textAlign: 'right', marginTop: 4 },
   empty: { color: colors.textMuted, textAlign: 'right', lineHeight: 22 },
 });
