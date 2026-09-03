@@ -22,6 +22,25 @@ export type SocialPublishJob = {
   idempotency_key: string;
 };
 
+export type SocialDelivery = {
+  id: string;
+  post_id: string;
+  connection_id: string;
+  provider: SocialProviderId;
+  status: 'queued' | 'publishing' | 'published' | 'failed' | 'cancelled';
+  scheduled_at: string;
+  next_attempt_at: string;
+  attempt_count: number;
+  max_attempts: number;
+  provider_publication_id: string | null;
+  provider_publication_url: string | null;
+  error_code: string | null;
+  error_summary: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const SAFE_JOB_COLUMNS = [
   'id',
   'post_id',
@@ -187,10 +206,10 @@ export async function getSocialPostSchedule(userId: string, postId: string) {
   ]);
   if (postError || !post) throw new Error('SOCIAL_POST_NOT_FOUND');
   if (jobsError) throw new Error('SOCIAL_PUBLISH_JOBS_UNAVAILABLE');
-  return { post, deliveries: jobs || [] };
+  return { post, deliveries: (jobs || []) as unknown as SocialDelivery[] };
 }
 
-export async function listSocialDeliveriesForUser(userId: string, postIds: string[]) {
+export async function listSocialDeliveriesForUser(userId: string, postIds: string[]): Promise<SocialDelivery[]> {
   if (!postIds.length) return [];
   const database = createPrivilegedSupabaseClient();
   const { data, error } = await database.from('social_publish_jobs')
@@ -199,7 +218,7 @@ export async function listSocialDeliveriesForUser(userId: string, postIds: strin
     .in('post_id', postIds)
     .order('created_at', { ascending: true });
   if (error) throw new Error('SOCIAL_PUBLISH_JOBS_UNAVAILABLE');
-  return data || [];
+  return (data || []) as unknown as SocialDelivery[];
 }
 
 export async function claimDueSocialPublishJobs(
@@ -215,7 +234,7 @@ export async function claimDueSocialPublishJobs(
     p_limit: Math.max(1, Math.min(limit, 25)),
   });
   if (error) throw new Error('SOCIAL_PUBLISH_CLAIM_FAILED');
-  return (data || []) as SocialPublishJob[];
+  return (data || []) as unknown as SocialPublishJob[];
 }
 
 export async function finalizeSocialPublishJob(args: {
