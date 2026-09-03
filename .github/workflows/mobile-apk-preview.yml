@@ -1,0 +1,68 @@
+name: Brand Box Mobile Preview APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-preview-apk:
+    name: Build Android preview APK on EAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.1'
+          cache: 'npm'
+          cache-dependency-path: apps/mobile/package.json
+
+      - name: Verify Expo token is configured
+        shell: bash
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN is missing. Add it in GitHub repository Settings > Secrets and variables > Actions > New repository secret."
+            exit 1
+          fi
+
+      - name: Install mobile dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Validate Expo project
+        run: npx expo-doctor
+
+      - name: Typecheck mobile app
+        run: npm run typecheck
+
+      - name: Build preview APK with EAS
+        shell: bash
+        run: |
+          set -o pipefail
+          npx eas-cli@latest build --platform android --profile preview --non-interactive 2>&1 | tee eas-build.log
+
+      - name: Write build summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Brand Box Mobile Preview APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "EAS project: @brand-box/brand" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f eas-build.log ]; then
+            BUILD_URL=$(grep -Eo 'https://expo\.dev/accounts/[^ ]+/builds/[A-Za-z0-9-]+' eas-build.log | tail -n 1 || true)
+            if [ -n "$BUILD_URL" ]; then
+              echo "Install/build page: $BUILD_URL" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "Open the EAS project dashboard to inspect the build output." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
