@@ -74,6 +74,7 @@ export default function CampaignComposerScreen() {
   const params = useLocalSearchParams();
   const initialGoal = routeText(params.goal, 1200);
   const initialTrendContext = routeText(params.trendContext, 800);
+  const initialProjectId = routeText(params.projectId, 160);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
   const [goal, setGoal] = useState(initialGoal);
@@ -93,8 +94,10 @@ export default function CampaignComposerScreen() {
     void fetchProjects(accessToken)
       .then((payload) => {
         if (!active) return;
-        setProjects(payload.projects || []);
-        setProjectId((current) => current || payload.projects?.[0]?.id || '');
+        const availableProjects = payload.projects || [];
+        const requestedOwnedProject = availableProjects.some((project) => project.id === initialProjectId) ? initialProjectId : '';
+        setProjects(availableProjects);
+        setProjectId((current) => current || requestedOwnedProject || availableProjects[0]?.id || '');
         setProjectError('');
       })
       .catch(() => {
@@ -104,7 +107,7 @@ export default function CampaignComposerScreen() {
         if (active) setProjectsLoading(false);
       });
     return () => { active = false; };
-  }, [accessToken]);
+  }, [accessToken, initialProjectId]);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === projectId) || null,
@@ -117,8 +120,10 @@ export default function CampaignComposerScreen() {
     setProjectError('');
     try {
       const payload = await fetchProjects(accessToken);
-      setProjects(payload.projects || []);
-      setProjectId((current) => current || payload.projects?.[0]?.id || '');
+      const availableProjects = payload.projects || [];
+      const requestedOwnedProject = availableProjects.some((project) => project.id === initialProjectId) ? initialProjectId : '';
+      setProjects(availableProjects);
+      setProjectId((current) => current || requestedOwnedProject || availableProjects[0]?.id || '');
     } catch {
       setProjectError('تعذر تحميل المشاريع. تحقق من الاتصال ثم أعد المحاولة.');
     } finally {
@@ -194,6 +199,13 @@ export default function CampaignComposerScreen() {
         <Card>
           <Text style={styles.prefillTitle}>تم استلام فرصة من Trend Radar</Text>
           <Muted>تمت تعبئة الهدف والسياق كنص مرجعي فقط. لم يتم اختيار مشروع أو تشغيل AI تلقائيًا.</Muted>
+        </Card>
+      ) : null}
+
+      {initialProjectId && activeProject?.id === initialProjectId ? (
+        <Card>
+          <Text style={styles.prefillTitle}>تم استلام المشروع من مساحة العمل</Text>
+          <Muted>تم اعتماد المشروع فقط بعد مطابقته مع قائمة مشاريعك التي أعادها الخادم. يمكنك تغييره قبل إنشاء الحملة.</Muted>
         </Card>
       ) : null}
 
