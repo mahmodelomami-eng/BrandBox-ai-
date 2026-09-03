@@ -2,9 +2,16 @@ name: Brand Box Mobile Preview APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'apk-preview'
 
 permissions:
   contents: read
+
+concurrency:
+  group: brand-box-mobile-preview-apk
+  cancel-in-progress: false
 
 jobs:
   build-preview-apk:
