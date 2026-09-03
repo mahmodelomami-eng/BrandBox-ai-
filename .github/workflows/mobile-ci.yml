@@ -56,3 +56,5 @@ jobs:
         run: node ../../src/tests/mobile-social-lifecycle.guard.cjs
       - name: Social scheduler security guard
         run: node ../../src/tests/mobile-social-scheduler.guard.cjs
+      - name: Mobile product QA guard
+        run: node ../../src/tests/mobile-product-qa.guard.cjs
