@@ -6,10 +6,12 @@ on:
       - 'apps/mobile/**'
       - 'src/app/api/v1/mobile/**'
       - 'src/app/api/v1/social/**'
+      - 'src/app/api/internal/social/**'
       - 'src/lib/social/**'
       - 'src/app/api/v1/trends/**'
       - 'src/tests/mobile-*.guard.cjs'
       - 'supabase/migrations/**'
+      - '.env.example'
       - '.github/workflows/mobile-ci.yml'
   push:
     branches:
@@ -18,10 +20,12 @@ on:
       - 'apps/mobile/**'
       - 'src/app/api/v1/mobile/**'
       - 'src/app/api/v1/social/**'
+      - 'src/app/api/internal/social/**'
       - 'src/lib/social/**'
       - 'src/app/api/v1/trends/**'
       - 'src/tests/mobile-*.guard.cjs'
       - 'supabase/migrations/**'
+      - '.env.example'
       - '.github/workflows/mobile-ci.yml'
 
 permissions:
@@ -50,3 +54,5 @@ jobs:
         run: node ../../src/tests/mobile-social-oauth.guard.cjs
       - name: Social lifecycle security guard
         run: node ../../src/tests/mobile-social-lifecycle.guard.cjs
+      - name: Social scheduler security guard
+        run: node ../../src/tests/mobile-social-scheduler.guard.cjs
