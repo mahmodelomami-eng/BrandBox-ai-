@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, BrandBoxApiError } from '@/lib/api';
 import { useAuth } from '@/providers/auth-provider';
 import { Card, Eyebrow, Muted, PrimaryButton, Screen, Title } from '@/components/ui';
 import { colors, radius, space } from '@/theme/tokens';
@@ -83,6 +83,9 @@ export default function PlannerScreen() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [busy, setBusy] = useState(false);
   const [busyPost, setBusyPost] = useState('');
+  const [editPostId, setEditPostId] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editSelected, setEditSelected] = useState<string[]>([]);
   const [schedulePostId, setSchedulePostId] = useState('');
   const [scheduleDate, setScheduleDate] = useState(tomorrowDate());
   const [scheduleTime, setScheduleTime] = useState('10:00');
@@ -127,6 +130,10 @@ export default function PlannerScreen() {
     setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
+  function toggleEditProvider(id: string) {
+    setEditSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+
   async function saveDraft() {
     if (!accessToken || !content.trim()) return;
     setBusy(true);
@@ -147,6 +154,54 @@ export default function PlannerScreen() {
     }
   }
 
+  function beginEdit(post: SocialPost) {
+    if (!['draft', 'cancelled', 'failed'].includes(post.status)) {
+      setMessage(post.status === 'scheduled'
+        ? 'ألغِ الجدولة أولًا قبل تعديل المسودة.'
+        : 'هذا المحتوى دخل مرحلة النشر ولا يمكن تعديله من المخطط.');
+      return;
+    }
+    setSchedulePostId('');
+    setEditPostId(post.id);
+    setEditContent(post.content);
+    setEditSelected([...post.target_providers]);
+    setMessage('');
+  }
+
+  function closeEdit() {
+    setEditPostId('');
+    setEditContent('');
+    setEditSelected([]);
+  }
+
+  async function saveEdit(post: SocialPost) {
+    if (!accessToken || busyPost || editPostId !== post.id || !editContent.trim()) return;
+    setBusyPost(post.id);
+    setMessage('');
+    try {
+      await apiRequest(`/api/v1/social/posts/${post.id}`, accessToken, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          content: editContent.trim(),
+          targetProviders: editSelected,
+        }),
+      });
+      closeEdit();
+      setMessage('تم حفظ التعديلات كمسودة للمراجعة. لم تتم الجدولة أو النشر.');
+      await reload();
+    } catch (error) {
+      if (error instanceof BrandBoxApiError && error.code === 'CANCEL_SOCIAL_SCHEDULE_BEFORE_EDIT') {
+        setMessage('ألغِ الجدولة أولًا ثم افتح المسودة للتعديل.');
+      } else if (error instanceof BrandBoxApiError && error.code === 'SOCIAL_POST_NOT_EDITABLE') {
+        setMessage('لا يمكن تعديل محتوى دخل مرحلة النشر أو تم نشره.');
+      } else {
+        setMessage('تعذر حفظ التعديلات. لم تتغير حالة النشر.');
+      }
+    } finally {
+      setBusyPost('');
+    }
+  }
+
   function scheduleIso() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduleDate) || !/^\d{2}:\d{2}$/.test(scheduleTime)) return '';
     const date = new Date(`${scheduleDate}T${scheduleTime}:00`);
@@ -154,7 +209,7 @@ export default function PlannerScreen() {
   }
 
   async function schedulePost(post: SocialPost) {
-    if (!accessToken || busyPost) return;
+    if (!accessToken || busyPost || editPostId === post.id) return;
     const scheduledAt = scheduleIso();
     if (!scheduledAt) {
       setMessage('اختر تاريخًا ووقتًا صحيحين. يتحقق الخادم من أن الموعد آمن ومسموح قبل إنشاء Jobs.');
@@ -197,7 +252,7 @@ export default function PlannerScreen() {
     setMessage('');
     try {
       await apiRequest(`/api/v1/social/posts/${post.id}/schedule`, accessToken, { method: 'DELETE' });
-      setMessage('تم إلغاء الجدولة قبل دخول المنشور مرحلة النشر.');
+      setMessage('تم إلغاء الجدولة قبل دخول المنشور مرحلة النشر. يمكنك الآن فتحه للتعديل ثم جدولته من جديد.');
       await reload();
     } catch {
       setMessage('تعذر الإلغاء. قد يكون المنشور دخل مرحلة النشر بالفعل.');
@@ -220,8 +275,8 @@ export default function PlannerScreen() {
   return (
     <Screen>
       <Eyebrow>SOCIAL PLANNER</Eyebrow>
-      <Title>خطّط مرة، ثم راقب كل قناة بشكل مستقل.</Title>
-      <Muted>المسودة لا تُنشر تلقائيًا. الجدولة تمر عبر حساب متصل وصلاحيات معتمدة، والـWorker لا يعمل إلا بعد تفعيل طبقات الأمان على الخادم.</Muted>
+      <Title>راجع المسودة، ثم جدولها بثقة.</Title>
+      <Muted>الحفظ والتعديل لا يعنيان الجدولة أو النشر. المحتوى يبقى تحت مراجعتك، والجدولة خطوة مستقلة تمر عبر حسابات وصلاحيات معتمدة.</Muted>
 
       <TextInput
         multiline
@@ -251,16 +306,59 @@ export default function PlannerScreen() {
 
       <Text style={styles.section}>المحتوى الأخير</Text>
       {posts.slice(0, 20).map((post) => {
+        const editing = editPostId === post.id;
         const scheduling = schedulePostId === post.id;
-        const canSchedule = ['draft', 'cancelled', 'failed'].includes(post.status);
+        const canReview = ['draft', 'cancelled', 'failed'].includes(post.status);
+        const canSchedule = canReview;
         const canCancel = post.status === 'scheduled';
         return (
           <Card key={post.id}>
             <View style={styles.postHeader}>
               <Text style={styles.status}>{statusLabel[post.status] || post.status}</Text>
-              <Text numberOfLines={4} style={styles.post}>{post.content}</Text>
+              {!editing ? <Text numberOfLines={4} style={styles.post}>{post.content}</Text> : null}
             </View>
-            <Muted>{post.target_providers.length ? post.target_providers.join(' • ') : 'بدون قناة محددة'}</Muted>
+
+            {editing ? (
+              <View style={styles.editBox}>
+                <Text style={styles.editTitle}>مراجعة المسودة</Text>
+                <TextInput
+                  multiline
+                  value={editContent}
+                  onChangeText={setEditContent}
+                  maxLength={5000}
+                  placeholder="راجع النص قبل الجدولة..."
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.editInput}
+                />
+                <Text style={styles.scheduleLabel}>القنوات المستهدفة</Text>
+                <View style={styles.channels}>
+                  {channels.map((channel) => {
+                    const active = editSelected.includes(channel.id);
+                    return (
+                      <Pressable
+                        key={channel.id}
+                        onPress={() => toggleEditProvider(channel.id)}
+                        style={[styles.channel, active && styles.channelActive]}
+                      >
+                        <Text style={[styles.channelText, active && styles.channelTextActive]}>{channel.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Pressable
+                  disabled={busyPost === post.id || !editContent.trim()}
+                  onPress={() => void saveEdit(post)}
+                  style={[styles.reviewSaveButton, (!editContent.trim() || busyPost === post.id) && styles.disabledButton]}
+                >
+                  {busyPost === post.id ? <ActivityIndicator color={colors.white} /> : <Text style={styles.scheduleButtonText}>حفظ التعديلات كمسودة</Text>}
+                </Pressable>
+                <Pressable disabled={busyPost === post.id} onPress={closeEdit}><Text style={styles.cancelLink}>إغلاق بدون حفظ</Text></Pressable>
+                <Muted>حفظ التعديل لا ينشئ Jobs ولا يغير أي حساب متصل ولا ينشر المحتوى.</Muted>
+              </View>
+            ) : (
+              <Muted>{post.target_providers.length ? post.target_providers.join(' • ') : 'بدون قناة محددة'}</Muted>
+            )}
+
             {post.scheduled_at ? <Text style={styles.scheduleText}>موعد النشر: {new Date(post.scheduled_at).toLocaleString('ar-LY')}</Text> : null}
             {post.error_summary ? <Text style={styles.errorText}>{post.error_summary}</Text> : null}
 
@@ -275,7 +373,7 @@ export default function PlannerScreen() {
               </View>
             ) : null}
 
-            {scheduling ? (
+            {scheduling && !editing ? (
               <View style={styles.scheduleBox}>
                 <Text style={styles.scheduleLabel}>التاريخ</Text>
                 <TextInput value={scheduleDate} onChangeText={setScheduleDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textMuted} style={styles.smallInput} />
@@ -288,15 +386,26 @@ export default function PlannerScreen() {
               </View>
             ) : null}
 
-            {!scheduling && canSchedule ? (
-              <Pressable onPress={() => setSchedulePostId(post.id)} style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>جدولة هذه المسودة</Text>
-              </Pressable>
+            {!editing && !scheduling && canReview ? (
+              <View style={styles.actionRow}>
+                <Pressable onPress={() => beginEdit(post)} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>مراجعة وتعديل</Text>
+                </Pressable>
+                {canSchedule ? (
+                  <Pressable onPress={() => { setEditPostId(''); setSchedulePostId(post.id); }} style={styles.secondaryButton}>
+                    <Text style={styles.secondaryButtonText}>جدولة</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
+
             {canCancel ? (
-              <Pressable disabled={busyPost === post.id} onPress={() => confirmCancel(post)} style={styles.cancelButton}>
-                <Text style={styles.cancelButtonText}>إلغاء الجدولة</Text>
-              </Pressable>
+              <>
+                <Muted>لتعديل هذا المحتوى يجب إلغاء الجدولة أولًا. لا يتم الإلغاء تلقائيًا أثناء التحرير.</Muted>
+                <Pressable disabled={busyPost === post.id} onPress={() => confirmCancel(post)} style={styles.cancelButton}>
+                  <Text style={styles.cancelButtonText}>إلغاء الجدولة</Text>
+                </Pressable>
+              </>
             ) : null}
           </Card>
         );
@@ -326,13 +435,19 @@ const styles = StyleSheet.create({
   delivery: { flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 10, borderRadius: radius.sm, backgroundColor: colors.surfaceRaised, padding: 9 },
   deliveryProvider: { color: colors.text, fontWeight: '800', fontSize: 11 },
   deliveryStatus: { color: colors.textMuted, fontWeight: '700', fontSize: 10 },
+  editBox: { gap: 9, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised, padding: 12 },
+  editTitle: { color: colors.text, textAlign: 'right', fontWeight: '900', fontSize: 14 },
+  editInput: { minHeight: 130, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 12, color: colors.text, textAlign: 'right', textAlignVertical: 'top', lineHeight: 22 },
   scheduleBox: { gap: 8, paddingTop: 6 },
   scheduleLabel: { color: colors.textMuted, textAlign: 'right', fontSize: 11, fontWeight: '700' },
   smallInput: { minHeight: 44, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised, paddingHorizontal: 12, color: colors.text, textAlign: 'right' },
   scheduleButton: { minHeight: 46, borderRadius: radius.md, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' },
+  reviewSaveButton: { minHeight: 46, borderRadius: radius.md, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center' },
+  disabledButton: { opacity: 0.5 },
   scheduleButtonText: { color: colors.white, fontWeight: '900' },
   cancelLink: { color: colors.textMuted, textAlign: 'center', fontWeight: '700', padding: 6 },
-  secondaryButton: { minHeight: 44, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  actionRow: { flexDirection: 'row-reverse', gap: 8 },
+  secondaryButton: { flex: 1, minHeight: 44, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   secondaryButtonText: { color: colors.text, fontWeight: '800' },
   cancelButton: { minHeight: 44, borderRadius: radius.md, borderWidth: 1, borderColor: '#5C2A2E', backgroundColor: '#241215', alignItems: 'center', justifyContent: 'center' },
   cancelButtonText: { color: '#FF777D', fontWeight: '900' },
