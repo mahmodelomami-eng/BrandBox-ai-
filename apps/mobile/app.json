@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "Brand Box AI",
-    "slug": "brand-box-ai",
+    "slug": "brand",
+    "owner": "brand-box",
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "brandbox",
@@ -19,7 +20,10 @@
       "expo-secure-store"
     ],
     "extra": {
-      "product": "Brand Box AI Growth Hub"
+      "product": "Brand Box AI Growth Hub",
+      "eas": {
+        "projectId": "004f971a-1bec-4e79-a1a6-4a9bac006151"
+      }
     }
   }
 }
