@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiRequest } from '@/lib/api';
 import { useAuth } from '@/providers/auth-provider';
 import { Card, Eyebrow, Muted, Screen, Title } from '@/components/ui';
@@ -24,17 +24,47 @@ const launchCategories = [
   { title: 'ترفيه وبث مرخّص', desc: 'اشتراكات مشاهدة أفلام ومسلسلات وخدمات ترفيه مرخّصة ومتاحة للمنطقة.' },
 ];
 
+function fetchCatalog(accessToken: string) {
+  return apiRequest<CatalogPayload>('/api/v1/mobile/store-catalog', accessToken);
+}
+
 export default function StoreScreen() {
   const { session } = useAuth();
+  const accessToken = session?.access_token || '';
   const [data, setData] = useState<CatalogPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!session?.access_token) return;
-    apiRequest<CatalogPayload>('/api/v1/mobile/store-catalog', session.access_token)
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, [session?.access_token]);
+    if (!accessToken) return;
+    let active = true;
+    void fetchCatalog(accessToken)
+      .then((payload) => {
+        if (!active) return;
+        setData(payload);
+        setError('');
+      })
+      .catch(() => {
+        if (active) setError('تعذر تحميل الكتالوج الرقمي. لم يتم عرض أسعار أو توفر قديم كأنه حالي.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [accessToken]);
+
+  async function retry() {
+    if (!accessToken) return;
+    setLoading(true);
+    setError('');
+    try {
+      setData(await fetchCatalog(accessToken));
+    } catch {
+      setError('تعذر تحميل الكتالوج الرقمي. تحقق من الاتصال ثم أعد المحاولة.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <Screen>
@@ -45,8 +75,18 @@ export default function StoreScreen() {
         <Text style={styles.policyTitle}>بوابة الدفع الأصلية</Text>
         <Text style={styles.policyText}>الشراء الرقمي داخل iOS/Android سيبقى غير مفعّل حتى اكتمال مسار شراء متوافق مع سياسة المتجر. لا يتم تمرير سعر أو استحقاق من العميل كمرجع نهائي.</Text>
       </View>
+
       {loading ? <ActivityIndicator color={colors.red} /> : null}
-      {data?.products.map((product) => (
+      {error ? (
+        <Card>
+          <Text style={styles.error}>{error}</Text>
+          <Pressable disabled={loading} onPress={() => void retry()} style={styles.retry}>
+            <Text style={styles.retryText}>إعادة تحميل الكتالوج</Text>
+          </Pressable>
+        </Card>
+      ) : null}
+
+      {!error && data?.products.map((product) => (
         <Card key={product.id}>
           <Text style={styles.category}>{product.category?.name_ar || 'منتج رقمي'}</Text>
           <Text style={styles.title}>{product.name}</Text>
@@ -61,7 +101,19 @@ export default function StoreScreen() {
           <Text style={styles.state}>{product.nativePurchaseEnabled ? 'متاح للشراء' : 'العرض فقط حتى اعتماد الدفع داخل التطبيق'}</Text>
         </Card>
       ))}
-      {!loading && !data?.products.length ? <><Muted>لا توجد منتجات موبايل مفعّلة بعد. هذا مقصود حتى تتم مطابقة فئات الكتالوج مع الموردين المصرّح بهم.</Muted>{launchCategories.map((item) => <Card key={item.title}><Text style={styles.title}>{item.title}</Text><Muted>{item.desc}</Muted><Text style={styles.state}>جاهز لاستقبال كتالوج معتمد</Text></Card>)}</> : null}
+
+      {!loading && !error && !data?.products.length ? (
+        <>
+          <Muted>لا توجد منتجات موبايل مفعّلة بعد. هذا مقصود حتى تتم مطابقة فئات الكتالوج مع الموردين المصرّح بهم.</Muted>
+          {launchCategories.map((item) => (
+            <Card key={item.title}>
+              <Text style={styles.title}>{item.title}</Text>
+              <Muted>{item.desc}</Muted>
+              <Text style={styles.state}>جاهز لاستقبال كتالوج معتمد</Text>
+            </Card>
+          ))}
+        </>
+      ) : null}
     </Screen>
   );
 }
@@ -76,4 +128,7 @@ const styles = StyleSheet.create({
   skuTitle: { color: colors.text, flex: 1, textAlign: 'right', fontWeight: '700' },
   price: { color: colors.text, fontWeight: '900' },
   state: { color: colors.warning, textAlign: 'right', fontWeight: '800', fontSize: 12 },
+  error: { color: '#FF777D', textAlign: 'right', lineHeight: 22 },
+  retry: { minHeight: 42, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  retryText: { color: colors.text, fontWeight: '800' },
 });
