@@ -61,6 +61,13 @@ type Workspace = {
   }>;
 };
 
+type WorkspaceRequest = {
+  projectId: string;
+  data: Workspace | null;
+  error: string;
+  settled: boolean;
+};
+
 const statusLabel: Record<string, string> = {
   draft: 'مسودة',
   scheduled: 'مجدول',
@@ -85,46 +92,45 @@ export default function ProjectWorkspaceScreen() {
   const accessToken = session?.access_token || '';
   const params = useLocalSearchParams<{ projectId?: string | string[] }>();
   const projectId = firstParam(params.projectId).trim();
-  const [data, setData] = useState<Workspace | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [request, setRequest] = useState<WorkspaceRequest>({ projectId: '', data: null, error: '', settled: false });
+
+  const currentRequest = request.projectId === projectId ? request : null;
+  const data = currentRequest?.data || null;
+  const error = !projectId ? 'معرّف المشروع غير صالح.' : currentRequest?.error || '';
+  const loading = Boolean(accessToken && projectId && !currentRequest?.settled);
 
   async function load() {
     if (!accessToken || !projectId) return;
-    setLoading(true);
-    setError('');
+    setRequest({ projectId, data: null, error: '', settled: false });
     try {
       const payload = await apiRequest<Workspace>(`/api/v1/mobile/projects/${encodeURIComponent(projectId)}`, accessToken);
-      setData(payload);
+      setRequest({ projectId, data: payload, error: '', settled: true });
     } catch {
-      setData(null);
-      setError('تعذر تحميل مساحة المشروع الحالية. لم يتم عرض بيانات قديمة أو جزئية.');
-    } finally {
-      setLoading(false);
+      setRequest({
+        projectId,
+        data: null,
+        error: 'تعذر تحميل مساحة المشروع الحالية. لم يتم عرض بيانات قديمة أو جزئية.',
+        settled: true,
+      });
     }
   }
 
   useEffect(() => {
-    if (!accessToken || !projectId) {
-      setLoading(false);
-      if (!projectId) setError('معرّف المشروع غير صالح.');
-      return;
-    }
+    if (!accessToken || !projectId) return;
     let active = true;
-    setLoading(true);
     void apiRequest<Workspace>(`/api/v1/mobile/projects/${encodeURIComponent(projectId)}`, accessToken)
       .then((payload) => {
         if (!active) return;
-        setData(payload);
-        setError('');
+        setRequest({ projectId, data: payload, error: '', settled: true });
       })
       .catch(() => {
         if (!active) return;
-        setData(null);
-        setError('تعذر تحميل مساحة المشروع الحالية. لم يتم عرض بيانات قديمة أو جزئية.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        setRequest({
+          projectId,
+          data: null,
+          error: 'تعذر تحميل مساحة المشروع الحالية. لم يتم عرض بيانات قديمة أو جزئية.',
+          settled: true,
+        });
       });
     return () => { active = false; };
   }, [accessToken, projectId]);
@@ -139,7 +145,7 @@ export default function ProjectWorkspaceScreen() {
       {error ? (
         <Card>
           <Text style={styles.error}>{error}</Text>
-          <Pressable onPress={() => void load()} style={styles.outlineButton}><Text style={styles.outlineText}>إعادة تحميل مساحة المشروع</Text></Pressable>
+          {projectId ? <Pressable onPress={() => void load()} style={styles.outlineButton}><Text style={styles.outlineText}>إعادة تحميل مساحة المشروع</Text></Pressable> : null}
         </Card>
       ) : null}
 
