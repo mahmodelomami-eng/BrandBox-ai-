@@ -7,6 +7,62 @@ ALTER FUNCTION public.schedule_social_post_jobs_atomic(UUID, UUID, TIMESTAMPTZ, 
 ALTER FUNCTION public.cancel_social_post_jobs_atomic(UUID, UUID) SECURITY INVOKER;
 ALTER FUNCTION public.claim_due_social_publish_jobs(TEXT, INTEGER) SECURITY INVOKER;
 
+CREATE OR REPLACE FUNCTION public.claim_due_social_publish_jobs_v2(
+  p_worker_id TEXT,
+  p_allowed_providers TEXT[],
+  p_limit INTEGER DEFAULT 10
+)
+RETURNS SETOF public.social_publish_jobs
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+BEGIN
+  IF p_worker_id IS NULL OR length(trim(p_worker_id)) < 8 THEN
+    RAISE EXCEPTION 'INVALID_SOCIAL_WORKER_ID';
+  END IF;
+
+  IF p_allowed_providers IS NULL OR cardinality(p_allowed_providers) < 1 THEN
+    RETURN;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM unnest(p_allowed_providers) AS provider
+    WHERE provider NOT IN ('meta', 'tiktok', 'youtube', 'linkedin')
+  ) THEN
+    RAISE EXCEPTION 'SOCIAL_PROVIDER_NOT_SUPPORTED';
+  END IF;
+
+  RETURN QUERY
+  WITH picked AS (
+    SELECT j.id
+    FROM public.social_publish_jobs j
+    WHERE j.provider = ANY(p_allowed_providers)
+      AND j.attempt_count < j.max_attempts
+      AND (
+        (j.status = 'queued' AND j.next_attempt_at <= NOW() AND j.scheduled_at <= NOW())
+        OR
+        (j.status = 'publishing' AND j.lease_expires_at IS NOT NULL AND j.lease_expires_at <= NOW())
+      )
+    ORDER BY j.next_attempt_at ASC, j.created_at ASC
+    FOR UPDATE SKIP LOCKED
+    LIMIT GREATEST(1, LEAST(COALESCE(p_limit, 10), 25))
+  ), claimed AS (
+    UPDATE public.social_publish_jobs j
+    SET status = 'publishing',
+        worker_id = p_worker_id,
+        leased_at = NOW(),
+        lease_expires_at = NOW() + INTERVAL '5 minutes',
+        attempt_count = j.attempt_count + 1,
+        updated_at = NOW()
+    FROM picked
+    WHERE j.id = picked.id
+    RETURNING j.*
+  )
+  SELECT * FROM claimed;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.finalize_social_publish_job_atomic(
   p_worker_id TEXT,
   p_job_id UUID,
@@ -160,8 +216,12 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.claim_due_social_publish_jobs_v2(TEXT, TEXT[], INTEGER)
+  FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.finalize_social_publish_job_atomic(TEXT, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ)
   FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_due_social_publish_jobs_v2(TEXT, TEXT[], INTEGER)
+  TO service_role;
 GRANT EXECUTE ON FUNCTION public.finalize_social_publish_job_atomic(TEXT, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TIMESTAMPTZ)
   TO service_role;
 
