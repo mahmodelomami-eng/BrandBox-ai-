@@ -13,6 +13,7 @@ on:
       - 'supabase/migrations/**'
       - '.env.example'
       - '.github/workflows/mobile-ci.yml'
+      - '.github/workflows/mobile-apk-preview.yml'
   push:
     branches:
       - 'feat/mobile-*'
@@ -27,6 +28,7 @@ on:
       - 'supabase/migrations/**'
       - '.env.example'
       - '.github/workflows/mobile-ci.yml'
+      - '.github/workflows/mobile-apk-preview.yml'
 
 permissions:
   contents: read
@@ -46,6 +48,8 @@ jobs:
           cache-dependency-path: apps/mobile/package.json
       - name: Install mobile dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Expo dependency health check
+        run: npx expo-doctor
       - name: Typecheck mobile app
         run: npm run typecheck
       - name: Campaign Composer security guard
