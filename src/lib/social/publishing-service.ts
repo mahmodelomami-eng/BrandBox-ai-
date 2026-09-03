@@ -202,11 +202,16 @@ export async function listSocialDeliveriesForUser(userId: string, postIds: strin
   return data || [];
 }
 
-export async function claimDueSocialPublishJobs(workerId: string, limit = 10): Promise<SocialPublishJob[]> {
-  if (!socialLivePublishingEnabled()) return [];
+export async function claimDueSocialPublishJobs(
+  workerId: string,
+  allowedProviders: SocialProviderId[],
+  limit = 10
+): Promise<SocialPublishJob[]> {
+  if (!socialLivePublishingEnabled() || !allowedProviders.length) return [];
   const database = createPrivilegedSupabaseClient();
-  const { data, error } = await database.rpc('claim_due_social_publish_jobs', {
+  const { data, error } = await database.rpc('claim_due_social_publish_jobs_v2', {
     p_worker_id: workerId,
+    p_allowed_providers: allowedProviders,
     p_limit: Math.max(1, Math.min(limit, 25)),
   });
   if (error) throw new Error('SOCIAL_PUBLISH_CLAIM_FAILED');
