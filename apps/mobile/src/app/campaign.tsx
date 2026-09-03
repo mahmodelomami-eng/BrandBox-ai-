@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { apiRequest, requestId } from '@/lib/api';
 import { useAuth } from '@/providers/auth-provider';
 import { Card, Eyebrow, Muted, PrimaryButton, Screen, Title } from '@/components/ui';
@@ -58,31 +59,49 @@ const providerLabel: Record<SocialProvider, string> = {
   linkedin: 'LinkedIn',
 };
 
+function routeText(value: string | string[] | undefined, maxLength: number) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === 'string' ? raw.trim().slice(0, maxLength) : '';
+}
+
+function fetchProjects(accessToken: string) {
+  return apiRequest<Bootstrap>('/api/v1/mobile/bootstrap', accessToken);
+}
+
 export default function CampaignComposerScreen() {
   const { session } = useAuth();
   const accessToken = session?.access_token || '';
+  const params = useLocalSearchParams();
+  const initialGoal = routeText(params.goal, 1200);
+  const initialTrendContext = routeText(params.trendContext, 800);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState('');
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState(initialGoal);
   const [offer, setOffer] = useState('');
-  const [trendContext, setTrendContext] = useState('');
+  const [trendContext, setTrendContext] = useState(initialTrendContext);
   const [selectedChannels, setSelectedChannels] = useState<SocialProvider[]>(['meta']);
   const [result, setResult] = useState<ComposeResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectError, setProjectError] = useState('');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     if (!accessToken) return;
     let active = true;
-    void apiRequest<Bootstrap>('/api/v1/mobile/bootstrap', accessToken)
+    void fetchProjects(accessToken)
       .then((payload) => {
         if (!active) return;
         setProjects(payload.projects || []);
         setProjectId((current) => current || payload.projects?.[0]?.id || '');
+        setProjectError('');
       })
       .catch(() => {
-        if (active) setMessage('تعذر تحميل المشاريع.');
+        if (active) setProjectError('تعذر تحميل المشاريع.');
+      })
+      .finally(() => {
+        if (active) setProjectsLoading(false);
       });
     return () => { active = false; };
   }, [accessToken]);
@@ -91,6 +110,21 @@ export default function CampaignComposerScreen() {
     () => projects.find((project) => project.id === projectId) || null,
     [projects, projectId]
   );
+
+  async function retryProjects() {
+    if (!accessToken) return;
+    setProjectsLoading(true);
+    setProjectError('');
+    try {
+      const payload = await fetchProjects(accessToken);
+      setProjects(payload.projects || []);
+      setProjectId((current) => current || payload.projects?.[0]?.id || '');
+    } catch {
+      setProjectError('تعذر تحميل المشاريع. تحقق من الاتصال ثم أعد المحاولة.');
+    } finally {
+      setProjectsLoading(false);
+    }
+  }
 
   function toggleChannel(provider: SocialProvider) {
     setSelectedChannels((current) => current.includes(provider)
@@ -117,7 +151,7 @@ export default function CampaignComposerScreen() {
       });
       setResult(payload);
       if (payload.retryable) {
-        setMessage('الحملة قيد المعالجة. أعد المحاولة من نفس المشروع بعد لحظات.');
+        setMessage('الحملة قيد المعالجة. أعد المحاولة من نفس المشروع لاحقًا.');
       } else if (payload.parseStatus === 'needs_review') {
         setMessage('تم التوليد، لكن تنسيق الحملة يحتاج مراجعة قبل تحويله إلى مسودات. لم يتم نشر أو حفظ أي شيء تلقائيًا.');
       }
@@ -156,7 +190,23 @@ export default function CampaignComposerScreen() {
       <Title>حوّل الهدف إلى حملة قابلة للتنفيذ.</Title>
       <Muted>اختر مشروعًا وهدفًا وقنوات. Brand Box يبني الاستراتيجية والمسودات باستخدام نفس رصيد AI، ثم تراجعها قبل أي نشر.</Muted>
 
+      {initialTrendContext ? (
+        <Card>
+          <Text style={styles.prefillTitle}>تم استلام فرصة من Trend Radar</Text>
+          <Muted>تمت تعبئة الهدف والسياق كنص مرجعي فقط. لم يتم اختيار مشروع أو تشغيل AI تلقائيًا.</Muted>
+        </Card>
+      ) : null}
+
       <Text style={styles.section}>المشروع</Text>
+      {projectsLoading ? <ActivityIndicator color={colors.red} /> : null}
+      {projectError ? (
+        <Card>
+          <Text style={styles.error}>{projectError}</Text>
+          <Pressable disabled={projectsLoading} onPress={() => void retryProjects()} style={styles.retry}>
+            <Text style={styles.retryText}>إعادة تحميل المشاريع</Text>
+          </Pressable>
+        </Card>
+      ) : null}
       <View style={styles.projectList}>
         {projects.map((project) => {
           const active = project.id === projectId;
@@ -167,7 +217,7 @@ export default function CampaignComposerScreen() {
           );
         })}
       </View>
-      {!projects.length ? <Card><Muted>أنشئ مشروعًا أولًا حتى تبقى الحملة والأصول والمسودات مرتبطة بسياق واضح.</Muted></Card> : null}
+      {!projectsLoading && !projectError && !projects.length ? <Card><Muted>أنشئ مشروعًا من شاشة «مشاريعي» أولًا حتى تبقى الحملة والأصول والمسودات مرتبطة بسياق واضح.</Muted></Card> : null}
       {activeProject ? <Muted>{activeProject.industry || activeProject.type}</Muted> : null}
 
       <Text style={styles.section}>هدف الحملة</Text>
@@ -219,7 +269,7 @@ export default function CampaignComposerScreen() {
         <PrimaryButton
           label="إنشاء الحملة"
           onPress={compose}
-          disabled={!projectId || goal.trim().length < 5 || !selectedChannels.length}
+          disabled={!projectId || goal.trim().length < 5 || !selectedChannels.length || projectsLoading}
         />
       )}
 
@@ -268,6 +318,7 @@ export default function CampaignComposerScreen() {
 
 const styles = StyleSheet.create({
   section: { color: colors.text, fontSize: 16, fontWeight: '900', textAlign: 'right', marginTop: 4 },
+  prefillTitle: { color: colors.info, fontWeight: '900', textAlign: 'right' },
   projectList: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
   projectChip: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 9 },
   projectChipActive: { borderColor: colors.red, backgroundColor: colors.redSoft },
@@ -281,6 +332,9 @@ const styles = StyleSheet.create({
   channelText: { color: colors.textMuted, fontWeight: '700', fontSize: 12 },
   channelTextActive: { color: colors.red },
   message: { color: colors.text, textAlign: 'right', lineHeight: 22 },
+  error: { color: '#FF777D', textAlign: 'right', lineHeight: 22 },
+  retry: { minHeight: 42, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  retryText: { color: colors.text, fontWeight: '800' },
   campaignName: { color: colors.text, fontSize: 22, fontWeight: '900', textAlign: 'right' },
   label: { color: colors.red, fontSize: 12, fontWeight: '900', textAlign: 'right', marginTop: 4 },
   body: { color: colors.text, fontSize: 14, lineHeight: 23, textAlign: 'right' },
