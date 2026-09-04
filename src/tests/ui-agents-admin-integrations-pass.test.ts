@@ -57,4 +57,11 @@ assert.ok(ai.includes('capabilities.canManagePricing'));
 assert.ok(ai.includes('secretPolicy.exposedToBrowser'));
 assert.ok(ai.includes('إدارة الأسرار محجوزة لصلاحية providers.secrets_manage'));
 
+// AI admin diagnostics must not echo raw API/provider errors for reads or mutations.
+assert.ok(ai.includes('function safeAdminAIError(status, fallback)'));
+assert.ok(ai.includes("setError(safeAdminAIError(response.status, 'تعذر تحميل تكاملات الذكاء الاصطناعي.'))"));
+assert.ok(ai.includes("setError(safeAdminAIError(response.status, 'تعذر حفظ التعديل.'))"));
+assert.ok(!ai.includes('result.error'));
+assert.ok(!ai.includes('err.message'));
+
 console.log('Admin integrations semantic theme, authority, and safe error-surface guard passed.');
