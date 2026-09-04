@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Logger } from '../lib/observability/telemetry';
 
 const record = Logger.error(
@@ -17,6 +19,14 @@ const record = Logger.error(
 );
 
 const context = record.context as Record<string, any>;
+const paymentLinkRoute = readFileSync(
+  join(process.cwd(), 'src/app/api/v1/ezonepay/payment-links/route.ts'),
+  'utf8',
+);
+const paymentFailureLog = paymentLinkRoute.slice(
+  paymentLinkRoute.indexOf("emitServerError('ezonepay checkout failed'"),
+  paymentLinkRoute.indexOf('return NextResponse.json(', paymentLinkRoute.indexOf("emitServerError('ezonepay checkout failed'")),
+);
 
 const assertions: Array<[boolean, string]> = [
   [record.level === 'ERROR', 'error log level must remain ERROR'],
@@ -31,6 +41,14 @@ const assertions: Array<[boolean, string]> = [
   [context.nested.safe === 'kept', 'safe nested context must remain available'],
   [context.list[0].refresh_token === '[REDACTED]', 'tokens inside arrays must be redacted'],
   [context.list[1].safe === 'also-kept', 'safe array context must remain available'],
+  [paymentFailureLog.includes('correlationId'), 'payment failures must include safe correlation context'],
+  [paymentFailureLog.includes("route: '/api/v1/ezonepay/payment-links'"), 'payment failures must include a safe route identifier'],
+  [paymentFailureLog.includes('publicCode'), 'payment failures may retain only the user-safe classified error code'],
+  [!paymentFailureLog.includes('message: code'), 'payment failures must not log raw provider-facing error messages'],
+  [!paymentFailureLog.includes('cause:'), 'payment failures must not log provider causes'],
+  [!paymentFailureLog.includes('customer:'), 'payment failures must not log payment customer payloads'],
+  [!paymentLinkRoute.includes("console.error('[ezonepay/payment-links] checkout failed'"), 'payment route must use shared redacted logging'],
+  [paymentLinkRoute.includes("headers: { 'x-request-id': correlationId }"), 'payment 502 responses must expose the safe correlation ID'],
 ];
 
 for (const [passed, message] of assertions) {

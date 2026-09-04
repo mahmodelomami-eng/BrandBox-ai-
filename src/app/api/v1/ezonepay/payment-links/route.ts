@@ -4,10 +4,12 @@ import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { EzonePayClient } from '@/lib/payments/ezonepay-client';
 import { getEzonePayMode } from '@/lib/payments/ezonepay-mode';
 import { createEzonePayOrderReference } from '@/lib/payments/ezonepay-order-reference';
+import { emitServerError, getRequestCorrelationId } from '@/lib/observability/telemetry';
 
 type CheckoutRequest = { itemType?: 'subscription' | 'purchase'; itemId?: string };
 
 export async function POST(request: NextRequest) {
+  const correlationId = getRequestCorrelationId(request.headers);
   const auth = await authenticateActiveUser(request);
   if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   const { user } = auth;
@@ -37,16 +39,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ paymentUrl: payment.link, paymentLinkId: payment.id, orderReference, mode: getEzonePayMode() });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'EZONEPAY_CHECKOUT_FAILED';
-    console.error('[ezonepay/payment-links] checkout failed', {
-      name: error instanceof Error ? error.name : 'UnknownError',
-      message: code,
-      cause: error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined,
-    });
     const publicCode = code.startsWith('EZONEPAY_')
       ? code
       : error instanceof Error && ['AbortError', 'TimeoutError', 'TypeError'].includes(error.name)
         ? 'EZONEPAY_UPSTREAM_UNAVAILABLE'
         : 'EZONEPAY_CHECKOUT_FAILED';
-    return NextResponse.json({ error: publicCode }, { status: 502 });
+    emitServerError('ezonepay checkout failed', error, {
+      correlationId,
+      route: '/api/v1/ezonepay/payment-links',
+      publicCode,
+    });
+    return NextResponse.json(
+      { error: publicCode },
+      { status: 502, headers: { 'x-request-id': correlationId } },
+    );
   }
 }
