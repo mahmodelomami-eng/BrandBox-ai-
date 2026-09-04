@@ -17,7 +17,7 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://coiprfontulttcjhnhlp.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_8siBjVnKH4ikPgI2E49c0g_9IhjbTJY",
-        "EXPO_PUBLIC_BRANDBOX_API_URL": "https://brandbox-ai.com"
+        "EXPO_PUBLIC_BRANDBOX_API_URL": "https://www.brandbox-ai.com"
       }
     },
     "production": {
