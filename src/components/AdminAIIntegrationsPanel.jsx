@@ -26,6 +26,14 @@ function creditsPerSecond(model) {
   return Number.isInteger(value) && value >= 1 ? value : 0;
 }
 
+function safeAdminAIError(status, fallback) {
+  if (status === 401) return 'انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.';
+  if (status === 403) return 'لا تملك الصلاحية المطلوبة لإدارة تكاملات الذكاء الاصطناعي.';
+  if (status === 409) return 'تعذر حفظ التعديل بسبب تعارض في الحالة الحالية.';
+  if (status === 429) return 'طلبات كثيرة مؤقتًا. حاول مجددًا بعد قليل.';
+  return fallback;
+}
+
 export default function AdminAIIntegrationsPanel() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [payload, setPayload] = useState(null);
@@ -44,14 +52,20 @@ export default function AdminAIIntegrationsPanel() {
     setLoading(true); setError('');
     try {
       const token = await accessToken();
-      if (!token) throw new Error('انتهت جلسة الدخول.');
+      if (!token) {
+        setError('انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.');
+        return;
+      }
       const response = await fetch('/api/v1/admin/ai-integrations', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || 'تعذر تحميل تكاملات الذكاء الاصطناعي.');
+      if (!response.ok) {
+        setError(safeAdminAIError(response.status, 'تعذر تحميل تكاملات الذكاء الاصطناعي.'));
+        return;
+      }
       setPayload(result);
       setBillingDraft(result.billing || {});
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر تحميل تكاملات الذكاء الاصطناعي.');
+    } catch {
+      setError('تعذر تحميل تكاملات الذكاء الاصطناعي.');
     } finally {
       setLoading(false);
     }
@@ -67,18 +81,24 @@ export default function AdminAIIntegrationsPanel() {
     setBusy(`${body.action}:${body.modelId || ''}`); setError(''); setMessage('');
     try {
       const token = await accessToken();
-      if (!token) throw new Error('انتهت جلسة الدخول.');
+      if (!token) {
+        setError('انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.');
+        return;
+      }
       const response = await fetch('/api/v1/admin/ai-integrations', {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || 'تعذر حفظ التعديل.');
+      await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(safeAdminAIError(response.status, 'تعذر حفظ التعديل.'));
+        return;
+      }
       setMessage('تم تحديث إعدادات النموذج وتسجيل العملية في Audit Log.');
       await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر حفظ التعديل.');
+    } catch {
+      setError('تعذر حفظ التعديل.');
     } finally {
       setBusy('');
     }
