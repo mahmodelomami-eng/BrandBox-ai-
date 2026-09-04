@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
+import { isActiveProfileStatus } from '@/lib/auth/user-status';
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -7,8 +8,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const { data: auth, error: authError } = await createServerSupabaseClient().auth.getUser(token);
   if (authError || !auth.user) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   const db = createPrivilegedSupabaseClient();
-  const { data: actor } = await db.from('profiles').select('role').eq('id', auth.user.id).maybeSingle();
-  if (actor?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
+  const { data: actor } = await db.from('profiles').select('role,status').eq('id', auth.user.id).maybeSingle();
+  if (actor?.role !== 'SUPER_ADMIN' || !isActiveProfileStatus(actor.status)) return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
 
   const body = await request.json();
   const purchased = Math.trunc(Number(body.purchasedCredits));
