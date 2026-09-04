@@ -4,6 +4,7 @@ import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { projectTypeMatchesTool } from '@/lib/projects/project-scope';
 import { RUNWAY_VIDEO_MODELS, validateRunwayVideoRequest } from '@/lib/ai/runway-client';
 import { VideoGenerationService } from '@/lib/generations/video-generation-service';
+import { emitServerError, getRequestCorrelationId } from '@/lib/observability/telemetry';
 
 const VIDEO_BUCKET = 'generation-video-assets';
 
@@ -107,6 +108,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const correlationId = getRequestCorrelationId(request.headers);
   const auth = await authenticateActiveUser(request);
   if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   let body: Record<string, unknown>;
@@ -167,15 +169,32 @@ export async function POST(request: NextRequest) {
       { creditsPerSecond, minimumCredits }
     );
     const status = result.success ? 202 : result.errorCode === 'INSUFFICIENT_CREDITS' ? 402 : 502;
+    if (!result.success && status >= 500) {
+      emitServerError('Video generation start failed', new Error(result.errorCode || 'VIDEO_GENERATION_FAILED'), {
+        correlationId,
+        requestId,
+        generationId: result.generationId,
+        operation: 'video_start',
+        errorCode: result.errorCode || 'VIDEO_GENERATION_FAILED',
+        wasRefunded: result.wasRefunded === true,
+      });
+    }
     return NextResponse.json(result, { status });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'VIDEO_GENERATION_FAILED';
     if (code === 'INVALID_VIDEO_REQUEST_ID') return NextResponse.json({ error: code }, { status: 400 });
+    emitServerError('Video generation start failed', error, {
+      correlationId,
+      requestId,
+      operation: 'video_start',
+      errorCode: 'VIDEO_GENERATION_FAILED',
+    });
     return NextResponse.json({ error: 'VIDEO_GENERATION_FAILED' }, { status: 502 });
   }
 }
 
 export async function PATCH(request: NextRequest) {
+  const correlationId = getRequestCorrelationId(request.headers);
   const auth = await authenticateActiveUser(request);
   if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   let body: Record<string, unknown>;
@@ -194,8 +213,20 @@ export async function PATCH(request: NextRequest) {
     const code = error instanceof Error ? error.message : '';
     if (code === 'VIDEO_GENERATION_NOT_FOUND') return NextResponse.json({ error: code }, { status: 404 });
     if (code === 'RUNWAY_RATE_LIMITED' || code === 'RUNWAY_PROVIDER_UNAVAILABLE' || code === 'RUNWAY_TIMEOUT' || code === 'RUNWAY_AUTH_FAILED' || code === 'RUNWAY_API_SECRET_MISSING') {
+      emitServerError('Video generation refresh failed', error, {
+        correlationId,
+        generationId,
+        operation: 'video_refresh',
+        errorCode: 'VIDEO_PROVIDER_TEMPORARILY_UNAVAILABLE',
+      });
       return NextResponse.json({ error: 'VIDEO_PROVIDER_TEMPORARILY_UNAVAILABLE' }, { status: 503 });
     }
+    emitServerError('Video generation refresh failed', error, {
+      correlationId,
+      generationId,
+      operation: 'video_refresh',
+      errorCode: 'VIDEO_REFRESH_FAILED',
+    });
     return NextResponse.json({ error: 'VIDEO_REFRESH_FAILED' }, { status: 502 });
   }
 }
