@@ -45,6 +45,14 @@ function SourceBadge({ value }) {
   return <span className="rounded-full border px-2.5 py-1 text-[10px] font-black" style={{ background: healthy ? 'var(--bb-success-soft)' : 'var(--bb-hover)', color: healthy ? 'var(--bb-success)' : 'var(--bb-text-secondary)', borderColor: healthy ? 'color-mix(in srgb, var(--bb-success) 25%, transparent)' : 'var(--bb-border)' }}>{value || 'غير محدد'}</span>;
 }
 
+function safeAdminSettingsError(status, fallback) {
+  if (status === 401) return 'انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.';
+  if (status === 403) return 'لا تملك الصلاحية المطلوبة لإدارة إعدادات المنصة.';
+  if (status === 409) return 'تعذر حفظ الإعدادات بسبب تعارض في الحالة الحالية.';
+  if (status === 429) return 'طلبات كثيرة مؤقتًا. حاول مجددًا بعد قليل.';
+  return fallback;
+}
+
 function Field({ definition, value, disabled, onChange }) {
   if (definition.valueType === 'boolean') {
     return (
@@ -91,16 +99,22 @@ export default function AdminSettingsHub({ sources = {} }) {
     setLoading(true); setError('');
     try {
       const accessToken = await token();
-      if (!accessToken) throw new Error('انتهت جلسة الدخول.');
+      if (!accessToken) {
+        setError('انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.');
+        return;
+      }
       const response = await fetch('/api/v1/admin/settings', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'تعذر تحميل الإعدادات.');
+      if (!response.ok) {
+        setError(safeAdminSettingsError(response.status, 'تعذر تحميل الإعدادات.'));
+        return;
+      }
       setSettings(payload.settings || {});
       setOriginal(payload.settings || {});
       setDefinitions(Array.isArray(payload.definitions) ? payload.definitions : []);
       setCapabilities(payload.capabilities || { canManageSettings: false, canManageSecurity: false });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر تحميل الإعدادات.');
+    } catch {
+      setError('تعذر تحميل الإعدادات.');
     } finally {
       setLoading(false);
     }
@@ -138,18 +152,24 @@ export default function AdminSettingsHub({ sources = {} }) {
     setSaving(true); setError(''); setMessage('');
     try {
       const accessToken = await token();
-      if (!accessToken) throw new Error('انتهت جلسة الدخول.');
+      if (!accessToken) {
+        setError('انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.');
+        return;
+      }
       const response = await fetch('/api/v1/admin/settings', {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: dirtySettings }),
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'تعذر حفظ الإعدادات.');
+      await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(safeAdminSettingsError(response.status, 'تعذر حفظ الإعدادات.'));
+        return;
+      }
       setOriginal((current) => ({ ...current, ...dirtySettings }));
       setMessage('تم حفظ الإعدادات وتسجيل العملية في سجل التدقيق.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر حفظ الإعدادات.');
+    } catch {
+      setError('تعذر حفظ الإعدادات.');
     } finally {
       setSaving(false);
     }

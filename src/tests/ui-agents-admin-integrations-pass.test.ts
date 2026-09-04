@@ -30,6 +30,13 @@ assert.ok(settings.includes("id === 'security' && !capabilities.canManageSecurit
 assert.ok(settings.includes('JSON.stringify(value) !== JSON.stringify(original[key])'));
 assert.ok(settings.includes('الأسرار ومفاتيح الخدمات لا يتم إرسالها إلى المتصفح'));
 
+// Admin settings diagnostics must never echo raw API errors into the browser.
+assert.ok(settings.includes('function safeAdminSettingsError(status, fallback)'));
+assert.ok(settings.includes("setError(safeAdminSettingsError(response.status, 'تعذر تحميل الإعدادات.'))"));
+assert.ok(settings.includes("setError(safeAdminSettingsError(response.status, 'تعذر حفظ الإعدادات.'))"));
+assert.ok(!settings.includes('payload.error'));
+assert.ok(!settings.includes('err.message'));
+
 // Ezone Pay remains a read-only server-authoritative operational view.
 assert.ok(ezone.includes("fetch('/api/v1/admin/ezonepay'"));
 assert.ok(ezone.match(/\/api\/v1\/admin\/ezonepay[\s\S]*?cache: 'no-store'/));
