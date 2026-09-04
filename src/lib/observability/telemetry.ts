@@ -11,6 +11,7 @@ type HealthComponent = {
 
 const REDACTED = '[REDACTED]';
 const SENSITIVE_CONTEXT_KEY = /(?:authorization|cookie|password|passcode|secret|signature|api[_-]?key|access[_-]?token|refresh[_-]?token|service[_-]?role|private[_-]?key|digital[_-]?code|delivered[_-]?code|provider[_-]?response)/i;
+const SAFE_CORRELATION_ID = /^[a-zA-Z0-9_-]{8,80}$/;
 
 function sanitizeLogValue(value: unknown, seen = new WeakSet<object>()): unknown {
   if (value === null || value === undefined) return value;
@@ -36,6 +37,12 @@ function sanitizeLogValue(value: unknown, seen = new WeakSet<object>()): unknown
 function sanitizeContext(ctx: unknown): Record<string, unknown> {
   if (!ctx || typeof ctx !== 'object' || Array.isArray(ctx)) return {};
   return sanitizeLogValue(ctx) as Record<string, unknown>;
+}
+
+export function getRequestCorrelationId(headers: Pick<Headers, 'get'>): string {
+  const supplied = headers.get('x-request-id')?.trim() || '';
+  if (SAFE_CORRELATION_ID.test(supplied)) return supplied;
+  return `req_${crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 async function checkDatabase(): Promise<HealthComponent> {
@@ -140,4 +147,10 @@ export class Logger {
   public static security(message: string, ctx: unknown = {}) {
     return { timestamp: new Date().toISOString(), level: 'SECURITY', message, context: sanitizeContext(ctx) };
   }
+}
+
+export function emitServerError(message: string, err: unknown, ctx: unknown = {}) {
+  const record = Logger.error(message, err, ctx);
+  console.error(JSON.stringify(record));
+  return record;
 }
