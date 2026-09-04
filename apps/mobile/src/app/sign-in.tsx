@@ -6,7 +6,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { colors, radius, space } from '@/theme/tokens';
 
 export default function SignInScreen() {
-  const { session, signIn } = useAuth();
+  const { session, configured, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -18,7 +18,13 @@ export default function SignInScreen() {
     setError('');
     setBusy(true);
     try { await signIn(email, password); }
-    catch { setError('تعذر تسجيل الدخول. تحقق من البيانات وحالة الحساب.'); }
+    catch (cause) {
+      if (cause instanceof Error && cause.message === 'MOBILE_PUBLIC_CONFIG_MISSING') {
+        setError('إعدادات النسخة التجريبية غير مكتملة. أعد بناء APK ببيئة Preview الصحيحة.');
+      } else {
+        setError('تعذر تسجيل الدخول. تحقق من البيانات وحالة الحساب.');
+      }
+    }
     finally { setBusy(false); }
   }
 
@@ -30,12 +36,13 @@ export default function SignInScreen() {
         <Muted>نفس حساب Brand Box، ونفس الرصيد والمشاريع. لا يوجد حساب منفصل للتطبيق.</Muted>
       </View>
       <View style={styles.form}>
+        {!configured ? <Text style={styles.error}>إعدادات Preview غير موجودة في هذه النسخة. التطبيق يعمل بأمان لكنه يحتاج APK جديدًا بالإعدادات الصحيحة.</Text> : null}
         <Text style={styles.label}>البريد الإلكتروني</Text>
         <TextInput value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" style={styles.input} placeholder="name@example.com" placeholderTextColor={colors.textMuted} />
         <Text style={styles.label}>كلمة المرور</Text>
         <TextInput value={password} onChangeText={setPassword} secureTextEntry style={styles.input} placeholder="••••••••" placeholderTextColor={colors.textMuted} />
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {busy ? <ActivityIndicator color={colors.red} /> : <PrimaryButton label="دخول" onPress={submit} disabled={!email || !password} />}
+        {busy ? <ActivityIndicator color={colors.red} /> : <PrimaryButton label="دخول" onPress={submit} disabled={!configured || !email || !password} />}
       </View>
     </Screen>
   );
