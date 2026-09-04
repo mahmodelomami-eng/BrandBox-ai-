@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { AdminRole, checkPermission } from '@/lib/auth/rbac-engine';
 import { isKnownRole } from '@/lib/admin/admin-user-policy';
+import { isActiveProfileStatus } from '@/lib/auth/user-status';
 
 async function authorize(request: NextRequest) {
   const token=request.headers.get('authorization')?.replace(/^Bearer\s+/i,''); if(!token) return null;
   const {data,error}=await createServerSupabaseClient().auth.getUser(token); if(error||!data.user) return null;
   const db=createPrivilegedSupabaseClient(); const {data:profile}=await db.from('profiles').select('role,status').eq('id',data.user.id).maybeSingle();
-  if(!profile||profile.status==='suspended') return null; const role=(profile.role||'USER') as AdminRole;
+  if(!profile||!isActiveProfileStatus(profile.status)) return null; const role=(profile.role||'USER') as AdminRole;
   if(!isKnownRole(role)||!checkPermission(role,'payments.read')) return null; return {userId:data.user.id,role};
 }
 export async function GET(request: NextRequest){
