@@ -27,6 +27,7 @@ const authContext = source('src/context/AuthContext.jsx');
 const authGate = source('src/components/AuthGate.jsx');
 const authPage = source('src/app/auth/page.jsx');
 const userAuth = source('src/lib/auth/user-auth.ts');
+const adminControlCenter = source('src/app/api/v1/admin/control-center/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -71,6 +72,11 @@ assertContract('server bearer authentication requires a matching active profile'
   userAuth.includes(".select('id,role,status')") &&
   userAuth.includes('profile.id !== data.user.id') &&
   userAuth.includes('!isActiveProfileStatus(profile.status)'),
+);
+
+assertContract('admin control center also requires an active profile before privileged reads',
+  adminControlCenter.includes("from '@/lib/auth/user-status'") &&
+  adminControlCenter.includes('!isActiveProfileStatus(profile.status)'),
 );
 
 const protectedApiRoutes = [
