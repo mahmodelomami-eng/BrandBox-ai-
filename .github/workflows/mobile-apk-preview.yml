@@ -46,8 +46,28 @@ jobs:
       - name: Install mobile dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Validate Expo dependency compatibility
-        run: npx --yes expo-doctor
+      - name: Validate pinned Expo dependencies
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const pkg = require('./package.json');
+          const deps = pkg.dependencies || {};
+          const expected = {
+            '@react-native-async-storage/async-storage': '2.2.0',
+            'expo-constants': '~57.0.17',
+            'react': '19.2.3',
+            'react-dom': '19.2.3',
+            'react-native': '0.86.3'
+          };
+          const mismatches = Object.entries(expected)
+            .filter(([name, version]) => deps[name] !== version)
+            .map(([name, version]) => `${name}: expected ${version}, found ${deps[name] || 'missing'}`);
+          if (mismatches.length) {
+            console.error(mismatches.join('\n'));
+            process.exit(1);
+          }
+          console.log('Pinned Expo dependency set verified.');
+          NODE
 
       - name: Typecheck mobile app
         run: npm run typecheck
@@ -129,7 +149,7 @@ jobs:
         run: |
           echo '## Brand Box Mobile Preview APK' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Automatic pipeline: dependency validation → typecheck → EAS preview APK.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Automatic pipeline: pinned dependency validation → typecheck → EAS preview APK.' >> "$GITHUB_STEP_SUMMARY"
           if [ -n '${{ steps.eas.outputs.build_page }}' ]; then
             echo '' >> "$GITHUB_STEP_SUMMARY"
             echo 'EAS build page: ${{ steps.eas.outputs.build_page }}' >> "$GITHUB_STEP_SUMMARY"
