@@ -19,6 +19,13 @@ function badge(ok, yes = 'جاهز', no = 'غير مهيأ') {
   );
 }
 
+function safeAdminEzoneError(status) {
+  if (status === 401) return 'انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.';
+  if (status === 403) return 'لا تملك الصلاحية المطلوبة لعرض حالة Ezone Pay.';
+  if (status === 429) return 'طلبات كثيرة مؤقتًا. حاول التحديث بعد قليل.';
+  return 'تعذر تحميل حالة Ezone Pay.';
+}
+
 export default function AdminEzonePayPanel() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const [payload, setPayload] = useState(null);
@@ -31,13 +38,19 @@ export default function AdminEzonePayPanel() {
     try {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
-      if (!token) throw new Error('انتهت جلسة الدخول.');
+      if (!token) {
+        setError('انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.');
+        return;
+      }
       const response = await fetch('/api/v1/admin/ezonepay', { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'تعذر تحميل حالة Ezone Pay.');
+      if (!response.ok) {
+        setError(safeAdminEzoneError(response.status));
+        return;
+      }
       setPayload(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'تعذر تحميل حالة Ezone Pay.');
+    } catch {
+      setError('تعذر تحميل حالة Ezone Pay.');
     } finally {
       setLoading(false);
     }
