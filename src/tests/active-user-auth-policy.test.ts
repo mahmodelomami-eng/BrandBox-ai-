@@ -34,6 +34,7 @@ const adminEzonePay = source('src/app/api/v1/admin/ezonepay/route.ts');
 const adminUsers = source('src/app/api/v1/admin/users/route.ts');
 const adminRoles = source('src/app/api/v1/admin/roles/route.ts');
 const adminSupportRequests = source('src/app/api/v1/admin/support-requests/route.ts');
+const adminCreditPackage = source('src/app/api/v1/admin/credit-packages/[id]/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -131,6 +132,12 @@ assertContract('admin support requests requires an active profile before custome
   adminSupportRequests.includes("from '@/lib/auth/user-status'") &&
   adminSupportRequests.includes('!isActiveProfileStatus(profile.status)') &&
   !adminSupportRequests.includes("profile.status === 'suspended'"),
+);
+
+assertContract('admin credit-package pricing mutation requires an active SUPER_ADMIN profile',
+  adminCreditPackage.includes("from '@/lib/auth/user-status'") &&
+  adminCreditPackage.includes(".select('role,status')") &&
+  adminCreditPackage.includes("actor?.role !== 'SUPER_ADMIN' || !isActiveProfileStatus(actor.status)"),
 );
 
 const protectedApiRoutes = [
