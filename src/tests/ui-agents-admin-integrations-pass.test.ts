@@ -38,6 +38,13 @@ assert.ok(ezone.includes('Client fulfillment: disabled'));
 assert.ok(!ezone.includes("method: 'PATCH'"));
 assert.ok(!ezone.includes("method: 'POST'"));
 
+// Admin payment diagnostics must never echo backend/provider errors into the browser.
+assert.ok(ezone.includes('function safeAdminEzoneError(status)'));
+assert.ok(ezone.includes('setError(safeAdminEzoneError(response.status))'));
+assert.ok(!ezone.includes('result.error'));
+assert.ok(!ezone.includes('err.message'));
+assert.ok(ezone.includes("catch {\n      setError('تعذر تحميل حالة Ezone Pay.');"));
+
 // AI integrations keep model/pricing authority behind authenticated PATCH + server capabilities.
 assert.ok(ai.includes("fetch('/api/v1/admin/ai-integrations'"));
 assert.ok(ai.match(/\/api\/v1\/admin\/ai-integrations[\s\S]*?cache: 'no-store'/));
@@ -50,4 +57,4 @@ assert.ok(ai.includes('capabilities.canManagePricing'));
 assert.ok(ai.includes('secretPolicy.exposedToBrowser'));
 assert.ok(ai.includes('إدارة الأسرار محجوزة لصلاحية providers.secrets_manage'));
 
-console.log('Admin integrations semantic theme and authority guard passed.');
+console.log('Admin integrations semantic theme, authority, and safe error-surface guard passed.');
