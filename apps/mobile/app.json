@@ -3,7 +3,7 @@
     "name": "Brand Box AI",
     "slug": "brand",
     "owner": "brand-box",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "scheme": "brandbox",
     "userInterfaceStyle": "automatic",
