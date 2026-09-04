@@ -35,6 +35,7 @@ const adminUsers = source('src/app/api/v1/admin/users/route.ts');
 const adminRoles = source('src/app/api/v1/admin/roles/route.ts');
 const adminSupportRequests = source('src/app/api/v1/admin/support-requests/route.ts');
 const adminCreditPackage = source('src/app/api/v1/admin/credit-packages/[id]/route.ts');
+const adminStoreFinance = source('src/app/api/v1/admin/store/finance/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -138,6 +139,12 @@ assertContract('admin credit-package pricing mutation requires an active SUPER_A
   adminCreditPackage.includes("from '@/lib/auth/user-status'") &&
   adminCreditPackage.includes(".select('role,status')") &&
   adminCreditPackage.includes("actor?.role !== 'SUPER_ADMIN' || !isActiveProfileStatus(actor.status)"),
+);
+
+assertContract('admin Store finance requires an active profile before payment and profitability reads',
+  adminStoreFinance.includes("from '@/lib/auth/user-status'") &&
+  adminStoreFinance.includes('!isActiveProfileStatus(profile.status)') &&
+  !adminStoreFinance.includes("profile.status==='suspended'"),
 );
 
 const protectedApiRoutes = [
