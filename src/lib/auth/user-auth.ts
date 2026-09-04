@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import type { AdminRole } from '@/lib/auth/rbac-engine';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { isActiveProfileStatus } from '@/lib/auth/user-status';
+import { emitServerError, getRequestCorrelationId } from '@/lib/observability/telemetry';
 
 export type ActiveUserProfile = {
   id: string;
@@ -28,8 +29,15 @@ export async function authenticateActiveUser(request: NextRequest): Promise<Acti
     .eq('id', data.user.id)
     .maybeSingle();
 
+  if (profileError) {
+    emitServerError('active user profile lookup failed', profileError, {
+      correlationId: getRequestCorrelationId(request.headers),
+      route: request.nextUrl.pathname,
+    });
+    return null;
+  }
+
   if (
-    profileError ||
     !profile ||
     profile.id !== data.user.id ||
     !isActiveProfileStatus(profile.status)
