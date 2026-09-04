@@ -28,6 +28,7 @@ const authGate = source('src/components/AuthGate.jsx');
 const authPage = source('src/app/auth/page.jsx');
 const userAuth = source('src/lib/auth/user-auth.ts');
 const adminControlCenter = source('src/app/api/v1/admin/control-center/route.ts');
+const adminSettings = source('src/app/api/v1/admin/settings/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -89,6 +90,12 @@ assertContract('profile lookup operational failures emit safe correlation contex
 assertContract('admin control center also requires an active profile before privileged reads',
   adminControlCenter.includes("from '@/lib/auth/user-status'") &&
   adminControlCenter.includes('!isActiveProfileStatus(profile.status)'),
+);
+
+assertContract('admin settings requires an active profile before privileged reads or writes',
+  adminSettings.includes("from '@/lib/auth/user-status'") &&
+  adminSettings.includes('!isActiveProfileStatus(profile.status)') &&
+  !adminSettings.includes("profile.status === 'suspended'"),
 );
 
 const protectedApiRoutes = [
