@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
+import { isActiveProfileStatus } from '@/lib/auth/user-status';
 
 type AdminRole = 'SUPER_ADMIN' | 'ADMIN' | 'SUPPORT' | 'USER';
 type SupportStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
@@ -27,7 +28,7 @@ async function actorFromRequest(request: NextRequest) {
     .eq('id', data.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || profile.status === 'suspended') return null;
+  if (profileError || !profile || !isActiveProfileStatus(profile.status)) return null;
   const role = (profile.role || 'USER') as AdminRole;
   if (!['SUPER_ADMIN', 'ADMIN', 'SUPPORT'].includes(role)) return null;
   return { userId: data.user.id, email: profile.email || data.user.email || '', role };

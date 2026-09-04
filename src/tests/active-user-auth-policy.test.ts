@@ -33,6 +33,7 @@ const adminAIIntegrations = source('src/app/api/v1/admin/ai-integrations/route.t
 const adminEzonePay = source('src/app/api/v1/admin/ezonepay/route.ts');
 const adminUsers = source('src/app/api/v1/admin/users/route.ts');
 const adminRoles = source('src/app/api/v1/admin/roles/route.ts');
+const adminSupportRequests = source('src/app/api/v1/admin/support-requests/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -124,6 +125,12 @@ assertContract('admin role catalog requires an active profile before privileged 
   adminRoles.includes("from '@/lib/auth/user-status'") &&
   adminRoles.includes('!isActiveProfileStatus(profile.status)') &&
   !adminRoles.includes("profile.status === 'suspended'"),
+);
+
+assertContract('admin support requests requires an active profile before customer data, signed attachments, or mutations',
+  adminSupportRequests.includes("from '@/lib/auth/user-status'") &&
+  adminSupportRequests.includes('!isActiveProfileStatus(profile.status)') &&
+  !adminSupportRequests.includes("profile.status === 'suspended'"),
 );
 
 const protectedApiRoutes = [
