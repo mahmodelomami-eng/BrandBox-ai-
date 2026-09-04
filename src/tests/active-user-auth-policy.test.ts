@@ -74,6 +74,18 @@ assertContract('server bearer authentication requires a matching active profile'
   userAuth.includes('!isActiveProfileStatus(profile.status)'),
 );
 
+const profileFailureLog = userAuth.slice(
+  userAuth.indexOf("emitServerError('active user profile lookup failed'"),
+  userAuth.indexOf('return null;', userAuth.indexOf("emitServerError('active user profile lookup failed'")),
+);
+assertContract('profile lookup operational failures emit safe correlation context only',
+  profileFailureLog.includes('correlationId: getRequestCorrelationId(request.headers)') &&
+  profileFailureLog.includes('route: request.nextUrl.pathname') &&
+  !profileFailureLog.includes('token') &&
+  !profileFailureLog.includes('authorization') &&
+  !profileFailureLog.includes('profile:'),
+);
+
 assertContract('admin control center also requires an active profile before privileged reads',
   adminControlCenter.includes("from '@/lib/auth/user-status'") &&
   adminControlCenter.includes('!isActiveProfileStatus(profile.status)'),
