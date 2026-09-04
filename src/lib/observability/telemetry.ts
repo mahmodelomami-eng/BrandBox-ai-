@@ -9,6 +9,35 @@ type HealthComponent = {
   detail?: string;
 };
 
+const REDACTED = '[REDACTED]';
+const SENSITIVE_CONTEXT_KEY = /(?:authorization|cookie|password|passcode|secret|signature|api[_-]?key|access[_-]?token|refresh[_-]?token|service[_-]?role|private[_-]?key|digital[_-]?code|delivered[_-]?code|provider[_-]?response)/i;
+
+function sanitizeLogValue(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'object') return value;
+
+  const objectValue = value as object;
+  if (seen.has(objectValue)) return '[Circular]';
+  seen.add(objectValue);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeLogValue(item, seen));
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    sanitized[key] = SENSITIVE_CONTEXT_KEY.test(key)
+      ? REDACTED
+      : sanitizeLogValue(nestedValue, seen);
+  }
+  return sanitized;
+}
+
+function sanitizeContext(ctx: unknown): Record<string, unknown> {
+  if (!ctx || typeof ctx !== 'object' || Array.isArray(ctx)) return {};
+  return sanitizeLogValue(ctx) as Record<string, unknown>;
+}
+
 async function checkDatabase(): Promise<HealthComponent> {
   const startedAt = Date.now();
 
@@ -89,8 +118,26 @@ export class HealthCheckEngine {
 }
 
 export class Logger {
-  public static info(message: string, ctx: any = {}) { return { timestamp: new Date().toISOString(), level: 'INFO', message, context: ctx }; }
-  public static warn(message: string, ctx: any = {}) { return { timestamp: new Date().toISOString(), level: 'WARN', message, context: ctx }; }
-  public static error(message: string, err: any, ctx: any = {}) { return { timestamp: new Date().toISOString(), level: 'ERROR', message, context: ctx }; }
-  public static security(message: string, ctx: any = {}) { return { timestamp: new Date().toISOString(), level: 'SECURITY', message, context: ctx }; }
+  public static info(message: string, ctx: unknown = {}) {
+    return { timestamp: new Date().toISOString(), level: 'INFO', message, context: sanitizeContext(ctx) };
+  }
+
+  public static warn(message: string, ctx: unknown = {}) {
+    return { timestamp: new Date().toISOString(), level: 'WARN', message, context: sanitizeContext(ctx) };
+  }
+
+  public static error(message: string, err: unknown, ctx: unknown = {}) {
+    const errorName = err instanceof Error ? err.name : 'Error';
+    return {
+      timestamp: new Date().toISOString(),
+      level: 'ERROR',
+      message,
+      error: { name: errorName },
+      context: sanitizeContext(ctx),
+    };
+  }
+
+  public static security(message: string, ctx: unknown = {}) {
+    return { timestamp: new Date().toISOString(), level: 'SECURITY', message, context: sanitizeContext(ctx) };
+  }
 }
