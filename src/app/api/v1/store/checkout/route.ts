@@ -4,6 +4,7 @@ import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { createStoreOrder } from '@/lib/store/store-service';
 import { createStorePaymentReference } from '@/lib/store/store-payment-reference';
 import { EzonePayClient } from '@/lib/payments/ezonepay-client';
+import { emitServerError, getRequestCorrelationId } from '@/lib/observability/telemetry';
 
 function appOrigin(request: NextRequest) {
   const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
@@ -16,6 +17,8 @@ function appOrigin(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const correlationId = getRequestCorrelationId(request.headers);
+
   try {
     const auth = await authenticateActiveUser(request);
     if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
@@ -75,6 +78,17 @@ export async function POST(request: NextRequest) {
     let status = 500;
     if (message.includes('STORE_IDEMPOTENCY_KEY_CONFLICT')) status = 409;
     else if (clientErrors.some((code) => message.includes(code))) status = 400;
-    return NextResponse.json({ error: status < 500 ? message : 'STORE_CHECKOUT_FAILED' }, { status });
+
+    if (status >= 500) {
+      emitServerError('store checkout failed', error, {
+        correlationId,
+        route: '/api/v1/store/checkout',
+      });
+    }
+
+    return NextResponse.json(
+      { error: status < 500 ? message : 'STORE_CHECKOUT_FAILED' },
+      { status, headers: { 'x-request-id': correlationId } },
+    );
   }
 }
