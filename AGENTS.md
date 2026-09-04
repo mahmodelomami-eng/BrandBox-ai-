@@ -60,6 +60,33 @@ Reviews auth, RBAC, RLS, secrets, payments, webhooks, credits, customer data, fu
 ### DevOps Agent
 Owns CI/CD configuration, preview deployment health, build reliability, and rollback-safe deployment changes. It never copies production secrets into repository files.
 
+## Agent Engineering System v2
+The repository uses specialist execution rather than one generic coding persona.
+
+### Specialist selection
+- Web UI work: prefer `Brand Box Web Frontend` and read `src/components/AGENTS.md`.
+- API/domain work: prefer `Brand Box Backend & Supabase` and read `src/app/api/AGENTS.md` plus `src/lib/AGENTS.md`.
+- Database/RLS work: use the backend/database specialist and read `supabase/AGENTS.md`.
+- Mobile work: prefer `Brand Box Mobile Expo` and read `apps/mobile/AGENTS.md` plus the mobile runbooks.
+- Cross-cutting validation: use `Brand Box QA & Security`.
+- Performance/accessibility passes: use `Brand Box Performance & Accessibility`.
+- Architecture/debt reviews: use `Brand Box Architecture Reviewer`.
+
+### Local contracts and skill packs
+Agents MUST read the nearest `AGENTS.md` before editing. Practical runbooks live under `docs/agent-knowledge/`, `docs/agent-engineering/`, and `apps/mobile/docs/`. These documents are treated as project memory: a recurring failure should become a prevention rule or regression test instead of being rediscovered.
+
+### Parallel execution and file ownership
+Before parallel work, the Tech Lead records file/domain ownership using `docs/agent-engineering/file-ownership.md`. Two coding agents must not edit the same file concurrently. Parallel branches should be independent, small, and integration-ordered. QA may prepare tests in parallel when its files do not overlap implementation files.
+
+### Self-review loop
+Every coding agent performs: implement → focused tests → self-review → security/authority diff review → PR. A different specialist reviews high-risk boundaries. Agents must not use a green build as a substitute for domain-specific verification.
+
+### Benchmarks and learning
+Role quality is evaluated against `docs/agent-engineering/benchmarks.md`. After a meaningful CI failure or production-like incident, capture cause, detection, fix, prevention, and regression coverage using `docs/agent-knowledge/ci-incident-learning.md`.
+
+### Speed policy
+Use focused/path-aware checks for fast feedback, but the repository-wide release gate remains mandatory before merge when required by the active release program. Never speed up delivery by weakening tests, skipping tenant/security checks, or splitting authority into the client.
+
 ## Theme-system policy
 - New or migrated UI surfaces should consume semantic tokens instead of raw dark/light color literals whenever practical.
 - Theme tokens must cover canvas, surfaces, elevation, borders, text hierarchy, brand accent, semantic status colors, controls, focus, hover, selected, pressed and disabled states.
@@ -69,17 +96,17 @@ Owns CI/CD configuration, preview deployment health, build reliability, and roll
 - Every theme-sensitive PR must include visual acceptance criteria for desktop and mobile in both themes and should include rendered preview evidence when available.
 
 ## Required execution loop
-1. Read the issue, relevant code, tests, migrations, and recent related changes.
+1. Read the issue, root contract, nearest local `AGENTS.md`, relevant runbooks, code, tests, migrations, and recent related changes.
 2. Restate the smallest shippable slice in the PR body.
-3. Create one branch for one coherent outcome.
+3. Record file ownership before parallel work and create one branch for one coherent outcome.
 4. Implement the smallest safe change.
 5. Add or update regression tests.
 6. Run the relevant focused tests first.
 7. Run `npm run verify:agent` for the standard non-destructive gate (lint, production-hardening tests, Store readiness, and production build with safe CI placeholders).
 8. If verification fails, diagnose and repair the branch; do not bypass or weaken the failing check.
 9. Review the diff for secrets, destructive SQL, client-side authority, tenant leaks, and unrelated edits.
-10. Open a PR using the repository template.
-11. If CI fails, diagnose and repair the branch; do not merge around a failure.
+10. Open a PR using the repository template and include risk/rollback notes.
+11. If CI fails, diagnose and repair the branch; record repeatable failures in incident learning.
 12. Merge only after required checks pass and no protected-operation gate is triggered.
 
 ## Architecture invariants
@@ -114,7 +141,7 @@ Every database PR must state migration impact, rollback strategy, RLS impact, an
 A task is complete only when:
 - acceptance criteria are satisfied;
 - focused regression tests pass;
-- `npm run verify:agent` passes;
+- `npm run verify:agent` passes when required by the active release policy;
 - no secrets are introduced;
 - no production safety invariant is weakened;
 - the PR contains risk and rollback notes;
