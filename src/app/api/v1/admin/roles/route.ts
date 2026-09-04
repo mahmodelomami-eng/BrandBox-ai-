@@ -6,6 +6,7 @@ import {
   ROLE_DEFINITIONS,
   ROLE_PERMISSIONS,
 } from '@/lib/auth/rbac-engine';
+import { isActiveProfileStatus } from '@/lib/auth/user-status';
 import { canAssignRoles, canReadUsers, isKnownRole } from '@/lib/admin/admin-user-policy';
 import { getRoleGuidance } from '@/lib/admin/role-guidance';
 
@@ -22,7 +23,7 @@ async function actorRoleFromRequest(request: NextRequest): Promise<AdminRole | n
     .eq('id', data.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || profile.status === 'suspended') return null;
+  if (profileError || !profile || !isActiveProfileStatus(profile.status)) return null;
   const role = (profile.role || 'USER') as AdminRole;
   return isKnownRole(role) && canReadUsers(role) ? role : null;
 }
