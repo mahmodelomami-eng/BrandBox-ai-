@@ -15,14 +15,10 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(publicConfigReady);
 
   useEffect(() => {
-    if (!publicConfigReady) {
-      setSession(null);
-      setLoading(false);
-      return;
-    }
+    if (!publicConfigReady) return undefined;
 
     let mounted = true;
     supabase.auth.getSession().then(({ data }) => {
