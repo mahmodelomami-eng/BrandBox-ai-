@@ -12,6 +12,9 @@ const imageWorkspace = readFileSync(join(root, 'src/components/ImageStudioWorksp
 const postRoute = route.slice(route.indexOf('export async function POST'));
 const existingLookup = engine.indexOf('const existingGeneration = await resolveExistingGeneration');
 const creditDeduction = engine.indexOf('CreditEngine.deductCredits');
+const failureLogStart = engine.indexOf("emitServerError('generation execution failed'");
+const failureLogEnd = engine.indexOf('\n      return {', failureLogStart);
+const failureLog = engine.slice(failureLogStart, failureLogEnd);
 
 const stableId = generationIdForRequest('user-a', 'request-1234');
 assert.equal(stableId, generationIdForRequest('user-a', 'request-1234'), 'the same user request must keep one generation identity');
@@ -32,6 +35,16 @@ assert.ok(engine.includes('gen_deduct_${generationId}'), 'credit reservation mus
 assert.ok(engine.includes("errorMessage: disposition.success"), 'an in-progress replay must not be represented as a completed success');
 assert.ok(postRoute.includes('if (result.retryable)'));
 assert.ok(postRoute.includes("status: 202, headers: { 'Retry-After': '2' }"), 'in-progress replays must receive an explicit retryable HTTP response');
+
+assert.ok(failureLogStart >= 0, 'generation failures must emit a structured server error');
+assert.ok(failureLog.includes('requestId'), 'generation failure logs must retain the safe request correlation ID');
+assert.ok(failureLog.includes('generationId'), 'generation failure logs must retain the stable generation ID');
+assert.ok(failureLog.includes('generationType'), 'generation failure logs must identify the generation type');
+assert.ok(failureLog.includes('failureCode'), 'generation failure logs must retain only the normalized failure code');
+assert.ok(failureLog.includes('refundConfirmed'), 'generation failure logs must expose refund confirmation state for credit reconciliation');
+for (const forbidden of ['prompt', 'result', 'providerImagePrompt', 'responseContent', 'providerUsage', 'actor.userId', 'modelId']) {
+  assert.ok(!failureLog.includes(forbidden), `generation failure logs must not include sensitive ${forbidden} context`);
+}
 
 for (const [name, source] of [
   ['chat workspace', chatWorkspace],
