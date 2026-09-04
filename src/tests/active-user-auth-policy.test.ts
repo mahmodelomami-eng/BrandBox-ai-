@@ -29,6 +29,7 @@ const authPage = source('src/app/auth/page.jsx');
 const userAuth = source('src/lib/auth/user-auth.ts');
 const adminControlCenter = source('src/app/api/v1/admin/control-center/route.ts');
 const adminSettings = source('src/app/api/v1/admin/settings/route.ts');
+const adminAIIntegrations = source('src/app/api/v1/admin/ai-integrations/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -96,6 +97,12 @@ assertContract('admin settings requires an active profile before privileged read
   adminSettings.includes("from '@/lib/auth/user-status'") &&
   adminSettings.includes('!isActiveProfileStatus(profile.status)') &&
   !adminSettings.includes("profile.status === 'suspended'"),
+);
+
+assertContract('admin AI integrations requires an active profile before privileged reads or writes',
+  adminAIIntegrations.includes("from '@/lib/auth/user-status'") &&
+  adminAIIntegrations.includes('!isActiveProfileStatus(profile.status)') &&
+  !adminAIIntegrations.includes("profile.status === 'suspended'"),
 );
 
 const protectedApiRoutes = [
