@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { AdminRole, checkPermission } from '@/lib/auth/rbac-engine';
 import { isKnownRole } from '@/lib/admin/admin-user-policy';
+import { isActiveProfileStatus } from '@/lib/auth/user-status';
 
 type Actor = {
   userId: string;
@@ -23,7 +24,7 @@ async function actorFromRequest(request: NextRequest): Promise<Actor | null> {
     .eq('id', data.user.id)
     .maybeSingle();
 
-  if (profileError || !profile || profile.status === 'suspended') return null;
+  if (profileError || !profile || !isActiveProfileStatus(profile.status)) return null;
   const role = (profile.role || 'USER') as AdminRole;
   if (!isKnownRole(role)) return null;
   if (!checkPermission(role, 'analytics.read') && !checkPermission(role, 'users.read') && !checkPermission(role, 'settings.read') && !checkPermission(role, 'providers.read') && !checkPermission(role, 'models.read')) return null;
