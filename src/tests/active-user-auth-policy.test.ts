@@ -36,6 +36,7 @@ const adminRoles = source('src/app/api/v1/admin/roles/route.ts');
 const adminSupportRequests = source('src/app/api/v1/admin/support-requests/route.ts');
 const adminCreditPackage = source('src/app/api/v1/admin/credit-packages/[id]/route.ts');
 const adminStoreFinance = source('src/app/api/v1/admin/store/finance/route.ts');
+const adminStoreInventory = source('src/app/api/v1/admin/store/inventory/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -145,6 +146,12 @@ assertContract('admin Store finance requires an active profile before payment an
   adminStoreFinance.includes("from '@/lib/auth/user-status'") &&
   adminStoreFinance.includes('!isActiveProfileStatus(profile.status)') &&
   !adminStoreFinance.includes("profile.status==='suspended'"),
+);
+
+assertContract('admin Store inventory requires an active profile before code-stock reads or imports',
+  adminStoreInventory.includes("from '@/lib/auth/user-status'") &&
+  adminStoreInventory.includes('!isActiveProfileStatus(profile.status)') &&
+  !adminStoreInventory.includes("profile.status === 'suspended'"),
 );
 
 const protectedApiRoutes = [
