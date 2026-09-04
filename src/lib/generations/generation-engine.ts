@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { CreditEngine } from '../credits/credit-engine';
 import { AuthContext } from '../auth/rbac-engine';
 import { createOpenRouterChatCompletion, createOpenRouterImageGeneration } from '../ai/openrouter-client';
+import { emitServerError } from '../observability/telemetry';
 import { createPrivilegedSupabaseClient } from '../supabase/server';
 
 export interface GenerationRequest {
@@ -373,6 +374,14 @@ export class GenerationEngine {
       if (!refundRes.success) {
         try { remainingBalance = await CreditEngine.getBalance(actor.userId); } catch { /* retain last known balance */ }
       }
+
+      emitServerError('generation execution failed', err, {
+        requestId,
+        generationId,
+        generationType: request.generationType,
+        failureCode: failure.code,
+        refundConfirmed: refundRes.success,
+      });
 
       return {
         success: false,
