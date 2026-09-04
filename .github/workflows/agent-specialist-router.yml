@@ -1,0 +1,147 @@
+name: Brand Box Agent Specialist Router
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: brand-box-agent-router-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Classify changed domains and specialist ownership
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node <<'NODE'
+          const [owner, repo] = process.env.GH_REPOSITORY.split('/');
+          const pr = Number(process.env.PR_NUMBER);
+          const token = process.env.GH_TOKEN;
+          const base = `https://api.github.com/repos/${owner}/${repo}`;
+
+          async function api(path, options = {}) {
+            const response = await fetch(`${base}${path}`, {
+              ...options,
+              headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+                ...(options.headers || {}),
+              },
+            });
+            if (!response.ok) {
+              const text = await response.text();
+              throw new Error(`${options.method || 'GET'} ${path} -> ${response.status}: ${text}`);
+            }
+            if (response.status === 204) return null;
+            return response.json();
+          }
+
+          const files = [];
+          for (let page = 1; page <= 10; page += 1) {
+            const batch = await api(`/pulls/${pr}/files?per_page=100&page=${page}`);
+            files.push(...batch.map((item) => item.filename));
+            if (batch.length < 100) break;
+          }
+
+          const matches = (predicate) => files.some(predicate);
+          const labels = new Map();
+          const add = (name, profile, color) => labels.set(name, { profile, color });
+
+          if (matches((f) => f.startsWith('apps/mobile/') || f.startsWith('src/app/api/v1/mobile/') || f.startsWith('src/app/api/v1/social/') || f.startsWith('src/app/api/internal/social/') || f.startsWith('src/lib/social/'))) {
+            add('agent:mobile', 'Brand Box Mobile Expo', '8250DF');
+          }
+          if (matches((f) => f === 'App.jsx' || f.startsWith('src/components/') || (f.startsWith('src/app/') && !f.startsWith('src/app/api/')) || f === 'src/app/globals.css')) {
+            add('agent:web-frontend', 'Brand Box Web Frontend', '1D76DB');
+          }
+          if (matches((f) => f.startsWith('src/app/api/') || f.startsWith('src/lib/') || f.startsWith('supabase/'))) {
+            add('agent:backend', 'Brand Box Backend & Supabase', '0E8A16');
+          }
+          if (matches((f) => f.startsWith('supabase/'))) {
+            add('agent:database', 'Brand Box Backend & Supabase', '006B75');
+          }
+          if (matches((f) => /(?:generation|openrouter|runway|provider|model|ai-integrat)/i.test(f))) {
+            add('agent:ai-integration', 'Brand Box AI Integration', '5319E7');
+          }
+          if (matches((f) => /(?:^|\/)(?:store|commerce|fulfillment|inventory|refund)/i.test(f))) {
+            add('agent:store', 'Brand Box Store Operations', 'B60205');
+          }
+          if (matches((f) => f.startsWith('src/tests/') || /(?:auth|rbac|rls|credit|payment|webhook|admin|support|social|security)/i.test(f))) {
+            add('agent:qa-security', 'Brand Box QA & Security', 'D73A4A');
+          }
+          if (matches((f) => f.startsWith('src/components/') || f.startsWith('apps/mobile/src/') || f === 'src/app/globals.css')) {
+            add('agent:performance-a11y', 'Brand Box Performance & Accessibility', 'FBCA04');
+          }
+          if (files.length >= 20 || matches((f) => f === 'package.json' || f === 'apps/mobile/package.json' || f.startsWith('.github/agents/') || f.endsWith('/AGENTS.md'))) {
+            add('agent:architecture', 'Brand Box Architecture Reviewer', '0052CC');
+          }
+
+          const allLabels = await api('/labels?per_page=100');
+          const existingLabelNames = new Set(allLabels.map((label) => label.name));
+          for (const [name, meta] of labels) {
+            if (!existingLabelNames.has(name)) {
+              await api('/labels', {
+                method: 'POST',
+                body: JSON.stringify({ name, color: meta.color, description: `Suggested specialist: ${meta.profile}` }),
+                headers: { 'Content-Type': 'application/json' },
+              });
+            }
+          }
+
+          const issue = await api(`/issues/${pr}`);
+          const currentAgentLabels = (issue.labels || [])
+            .map((label) => typeof label === 'string' ? label : label.name)
+            .filter((name) => name.startsWith('agent:'));
+
+          for (const name of currentAgentLabels) {
+            if (!labels.has(name)) {
+              try {
+                await api(`/issues/${pr}/labels/${encodeURIComponent(name)}`, { method: 'DELETE' });
+              } catch (error) {
+                console.warn(`Could not remove ${name}: ${error.message}`);
+              }
+            }
+          }
+
+          if (labels.size) {
+            await api(`/issues/${pr}/labels`, {
+              method: 'POST',
+              body: JSON.stringify({ labels: [...labels.keys()] }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+
+          const marker = '<!-- brand-box-specialist-router -->';
+          const profileLines = [...labels.entries()].map(([label, meta]) => `- \`${label}\` → **${meta.profile}**`).join('\n') || '- No specialist label matched automatically; Tech Lead should route manually.';
+          const ownership = files.length ? files.slice(0, 12).map((f) => `- \`${f}\``).join('\n') : '- No changed files returned.';
+          const more = files.length > 12 ? `\n- …and ${files.length - 12} more changed files.` : '';
+          const body = `${marker}\n## 🤖 Brand Box Specialist Router\n\nSuggested specialist coverage based on changed paths:\n${profileLines}\n\nChanged-file sample:\n${ownership}${more}\n\nThis router only classifies ownership. It **does not assign coding agents, write code, expose secrets, or merge the PR**. Use \`docs/agent-engineering/file-ownership.md\` when multiple coding specialists work in parallel.`;
+
+          const comments = await api(`/issues/${pr}/comments?per_page=100`);
+          const existing = comments.find((comment) => (comment.body || '').includes(marker));
+          if (existing) {
+            await api(`/issues/comments/${existing.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ body }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+          } else {
+            await api(`/issues/${pr}/comments`, {
+              method: 'POST',
+              body: JSON.stringify({ body }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+
+          console.log(JSON.stringify({ files: files.length, labels: [...labels.keys()] }, null, 2));
+          NODE
