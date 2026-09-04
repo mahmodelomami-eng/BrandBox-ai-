@@ -73,11 +73,28 @@ jobs:
           const progress = Math.round((completed / total) * 100);
           const active = issueStates.find((issue) => issue.state === 'open') || null;
 
-          let body = originalBody;
+          let body = originalBody.replace(/\s+— \*\*ACTIVE NEXT SLICE\*\*/g, '');
           for (const issue of issueStates) {
             const mark = issue.state === 'closed' ? 'x' : ' ';
             const pattern = new RegExp(`- \\[([ xX])\\] #${issue.number}\\b`, 'g');
             body = body.replace(pattern, `- [${mark}] #${issue.number}`);
+          }
+
+          if (active) {
+            const activePattern = new RegExp(`(- \\[ \\] #${active.number}[^\\n]*)`);
+            body = body.replace(activePattern, '$1 — **ACTIVE NEXT SLICE**');
+          }
+
+          body = body.replace(
+            /- Completed: \*\*\d+\s*\/\s*\d+\s*\(\d+%\)\*\*\./,
+            `- Completed: **${completed} / ${total} (${progress}%)**.`
+          );
+
+          if (active) {
+            body = body.replace(
+              /- Engineering must continue with #\d+ now\.[^\n]*/,
+              `- Engineering must continue with #${active.number} now. Do not stay idle because of unrelated Store/provider/external activation work.`
+            );
           }
 
           if (body !== originalBody) {
@@ -143,14 +160,6 @@ jobs:
               headers: { 'Content-Type': 'application/json' },
             });
           }
-
-          await api(`/issues/${umbrellaNumber}`, {
-            method: 'PATCH',
-            body: JSON.stringify({
-              title: umbrella.title,
-            }),
-            headers: { 'Content-Type': 'application/json' },
-          });
 
           console.log(JSON.stringify({ completed, total, progress, active }, null, 2));
           NODE
