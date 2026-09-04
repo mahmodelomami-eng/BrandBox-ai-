@@ -4,20 +4,23 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'apk-preview'
+      - main
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-apk-preview.yml'
 
 permissions:
   contents: read
 
 concurrency:
   group: brand-box-mobile-preview-apk
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-preview-apk:
-    name: Build Android preview APK on EAS
+    name: Validate and build Android preview APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     defaults:
       run:
         working-directory: apps/mobile
@@ -31,45 +34,107 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22.13.1'
-          cache: 'npm'
-          cache-dependency-path: apps/mobile/package.json
 
       - name: Verify Expo token is configured
         shell: bash
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
-            echo "EXPO_TOKEN is missing. Add it in GitHub repository Settings > Secrets and variables > Actions > New repository secret."
+            echo "EXPO_TOKEN is missing from GitHub Actions secrets."
             exit 1
           fi
 
       - name: Install mobile dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Validate Expo project
+      - name: Validate Expo dependency compatibility
         run: npx --yes expo-doctor
 
       - name: Typecheck mobile app
         run: npm run typecheck
 
+      - name: Verify preview build configuration
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const eas = require('./eas.json');
+          const env = eas?.build?.preview?.env || {};
+          const required = [
+            'EXPO_PUBLIC_SUPABASE_URL',
+            'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+            'EXPO_PUBLIC_BRANDBOX_API_URL'
+          ];
+          const missing = required.filter((key) => !env[key]);
+          if (missing.length) {
+            console.error(`Missing preview env: ${missing.join(', ')}`);
+            process.exit(1);
+          }
+          if (env.EXPO_PUBLIC_BRANDBOX_API_URL !== 'https://www.brandbox-ai.com') {
+            console.error('Preview API URL must use the canonical www host.');
+            process.exit(1);
+          }
+          console.log('Preview environment configuration verified.');
+          NODE
+
       - name: Build preview APK with EAS
         shell: bash
         run: |
-          set -o pipefail
-          npx --yes eas-cli@latest build --platform android --profile preview --non-interactive 2>&1 | tee eas-build.log
+          set -euo pipefail
+          npx --yes eas-cli@latest build \
+            --platform android \
+            --profile preview \
+            --clear-cache \
+            --non-interactive \
+            --wait \
+            --json > eas-build.json
+          cat eas-build.json
+
+      - name: Extract EAS build metadata
+        id: eas
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const raw = fs.readFileSync('eas-build.json', 'utf8');
+          const parsed = JSON.parse(raw);
+          const build = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (!build?.id) throw new Error('EAS build ID missing from JSON output');
+          const page = `https://expo.dev/accounts/brand-box/projects/brand/builds/${build.id}`;
+          const apk = build?.artifacts?.buildUrl || '';
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `build_id=${build.id}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `build_page=${page}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `apk_url=${apk}\n`);
+          NODE
+
+      - name: Download generated APK
+        if: steps.eas.outputs.apk_url != ''
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 \
+            '${{ steps.eas.outputs.apk_url }}' \
+            --output brandbox-ai-preview.apk
+          test -s brandbox-ai-preview.apk
+
+      - name: Upload APK as GitHub artifact
+        if: steps.eas.outputs.apk_url != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: brandbox-ai-preview-apk
+          path: apps/mobile/brandbox-ai-preview.apk
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Write build summary
         if: always()
         shell: bash
         run: |
-          echo "## Brand Box Mobile Preview APK" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "EAS project: @brand-box/brand" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f eas-build.log ]; then
-            BUILD_URL=$(grep -Eo 'https://expo\.dev/accounts/[^ ]+/builds/[A-Za-z0-9-]+' eas-build.log | tail -n 1 || true)
-            if [ -n "$BUILD_URL" ]; then
-              echo "Install/build page: $BUILD_URL" >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "Open the EAS project dashboard to inspect the build output." >> "$GITHUB_STEP_SUMMARY"
-            fi
+          echo '## Brand Box Mobile Preview APK' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Automatic pipeline: dependency validation → typecheck → EAS preview APK.' >> "$GITHUB_STEP_SUMMARY"
+          if [ -n '${{ steps.eas.outputs.build_page }}' ]; then
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo 'EAS build page: ${{ steps.eas.outputs.build_page }}' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n '${{ steps.eas.outputs.apk_url }}' ]; then
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo 'APK generated successfully and uploaded as workflow artifact.' >> "$GITHUB_STEP_SUMMARY"
           fi
