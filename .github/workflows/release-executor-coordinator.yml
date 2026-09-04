@@ -1,0 +1,165 @@
+name: Brand Box Release Coordinator
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+  issues:
+    types: [closed, reopened]
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: brand-box-release-coordinator
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Reconcile launch backlog and active issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          UMBRELLA_ISSUE: '98'
+        run: |
+          node <<'NODE'
+          const [owner, repo] = process.env.GH_REPOSITORY.split('/');
+          const token = process.env.GH_TOKEN;
+          const umbrellaNumber = Number(process.env.UMBRELLA_ISSUE || '98');
+          const base = `https://api.github.com/repos/${owner}/${repo}`;
+
+          async function api(path, options = {}) {
+            const response = await fetch(`${base}${path}`, {
+              ...options,
+              headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+                ...(options.headers || {}),
+              },
+            });
+            if (!response.ok) {
+              const text = await response.text();
+              throw new Error(`${options.method || 'GET'} ${path} -> ${response.status}: ${text}`);
+            }
+            if (response.status === 204) return null;
+            return response.json();
+          }
+
+          const umbrella = await api(`/issues/${umbrellaNumber}`);
+          const originalBody = umbrella.body || '';
+          const checklistMatches = [...originalBody.matchAll(/^- \[[ xX]\] #(\d+)\b/gm)];
+          const issueNumbers = [...new Set(checklistMatches.map((match) => Number(match[1])))];
+
+          if (!issueNumbers.length) {
+            throw new Error(`No release checklist issues found in #${umbrellaNumber}`);
+          }
+
+          const issueStates = [];
+          for (const number of issueNumbers) {
+            const issue = await api(`/issues/${number}`);
+            issueStates.push({ number, title: issue.title, state: issue.state, labels: issue.labels || [] });
+          }
+
+          const completed = issueStates.filter((issue) => issue.state === 'closed').length;
+          const total = issueStates.length;
+          const progress = Math.round((completed / total) * 100);
+          const active = issueStates.find((issue) => issue.state === 'open') || null;
+
+          let body = originalBody.replace(/\s+— \*\*ACTIVE NEXT SLICE\*\*/g, '');
+          for (const issue of issueStates) {
+            const mark = issue.state === 'closed' ? 'x' : ' ';
+            const pattern = new RegExp(`- \\[([ xX])\\] #${issue.number}\\b`, 'g');
+            body = body.replace(pattern, `- [${mark}] #${issue.number}`);
+          }
+
+          if (active) {
+            const activePattern = new RegExp(`(- \\[ \\] #${active.number}[^\\n]*)`);
+            body = body.replace(activePattern, '$1 — **ACTIVE NEXT SLICE**');
+          }
+
+          body = body.replace(
+            /- Completed: \*\*\d+\s*\/\s*\d+\s*\(\d+%\)\*\*\./,
+            `- Completed: **${completed} / ${total} (${progress}%)**.`
+          );
+
+          if (active) {
+            body = body.replace(
+              /- Engineering must continue with #\d+ now\.[^\n]*/,
+              `- Engineering must continue with #${active.number} now. Do not stay idle because of unrelated Store/provider/external activation work.`
+            );
+          }
+
+          if (body !== originalBody) {
+            await api(`/issues/${umbrellaNumber}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ body }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+
+          const activeLabel = 'release:active';
+          try {
+            await api(`/labels/${encodeURIComponent(activeLabel)}`);
+          } catch {
+            await api('/labels', {
+              method: 'POST',
+              body: JSON.stringify({
+                name: activeLabel,
+                color: 'D73A4A',
+                description: 'Current Brand Box v1 launch task selected by the release coordinator',
+              }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+
+          for (const issue of issueStates) {
+            const hasActive = issue.labels.some((label) => (typeof label === 'string' ? label : label.name) === activeLabel);
+            if (active && issue.number === active.number) {
+              if (!hasActive) {
+                await api(`/issues/${issue.number}/labels`, {
+                  method: 'POST',
+                  body: JSON.stringify({ labels: [activeLabel] }),
+                  headers: { 'Content-Type': 'application/json' },
+                });
+              }
+            } else if (hasActive) {
+              try {
+                await api(`/issues/${issue.number}/labels/${encodeURIComponent(activeLabel)}`, { method: 'DELETE' });
+              } catch (error) {
+                console.warn(`Unable to remove active label from #${issue.number}: ${error.message}`);
+              }
+            }
+          }
+
+          const marker = '<!-- brand-box-release-coordinator -->';
+          const activeText = active
+            ? `#${active.number} — ${active.title}`
+            : 'No open launch issue remains; run the final release decision.';
+          const commentBody = `${marker}\n## 🤖 Brand Box Release Coordinator\n\n- Progress: **${completed}/${total} (${progress}%)**\n- Active release task: **${activeText}**\n- Source: issue #${umbrellaNumber}\n- Custom coding profile: \`Brand Box Release Execution\`\n- Reconciled: ${new Date().toISOString()}\n\nThe coordinator synchronizes checklist state with actual issue state and marks exactly one launch issue as \`release:active\`. Code implementation is performed by the custom GitHub coding agent when that issue is assigned to it. Protected operations still require owner/platform authorization.`;
+
+          const comments = await api(`/issues/${umbrellaNumber}/comments?per_page=100`);
+          const existing = comments.find((comment) => (comment.body || '').includes(marker));
+          if (existing) {
+            await api(`/issues/comments/${existing.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ body: commentBody }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+          } else {
+            await api(`/issues/${umbrellaNumber}/comments`, {
+              method: 'POST',
+              body: JSON.stringify({ body: commentBody }),
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+
+          console.log(JSON.stringify({ completed, total, progress, active }, null, 2));
+          NODE
