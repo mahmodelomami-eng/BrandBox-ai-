@@ -51,6 +51,17 @@ function statusMeta(status) {
   return { label: 'جاري التوليد', className: 'border-[color-mix(in_srgb,var(--bb-info)_28%,transparent)] bg-[var(--bb-info-soft)] text-[var(--bb-info)]' };
 }
 
+function safePricingOptions(model) {
+  if (!Array.isArray(model?.pricingOptions)) return [];
+  return model.pricingOptions.filter((option) => (
+    option
+    && typeof option.resolution === 'string'
+    && (option.audioMode === 'off' || option.audioMode === 'on')
+    && Number.isInteger(Number(option.creditsPerSecond))
+    && Number(option.creditsPerSecond) > 0
+  ));
+}
+
 export default function VideoProjectWorkspace({ projectId, initialPrompt = '', templateSettings = {} }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const { creditBalance, refreshProfile } = useAuth();
@@ -84,20 +95,32 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
     () => Array.isArray(selectedModel?.supportedResolutions) ? selectedModel.supportedResolutions.filter(Boolean) : [],
     [selectedModel]
   );
+  const pricingOptions = useMemo(() => safePricingOptions(selectedModel), [selectedModel]);
   const effectiveRatio = ratioAlias(ratio, availableRatios);
   const effectiveDuration = availableDurations.includes(duration) ? duration : (availableDurations[0] || 0);
   const effectiveResolution = availableResolutions.includes(resolution) ? resolution : (availableResolutions[0] || '');
-  const effectiveGenerateAudio = Boolean(selectedModel?.supportsAudio && generateAudio);
+  const audioPriceAvailable = pricingOptions.length === 0
+    || pricingOptions.some((option) => option.resolution === effectiveResolution && option.audioMode === 'on');
+  const effectiveGenerateAudio = Boolean(selectedModel?.supportsAudio && generateAudio && audioPriceAvailable);
+  const selectedPricing = pricingOptions.find((option) => (
+    option.resolution === effectiveResolution
+    && option.audioMode === (effectiveGenerateAudio ? 'on' : 'off')
+  )) || null;
+  const selectedCreditsPerSecond = selectedPricing
+    ? Number(selectedPricing.creditsPerSecond)
+    : pricingOptions.length === 0 && Number(selectedModel?.creditsPerSecond) > 0
+      ? Number(selectedModel.creditsPerSecond)
+      : null;
   const selectedProviderConfigured = Boolean(selectedModel?.configured);
   const capabilitiesAvailable = Boolean(selectedModel?.capabilitiesAvailable);
-  const priceEstimate = selectedModel?.creditsPerSecond && effectiveDuration
-    ? Math.max(Number(selectedModel.minimumCredits || 0), selectedModel.creditsPerSecond * effectiveDuration)
+  const priceEstimate = selectedCreditsPerSecond && effectiveDuration
+    ? Math.max(Number(selectedModel.minimumCredits || 0), selectedCreditsPerSecond * effectiveDuration)
     : null;
   const generationReady = Boolean(
     selectedProviderConfigured
     && capabilitiesAvailable
     && selectedModel?.pricingReady
-    && selectedModel?.creditsPerSecond
+    && selectedCreditsPerSecond
     && effectiveDuration
     && effectiveRatio
     && effectiveResolution
@@ -379,7 +402,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           <div className="space-y-5 p-4 sm:p-5">
             {!generationReady && (
               <div className="bb-warning-surface rounded-2xl border p-4 text-xs leading-6">
-                <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير متاح بهذه الإعدادات</div><p className="bb-text-secondary mt-1">{models.length === 0 ? 'لا يوجد نموذج فيديو مفعّل ومرئي من لوحة الإدارة.' : !selectedProviderConfigured ? 'مفتاح مزود الفيديو المحدد غير مهيأ على الخادم.' : !selectedModel?.pricingReady ? 'النموذج موجود لكن سعر Brand Box لكل ثانية لم يُضبط بعد.' : !capabilitiesAvailable ? 'تعذر التحقق من قدرات النموذج، لذلك لن نعرض أو نرسل إعدادات بالتخمين.' : 'اختر قيمة مدعومة من القوائم المتاحة.'} يمكنك الاستمرار في حفظ المسودات دون أي تكلفة.</p></div></div>
+                <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير متاح بهذه الإعدادات</div><p className="bb-text-secondary mt-1">{models.length === 0 ? 'لا يوجد نموذج فيديو مفعّل ومرئي من لوحة الإدارة.' : !selectedProviderConfigured ? 'مفتاح مزود الفيديو المحدد غير مهيأ على الخادم.' : !selectedModel?.pricingReady ? 'النموذج موجود لكن مصفوفة تسعير Brand Box لم تُضبط بعد.' : !capabilitiesAvailable ? 'تعذر التحقق من قدرات النموذج، لذلك لن نعرض أو نرسل إعدادات بالتخمين.' : !selectedCreditsPerSecond ? 'تركيبة الدقة والصوت الحالية غير مسعّرة، لذلك لن يتم حجز أي نقاط.' : 'اختر قيمة مدعومة من القوائم المتاحة.'} يمكنك الاستمرار في حفظ المسودات دون أي تكلفة.</p></div></div>
               </div>
             )}
 
@@ -431,12 +454,12 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={effectiveRatio} onChange={(event) => setRatio(event.target.value)} disabled={!capabilitiesAvailable || availableRatios.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableRatios.map((value) => <option key={value} value={value}>{ratioLabel(value)}</option>)}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={effectiveDuration} onChange={(event) => setDuration(Number(event.target.value))} disabled={!capabilitiesAvailable || availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">الدقة</span><select value={effectiveResolution} onChange={(event) => setResolution(event.target.value)} disabled={!capabilitiesAvailable || availableResolutions.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableResolutions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            {selectedModel?.supportsAudio && <label className="bb-input flex items-center justify-between rounded-xl border px-4 py-3"><span><span className="bb-text-primary block text-xs font-black">توليد الصوت مع الفيديو</span><span className="bb-text-tertiary mt-1 block text-[10px]">هذا الخيار يظهر فقط لأن النموذج المحدد يعلنه كقدرة مدعومة.</span></span><input type="checkbox" checked={effectiveGenerateAudio} onChange={(event) => setGenerateAudio(event.target.checked)} className="h-4 w-4" /></label>}
+            {selectedModel?.supportsAudio && <label className="bb-input flex items-center justify-between rounded-xl border px-4 py-3"><span><span className="bb-text-primary block text-xs font-black">توليد الصوت مع الفيديو</span><span className="bb-text-tertiary mt-1 block text-[10px]">السعر يتغير تلقائيًا حسب الدقة وتشغيل الصوت، والخادم يعيد التحقق قبل الخصم.</span></span><input type="checkbox" checked={effectiveGenerateAudio} disabled={!audioPriceAvailable} onChange={(event) => setGenerateAudio(event.target.checked)} className="h-4 w-4" /></label>}
           </div>
 
           <div className="bb-surface-1 bb-border bb-text-secondary mt-5 rounded-2xl border p-3 text-xs leading-6">
             {capabilitiesAvailable ? <><span>قدرات النموذج:</span> <strong className="bb-text-primary">{availableResolutions.join(' / ')} · {availableDurations.join(', ')} ث</strong><br/></> : <><span className="bb-text-danger font-black">تعذر تأكيد قدرات النموذج، لذلك تم تعطيل التوليد.</span><br/></>}
-            {selectedModel?.creditsPerSecond ? <><span>التكلفة المؤكدة من الخادم:</span> <strong className="bb-text-primary">{selectedModel.creditsPerSecond} نقطة/ث</strong><br/><span>إجمالي هذه المهمة:</span> <strong className="bb-text-accent">{priceEstimate} نقطة</strong></> : 'لن يتم حجز أي نقاط حتى يضبط المسؤول سعر Brand Box لكل ثانية.'}
+            {selectedCreditsPerSecond ? <><span>سعر الإعداد الحالي:</span> <strong className="bb-text-primary">{selectedCreditsPerSecond} نقطة/ث</strong><br/><span>إجمالي هذه المهمة:</span> <strong className="bb-text-accent">{priceEstimate} نقطة</strong></> : 'تركيبة الدقة والصوت الحالية غير مسعّرة ولن يتم حجز نقاط لها.'}
             {creditBalance !== null && creditBalance !== undefined && <><br/><span>رصيدك الحالي:</span> <strong className="bb-text-primary">{creditBalance}</strong></>}
           </div>
 
