@@ -31,20 +31,20 @@ const STYLE_OPTIONS = [
   { id: 'formal', label: 'رسمي', prompt: 'أسلوب رسمي فاخر، إعلان تجاري احترافي، تكوين متزن', background: 'linear-gradient(135deg,#111827,#552126 55%,#090a0d)' },
 ];
 
-const ASPECTS = [
-  { value: '1:1', label: '1:1', box: 'h-4 w-4' },
-  { value: '16:9', label: '16:9', box: 'h-3 w-6' },
-  { value: '9:16', label: '9:16', box: 'h-6 w-3' },
-  { value: '4:3', label: '4:3', box: 'h-4 w-6' },
-  { value: '3:4', label: '3:4', box: 'h-6 w-4' },
-];
-
-const RESOLUTIONS = [
-  { value: '512', label: '512px' },
-  { value: '1K', label: '1K' },
-  { value: '2K', label: '2K' },
-  { value: '4K', label: '4K' },
-];
+// Visual metadata only. This is NOT an allowlist. The actual selectable aspect
+// ratios always come from the selected model's OpenRouter capability object.
+const ASPECT_META = {
+  '1:1': { label: '1:1', box: 'h-4 w-4' },
+  '16:9': { label: '16:9', box: 'h-3 w-6' },
+  '9:16': { label: '9:16', box: 'h-6 w-3' },
+  '4:3': { label: '4:3', box: 'h-4 w-6' },
+  '3:4': { label: '3:4', box: 'h-6 w-4' },
+  '3:2': { label: '3:2', box: 'h-4 w-6' },
+  '2:3': { label: '2:3', box: 'h-6 w-4' },
+  '4:5': { label: '4:5', box: 'h-5 w-4' },
+  '5:4': { label: '5:4', box: 'h-4 w-5' },
+  '21:9': { label: '21:9', box: 'h-2.5 w-7' },
+};
 
 const TOOL_LINKS = [
   { id: 'images', label: 'الصور AI', description: 'مشاريع الصور', icon: ImageIcon, href: '/projects/images' },
@@ -78,14 +78,37 @@ function normalizeAsset(asset) {
 
 function normalizeImageModel(model) {
   const metadata = model?.metadata && typeof model.metadata === 'object' ? model.metadata : {};
+  const capabilityImage = model?.capabilities?.image && typeof model.capabilities.image === 'object'
+    ? model.capabilities.image
+    : {};
   const cost = Number(model?.minimum_credits);
+  const supportedResolutions = Array.isArray(model?.supported_resolutions)
+    ? model.supported_resolutions.filter(Boolean)
+    : Array.isArray(capabilityImage.resolutions) ? capabilityImage.resolutions.filter(Boolean) : [];
+  const supportedAspectRatios = Array.isArray(model?.supported_aspect_ratios)
+    ? model.supported_aspect_ratios.filter(Boolean)
+    : Array.isArray(capabilityImage.aspectRatios) ? capabilityImage.aspectRatios.filter(Boolean) : [];
+  const maxCount = Number(model?.max_count ?? capabilityImage?.countRange?.max ?? 0);
   return {
     id: model?.model_id || '',
     name: model?.display_name_ar || model?.display_name_en || model?.model_id || 'نموذج صور',
     provider: model?.vendor_name || 'OpenRouter',
     cost: Number.isFinite(cost) ? cost : 0,
     badge: typeof metadata.brandbox_badge === 'string' ? metadata.brandbox_badge : 'متاح',
+    capabilitiesAvailable: model?.capabilitiesAvailable === true,
+    capabilitySource: model?.capabilitySource || 'unknown',
+    supportedResolutions,
+    supportedAspectRatios,
+    maxCount: Number.isInteger(maxCount) && maxCount > 0 ? Math.min(maxCount, 20) : 0,
   };
+}
+
+function aspectMeta(value) {
+  return ASPECT_META[value] || { label: value, box: 'h-4 w-5' };
+}
+
+function resolutionLabel(value) {
+  return String(value).toLowerCase() === '512' ? '512px' : String(value);
 }
 
 function isImageProject(project) {
@@ -97,6 +120,7 @@ function friendlyImageError(value) {
   if (code.includes('INSUFFICIENT_CREDITS')) return 'رصيدك غير كافٍ لهذه العملية. اشحن الرصيد أو خفّض عدد الصور.';
   if (code.includes('RATE_LIMIT')) return 'مزود الصور مشغول حاليًا. انتظر قليلًا ثم أعد المحاولة.';
   if (code.includes('TIMEOUT')) return 'استغرق مزود الصور وقتًا أطول من المتوقع. لم تُحتسب العملية الناجحة ويمكنك إعادة المحاولة.';
+  if (code.includes('CAPABILIT')) return 'تعذر التحقق من إعدادات هذا النموذج من OpenRouter. تم إيقاف التوليد بدل إرسال إعدادات غير مؤكدة.';
   if (code.includes('MODEL') && (code.includes('UNAVAILABLE') || code.includes('DISABLED') || code.includes('NOT_ALLOWED'))) return 'نموذج الصور المحدد غير متاح حاليًا. اختر نموذجًا آخر أو حدّث القائمة.';
   if (code.includes('SETTING') || code.includes('ASPECT') || code.includes('RESOLUTION') || code.includes('COUNT')) return 'الإعدادات الحالية غير مدعومة بواسطة هذا النموذج. غيّر الدقة أو النسبة أو عدد الصور.';
   if (code.includes('PROVIDER') || code.includes('UPSTREAM')) return 'تعذر الوصول إلى مزود الصور حاليًا. أعد المحاولة بعد قليل.';
@@ -125,7 +149,6 @@ export default function ImageStudioWorkspace() {
   const styleFromUrl = searchParams.get('style') || '';
   const aspectFromUrl = searchParams.get('aspect') || '';
   const initialStyleId = STYLE_OPTIONS.some((style) => style.id === styleFromUrl) ? styleFromUrl : 'photo';
-  const initialAspectRatio = ASPECTS.some((aspect) => aspect.value === aspectFromUrl) ? aspectFromUrl : '16:9';
 
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(projectFromUrl);
@@ -138,8 +161,8 @@ export default function ImageStudioWorkspace() {
   const [prompt, setPrompt] = useState(promptFromUrl.slice(0, 1000));
   const [selectedModelId, setSelectedModelId] = useState('');
   const [styleId, setStyleId] = useState(initialStyleId);
-  const [aspectRatio, setAspectRatio] = useState(initialAspectRatio);
-  const [resolution, setResolution] = useState('2K');
+  const [aspectRatio, setAspectRatio] = useState(aspectFromUrl || '');
+  const [resolution, setResolution] = useState('');
   const [count, setCount] = useState(1);
   const [useBrandKit, setUseBrandKit] = useState(true);
   const [balance, setBalance] = useState(null);
@@ -149,7 +172,7 @@ export default function ImageStudioWorkspace() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [message, setMessage] = useState(promptFromUrl ? { type: 'success', text: 'تم تحميل برومبت القالب وإعداداته. عدّله إذا أردت ثم ابدأ التوليد.' } : null);
+  const [message, setMessage] = useState(promptFromUrl ? { type: 'success', text: 'تم تحميل برومبت القالب. سيتم ضبط الدقة والنسبة والعدد تلقائيًا حسب النموذج المختار.' } : null);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
@@ -157,6 +180,27 @@ export default function ImageStudioWorkspace() {
   );
   const selectedModel = imageModels.find((model) => model.id === selectedModelId) || imageModels[0] || null;
   const selectedStyle = STYLE_OPTIONS.find((style) => style.id === styleId) || STYLE_OPTIONS[0];
+  const availableAspects = selectedModel?.supportedAspectRatios || [];
+  const availableResolutions = selectedModel?.supportedResolutions || [];
+  const maxCount = selectedModel?.maxCount || 0;
+  const countOptions = useMemo(
+    () => maxCount > 0 ? Array.from({ length: maxCount }, (_, index) => index + 1) : [],
+    [maxCount],
+  );
+  const capabilitiesAvailable = Boolean(selectedModel?.capabilitiesAvailable && availableAspects.length && maxCount > 0);
+
+  useEffect(() => {
+    if (!selectedModel) return;
+    if (availableAspects.length > 0 && !availableAspects.includes(aspectRatio)) {
+      setAspectRatio(availableAspects[0]);
+    }
+    if (availableResolutions.length === 0) {
+      if (resolution) setResolution('');
+    } else if (!availableResolutions.includes(resolution)) {
+      setResolution(availableResolutions[0]);
+    }
+    if (maxCount > 0 && (count < 1 || count > maxCount)) setCount(1);
+  }, [aspectRatio, availableAspects, availableResolutions, count, maxCount, resolution, selectedModel]);
 
   const getToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -314,6 +358,10 @@ export default function ImageStudioWorkspace() {
       setMessage({ type: 'error', text: 'نماذج الصور غير متاحة مؤقتًا. أعد المحاولة بعد قليل.' });
       return;
     }
+    if (!capabilitiesAvailable) {
+      setMessage({ type: 'error', text: 'تعذر تأكيد قدرات النموذج من OpenRouter. لن نرسل إعدادات بالتخمين.' });
+      return;
+    }
     if (!prompt.trim()) {
       setMessage({ type: 'error', text: 'اكتب وصف الصورة قبل بدء التوليد.' });
       return;
@@ -330,6 +378,7 @@ export default function ImageStudioWorkspace() {
       const token = await getToken();
       if (!token) throw new Error('SESSION_REQUIRED');
       const finalPrompt = selectedStyle.prompt ? `${prompt.trim()}\nالأسلوب البصري المطلوب: ${selectedStyle.prompt}.` : prompt.trim();
+      const settings = { aspectRatio, count, style: styleId, useBrandKit, ...(resolution ? { resolution } : {}) };
       const response = await fetch('/api/v1/generations', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -339,11 +388,16 @@ export default function ImageStudioWorkspace() {
           modelId: selectedModel.id,
           prompt: finalPrompt,
           projectId: activeProject.id,
-          settings: { aspectRatio, resolution, count, style: styleId, useBrandKit },
+          settings,
         }),
       });
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.errorMessage || result.error || 'IMAGE_GENERATION_FAILED');
+
+      const normalizedSettings = result.normalizedSettings || settings;
+      if (normalizedSettings.aspectRatio) setAspectRatio(normalizedSettings.aspectRatio);
+      if ('resolution' in normalizedSettings) setResolution(normalizedSettings.resolution || '');
+      if (Number.isInteger(Number(normalizedSettings.count))) setCount(Number(normalizedSettings.count));
 
       const urls = Array.isArray(result.resultUrls) ? result.resultUrls : result.resultUrl ? [result.resultUrl] : [];
       const now = new Date().toISOString();
@@ -360,7 +414,7 @@ export default function ImageStudioWorkspace() {
         setGallery((current) => [...optimistic, ...current]);
       }
       if (typeof result.remainingBalance === 'number') setBalance(result.remainingBalance);
-      setMessage({ type: 'success', text: `تم توليد ${urls.length || count} ${urls.length === 1 || count === 1 ? 'صورة' : 'صور'} بنجاح. احتفظنا بالوصف لتعديله أو إعادة استخدامه.` });
+      setMessage({ type: 'success', text: `تم توليد ${urls.length || count} ${urls.length === 1 || count === 1 ? 'صورة' : 'صور'} بالإعدادات المدعومة فعليًا من النموذج.` });
       if (refreshProfile) void refreshProfile();
       window.setTimeout(() => void loadHistory(activeProject.id), 800);
     } catch (error) {
@@ -427,7 +481,7 @@ export default function ImageStudioWorkspace() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h1 className="bb-text-primary flex items-center gap-2 text-xl font-black"><Sparkles className="bb-text-accent h-5 w-5" /> توليد صورة جديدة</h1>
-                <p className="bb-text-secondary mt-1 text-xs leading-6">اكتب فكرتك واضبط الإعدادات، وسيظهر السعر قبل تنفيذ الطلب.</p>
+                <p className="bb-text-secondary mt-1 text-xs leading-6">الإعدادات أدناه تتغير تلقائيًا لتطابق قدرات النموذج المحدد في OpenRouter.</p>
               </div>
               <button type="button" onClick={() => void loadHistory(activeProject?.id)} disabled={!activeProject || historyLoading} className="bb-button-secondary grid h-10 w-10 place-items-center rounded-xl border transition disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2" aria-label="تحديث الصور"><RefreshCw className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`} /></button>
             </div>
@@ -472,6 +526,7 @@ export default function ImageStudioWorkspace() {
                 </div>
               )}
               {(!imageModelsAvailable || imageModels.length === 0) && <p className="bb-text-warning mt-2 text-[10px] leading-5">نماذج الصور غير متاحة مؤقتًا. لن يتم خصم نقاط حتى يعود كتالوج النماذج.</p>}
+              {selectedModel && !capabilitiesAvailable && <p className="bb-text-warning mt-2 text-[10px] leading-5">تعذر تأكيد قدرات هذا النموذج. تم تعطيل التوليد حتى لا تظهر أو تُرسل إعدادات غير مدعومة.</p>}
             </div>
 
             <div>
@@ -479,20 +534,20 @@ export default function ImageStudioWorkspace() {
               <div className="grid grid-cols-5 gap-2">{STYLE_OPTIONS.map((style) => <SelectTile key={style.id} active={styleId === style.id} pressed={styleId === style.id} onClick={() => setStyleId(style.id)} className="overflow-hidden p-1"><span className="block aspect-square rounded-lg" style={{ background: style.background }} /><span className="bb-text-secondary mt-1 block truncate text-[9px] font-bold">{style.label}</span></SelectTile>)}</div>
             </div>
 
-            <div>
+            {availableAspects.length > 0 && <div>
               <div className="mb-2 flex items-center justify-between"><label className="bb-text-secondary text-xs font-black">النسبة (Aspect Ratio)</label><span className="bb-text-accent text-[10px] font-bold">{aspectRatio}</span></div>
-              <div className="grid grid-cols-5 gap-2">{ASPECTS.map((item) => <SelectTile key={item.value} active={aspectRatio === item.value} pressed={aspectRatio === item.value} onClick={() => setAspectRatio(item.value)} className="flex min-h-14 flex-col items-center justify-center text-[9px] font-bold"><span className={`mb-1 rounded-sm border ${item.box} ${aspectRatio === item.value ? 'border-[var(--bb-accent)]' : 'border-[var(--bb-border-strong)]'}`} />{item.label}</SelectTile>)}</div>
-            </div>
+              <div className="grid grid-cols-3 gap-2">{availableAspects.map((value) => { const item = aspectMeta(value); return <SelectTile key={value} active={aspectRatio === value} pressed={aspectRatio === value} onClick={() => setAspectRatio(value)} className="flex min-h-14 flex-col items-center justify-center text-[9px] font-bold"><span className={`mb-1 rounded-sm border ${item.box} ${aspectRatio === value ? 'border-[var(--bb-accent)]' : 'border-[var(--bb-border-strong)]'}`} />{item.label}</SelectTile>; })}</div>
+            </div>}
 
-            <div>
+            {availableResolutions.length > 0 && <div>
               <div className="mb-2 flex items-center justify-between"><label className="bb-text-secondary text-xs font-black">الدقة (Resolution)</label><span className="bb-text-accent text-[10px] font-bold">{resolution}</span></div>
-              <div className="grid grid-cols-4 gap-2">{RESOLUTIONS.map((item) => <SelectTile key={item.label} active={resolution === item.value} pressed={resolution === item.value} onClick={() => setResolution(item.value)} className="text-[10px] font-black">{item.label}</SelectTile>)}</div>
-            </div>
+              <div className="grid grid-cols-3 gap-2">{availableResolutions.map((value) => <SelectTile key={value} active={resolution === value} pressed={resolution === value} onClick={() => setResolution(value)} className="text-[10px] font-black">{resolutionLabel(value)}</SelectTile>)}</div>
+            </div>}
 
-            <div>
-              <div className="mb-2 flex items-center justify-between"><label className="bb-text-secondary text-xs font-black">عدد الصور</label><span className="bb-text-tertiary text-[10px]">حتى 4</span></div>
-              <div className="grid grid-cols-3 gap-2">{[1, 2, 4].map((value) => <SelectTile key={value} active={count === value} pressed={count === value} onClick={() => setCount(value)} className="text-xs font-black">{value}</SelectTile>)}</div>
-            </div>
+            {countOptions.length > 0 && <div>
+              <div className="mb-2 flex items-center justify-between"><label className="bb-text-secondary text-xs font-black">عدد الصور</label><span className="bb-text-tertiary text-[10px]">حتى {maxCount}</span></div>
+              <div className="grid grid-cols-4 gap-2">{countOptions.map((value) => <SelectTile key={value} active={count === value} pressed={count === value} onClick={() => setCount(value)} className="text-xs font-black">{value}</SelectTile>)}</div>
+            </div>}
 
             <button type="button" onClick={() => setUseBrandKit((value) => !value)} aria-pressed={useBrandKit} className="bb-button-secondary flex min-h-12 w-full items-center justify-between rounded-xl border p-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2"><span className="flex items-center gap-2"><Palette className="bb-text-accent h-4 w-4" />تطبيق هوية المشروع</span><span className={`relative h-5 w-9 rounded-full transition ${useBrandKit ? 'bg-[var(--bb-accent)]' : 'bg-[var(--bb-border-strong)]'}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${useBrandKit ? 'right-0.5' : 'right-[18px]'}`} /></span></button>
 
@@ -503,7 +558,7 @@ export default function ImageStudioWorkspace() {
               </div>
             )}
 
-            <button type="button" onClick={generateImages} disabled={generating || !activeProject || !selectedModel || !imageModelsAvailable || insufficientCredits} className="bb-button-primary flex min-h-12 w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2"><Sparkles className="h-4 w-4" />{generating ? 'جاري توليد الصور...' : `توليد ${count === 1 ? 'الصورة' : `${count} صور`}`}</button>
+            <button type="button" onClick={generateImages} disabled={generating || !activeProject || !selectedModel || !imageModelsAvailable || !capabilitiesAvailable || insufficientCredits} className="bb-button-primary flex min-h-12 w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2"><Sparkles className="h-4 w-4" />{generating ? 'جاري توليد الصور...' : `توليد ${count === 1 ? 'الصورة' : `${count} صور`}`}</button>
             {selectedModel && <div className="bb-text-tertiary flex flex-wrap items-center justify-center gap-1.5 text-center text-[10px]"><span>التكلفة المتوقعة</span><strong className="bb-text-secondary">{requiredCredits}</strong><span>نقطة حسب كتالوج المنصة</span>{currentBalance !== null && <><span>· رصيدك</span><strong className={insufficientCredits ? 'bb-text-warning' : 'bb-text-accent'}>{currentBalance}</strong></>}</div>}
 
             {message && <div className={`${message.type === 'error' ? 'bb-danger-surface' : 'bb-accent-soft'} rounded-xl border px-3 py-2.5 text-xs leading-5`} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</div>}
@@ -531,7 +586,7 @@ export default function ImageStudioWorkspace() {
             ) : !galleryReady && historyError ? (
               <div className="bb-panel flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed px-5 text-center"><ImageIcon className="bb-text-disabled h-10 w-10" /><h3 className="bb-text-primary mt-4 text-base font-black">تعذر عرض نتائج هذا المشروع</h3><p className="bb-text-secondary mt-2 max-w-md text-xs leading-6">المشروع وإعداداتك ما زالت محفوظة. استخدم زر إعادة تحميل المعرض أعلاه.</p></div>
             ) : gallery.length === 0 ? (
-              <div className="bb-panel flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed px-5 text-center"><span className="bb-surface-1 bb-border flex h-20 w-20 items-center justify-center rounded-full border"><ImageIcon className="bb-text-disabled h-9 w-9" /></span><h3 className="bb-text-primary mt-6 text-lg font-black">لم يتم توليد أي صورة بعد</h3><p className="bb-text-secondary mt-2 max-w-md text-xs leading-6">اكتب وصف الصورة وحدد النموذج والطراز والنسبة والدقة. سترى التكلفة قبل التوليد، وستبقى النتائج محفوظة داخل هذا المشروع.</p></div>
+              <div className="bb-panel flex min-h-[560px] flex-col items-center justify-center rounded-3xl border border-dashed px-5 text-center"><span className="bb-surface-1 bb-border flex h-20 w-20 items-center justify-center rounded-full border"><ImageIcon className="bb-text-disabled h-9 w-9" /></span><h3 className="bb-text-primary mt-6 text-lg font-black">لم يتم توليد أي صورة بعد</h3><p className="bb-text-secondary mt-2 max-w-md text-xs leading-6">اختر النموذج أولًا؛ ستظهر النسب والدقات وعدد الصور التي يدعمها ذلك النموذج فقط.</p></div>
             ) : (
               <div className="columns-1 gap-4 sm:columns-2 xl:columns-3 2xl:columns-4">
                 {gallery.map((image) => (
