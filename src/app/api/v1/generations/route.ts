@@ -5,26 +5,30 @@ import { GenerationEngine, GenerationRequest } from '@/lib/generations/generatio
 import {
   OPENROUTER_IMAGE_ASPECT_RATIOS,
   OPENROUTER_IMAGE_MODELS,
-  OPENROUTER_IMAGE_RESOLUTIONS,
 } from '@/lib/ai/openrouter-client';
+import { getOpenRouterImageCapabilities } from '@/lib/ai/openrouter-image-capabilities';
 import { generationTypeToProjectTool, projectTypeMatchesTool } from '@/lib/projects/project-scope';
 
 type HistoryGenerationType = 'chat' | 'image';
 
 const imageAspectRatios = new Set<string>(OPENROUTER_IMAGE_ASPECT_RATIOS);
-const imageResolutions = new Set<string>(OPENROUTER_IMAGE_RESOLUTIONS);
 const imageStyleIds = new Set(['none', 'photo', 'cinematic', 'minimal', 'formal']);
 
-function validImageSettings(settings: Record<string, unknown> | undefined): boolean {
+function validImageSettings(modelId: string, settings: Record<string, unknown> | undefined): boolean {
+  const capabilities = getOpenRouterImageCapabilities(modelId);
+  if (!capabilities) return false;
+
   const aspectRatio = typeof settings?.aspectRatio === 'string' ? settings.aspectRatio : '1:1';
-  const resolution = typeof settings?.resolution === 'string' ? settings.resolution : '1K';
+  const resolution = settings?.resolution;
   const count = Number(settings?.count ?? 1);
   const style = settings?.style;
   const useBrandKit = settings?.useBrandKit;
 
   if (!imageAspectRatios.has(aspectRatio)) return false;
-  if (!imageResolutions.has(resolution)) return false;
-  if (!Number.isInteger(count) || count < 1 || count > 4) return false;
+  if (resolution !== undefined) {
+    if (typeof resolution !== 'string' || !capabilities.supportedResolutions.includes(resolution as never)) return false;
+  }
+  if (!Number.isInteger(count) || count < 1 || count > capabilities.maxCount) return false;
   if (style !== undefined && (typeof style !== 'string' || !imageStyleIds.has(style))) return false;
   if (useBrandKit !== undefined && typeof useBrandKit !== 'boolean') return false;
   return true;
@@ -171,9 +175,17 @@ export async function GET(request: NextRequest) {
     const { data, error } = await database.storage.from('generation-assets').createSignedUrl(asset.file_path, 3600);
     return { ...asset, signed_url: error ? null : data?.signedUrl || null };
   }));
-  const supportedImageModels = (imageModels || []).filter((model) =>
-    OPENROUTER_IMAGE_MODELS.includes(model.model_id as typeof OPENROUTER_IMAGE_MODELS[number])
-  );
+  const supportedImageModels = (imageModels || [])
+    .filter((model) => OPENROUTER_IMAGE_MODELS.includes(model.model_id as typeof OPENROUTER_IMAGE_MODELS[number]))
+    .map((model) => {
+      const capabilities = getOpenRouterImageCapabilities(model.model_id);
+      return {
+        ...model,
+        supported_resolutions: capabilities?.supportedResolutions || [],
+        default_resolution: capabilities?.defaultResolution || null,
+        max_count: capabilities?.maxCount || 1,
+      };
+    });
 
   return NextResponse.json({
     generations: generations || [],
@@ -208,7 +220,7 @@ export async function POST(request: NextRequest) {
   if (generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
     return NextResponse.json({ error: 'IMAGE_MODEL_NOT_SUPPORTED' }, { status: 400 });
   }
-  if (generationType === 'image' && !validImageSettings(body.settings)) {
+  if (generationType === 'image' && !validImageSettings(body.modelId, body.settings)) {
     return NextResponse.json({ error: 'INVALID_IMAGE_SETTINGS' }, { status: 400 });
   }
 
