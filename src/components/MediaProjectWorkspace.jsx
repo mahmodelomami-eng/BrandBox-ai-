@@ -103,18 +103,12 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
 
   const visibleItems = itemsOwnerId === projectId ? items : [];
   const selectedAudioModel = audioModels.find((model) => model.id === selectedAudioModelId) || audioModels[0] || null;
-
-  useEffect(() => {
-    if (tool !== 'audio' || !selectedAudioModel) return;
-    if (selectedAudioModel.voices.length && !selectedAudioModel.voices.includes(audioVoice)) {
-      setAudioVoice(selectedAudioModel.voices[0]);
-    }
-    if (!selectedAudioModel.voices.length && audioVoice) setAudioVoice('');
-    if (selectedAudioModel.responseFormats.length && !selectedAudioModel.responseFormats.includes(audioFormat)) {
-      setAudioFormat(selectedAudioModel.responseFormats[0]);
-    }
-    if (!selectedAudioModel.responseFormats.length && audioFormat) setAudioFormat('');
-  }, [audioFormat, audioVoice, selectedAudioModel, tool]);
+  const effectiveAudioVoice = selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.voices.length > 0
+    ? (selectedAudioModel.voices.includes(audioVoice) ? audioVoice : selectedAudioModel.voices[0])
+    : '';
+  const effectiveAudioFormat = selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.responseFormats.length > 0
+    ? (selectedAudioModel.responseFormats.includes(audioFormat) ? audioFormat : selectedAudioModel.responseFormats[0])
+    : '';
 
   const getToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -223,8 +217,8 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
     return {
       ...settings,
       ...(selectedAudioModel?.capabilitiesAvailable ? { modelId: selectedAudioModel.id } : {}),
-      ...(selectedAudioModel?.capabilitiesAvailable && audioVoice ? { voice: audioVoice } : {}),
-      ...(selectedAudioModel?.capabilitiesAvailable && audioFormat ? { responseFormat: audioFormat } : {}),
+      ...(selectedAudioModel?.capabilitiesAvailable && effectiveAudioVoice ? { voice: effectiveAudioVoice } : {}),
+      ...(selectedAudioModel?.capabilitiesAvailable && effectiveAudioFormat ? { responseFormat: effectiveAudioFormat } : {}),
       ...(selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.supportsSpeed ? { speed: 1 } : {}),
     };
   }
@@ -366,8 +360,8 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
               {!audioModelsAvailable ? <p className="bb-text-warning mt-2 text-[10px] leading-5">تعذر قراءة كتالوج الصوت. لم نعرض أصواتًا أو صيغًا بالتخمين.</p> : audioModels.length === 0 ? <p className="bb-text-tertiary mt-2 text-[10px] leading-5">لا يوجد موديل TTS مفعّل ومرئي حاليًا، لذلك لا توجد إعدادات مزود لعرضها.</p> : <div className="mt-3 space-y-3">
                 <label className="block"><span className="bb-text-secondary mb-1.5 block text-[10px] font-black">الموديل</span><select value={selectedAudioModelId} onChange={(event) => setSelectedAudioModelId(event.target.value)} className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs font-bold">{audioModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</select></label>
                 {selectedAudioModel && !selectedAudioModel.capabilitiesAvailable && <p className="bb-text-warning text-[10px] leading-5">الموديل موجود لكن قدراته غير مؤكدة؛ لن نعرض Voice أو Format.</p>}
-                {selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.voices.length > 0 && <label className="block"><span className="bb-text-secondary mb-1.5 block text-[10px] font-black">Voice</span><select value={audioVoice} onChange={(event) => setAudioVoice(event.target.value)} className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs font-bold">{selectedAudioModel.voices.map((voice) => <option key={voice} value={voice}>{voice}</option>)}</select></label>}
-                {selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.responseFormats.length > 0 && <label className="block"><span className="bb-text-secondary mb-1.5 block text-[10px] font-black">Output format</span><select value={audioFormat} onChange={(event) => setAudioFormat(event.target.value)} className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs font-bold">{selectedAudioModel.responseFormats.map((format) => <option key={format} value={format}>{format}</option>)}</select></label>}
+                {selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.voices.length > 0 && <label className="block"><span className="bb-text-secondary mb-1.5 block text-[10px] font-black">Voice</span><select value={effectiveAudioVoice} onChange={(event) => setAudioVoice(event.target.value)} className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs font-bold">{selectedAudioModel.voices.map((voice) => <option key={voice} value={voice}>{voice}</option>)}</select></label>}
+                {selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.responseFormats.length > 0 && <label className="block"><span className="bb-text-secondary mb-1.5 block text-[10px] font-black">Output format</span><select value={effectiveAudioFormat} onChange={(event) => setAudioFormat(event.target.value)} className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs font-bold">{selectedAudioModel.responseFormats.map((format) => <option key={format} value={format}>{format}</option>)}</select></label>}
                 {selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.supportsSpeed && <div className="bb-text-tertiary rounded-lg border border-[var(--bb-border)] px-3 py-2 text-[10px]">Speed مدعوم بواسطة هذا الموديل؛ إلى أن يعلن الكتالوج Range دقيقًا نحفظ القيمة الآمنة 1.0 فقط ولا نعرض Range تخمينيًا.</div>}
               </div>}
             </div>}
