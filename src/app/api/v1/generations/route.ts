@@ -4,6 +4,7 @@ import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { GenerationEngine, GenerationRequest } from '@/lib/generations/generation-engine';
 import { getOpenRouterModelCapabilities, isCapabilityKnown } from '@/lib/ai/openrouter-model-capabilities';
 import { applyChatCapabilityPolicy, applyImageCapabilityPolicy } from '@/lib/ai/openrouter-settings-policy';
+import { isModelUserPriced } from '@/lib/ai/model-user-pricing';
 import { generationTypeToProjectTool, projectTypeMatchesTool } from '@/lib/projects/project-scope';
 
 type HistoryGenerationType = 'chat' | 'image';
@@ -176,12 +177,14 @@ export async function GET(request: NextRequest) {
     const { data, error } = await database.storage.from('generation-assets').createSignedUrl(asset.file_path, 3600);
     return { ...asset, signed_url: error ? null : data?.signedUrl || null };
   }));
+  const pricedChatModels = (chatModels || []).filter((model) => isModelUserPriced({ ...model, generation_type: 'chat' }));
+  const pricedImageModels = (imageModels || []).filter((model) => isModelUserPriced({ ...model, generation_type: 'image' }));
   const decoratedChatModels = chatModelsError
     ? []
-    : await Promise.all((chatModels || []).map((model) => decorateModel('chat', model as unknown as Record<string, unknown>)));
+    : await Promise.all(pricedChatModels.map((model) => decorateModel('chat', model as unknown as Record<string, unknown>)));
   const decoratedImageModels = imageModelsError
     ? []
-    : await Promise.all((imageModels || []).map((model) => decorateModel('image', model as unknown as Record<string, unknown>)));
+    : await Promise.all(pricedImageModels.map((model) => decorateModel('image', model as unknown as Record<string, unknown>)));
 
   return NextResponse.json({
     generations: generations || [],
@@ -228,6 +231,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: generationType === 'chat' ? 'CHAT_MODEL_CATALOG_UNAVAILABLE' : 'IMAGE_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
   }
   if (!model) {
+    return NextResponse.json({ error: generationType === 'chat' ? 'CHAT_MODEL_NOT_AVAILABLE' : 'IMAGE_MODEL_NOT_AVAILABLE' }, { status: 400 });
+  }
+  if (!isModelUserPriced({ ...model, generation_type: generationType })) {
     return NextResponse.json({ error: generationType === 'chat' ? 'CHAT_MODEL_NOT_AVAILABLE' : 'IMAGE_MODEL_NOT_AVAILABLE' }, { status: 400 });
   }
 
