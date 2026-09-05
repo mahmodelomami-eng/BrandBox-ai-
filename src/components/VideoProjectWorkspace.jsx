@@ -62,6 +62,11 @@ function safePricingOptions(model) {
   ));
 }
 
+function videoModelOptionLabel(model) {
+  const badge = model?.pricingReady ? (model.badge || 'متاح') : 'غير مسعّر';
+  return `${model?.name || model?.modelId || 'نموذج فيديو'} — ${badge}`;
+}
+
 export default function VideoProjectWorkspace({ projectId, initialPrompt = '', templateSettings = {} }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const { creditBalance, refreshProfile } = useAuth();
@@ -83,6 +88,15 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
   const [message, setMessage] = useState(initialPrompt ? { type: 'success', text: 'تم تحميل برومبت القالب وإعداداته. سيتم ضبط القيم تلقائيًا حسب النموذج الذي تختاره.' } : null);
 
   const selectedModel = models.find((model) => model.modelId === modelId) || models[0] || null;
+  const recommendedVideoModels = useMemo(
+    () => models.filter((model) => model.featured === true && model.pricingReady === true),
+    [models]
+  );
+  const otherVideoModels = useMemo(
+    () => models.filter((model) => !(model.featured === true && model.pricingReady === true)),
+    [models]
+  );
+  const selectedModelBadge = selectedModel?.pricingReady ? (selectedModel.badge || 'متاح') : 'غير مسعّر';
   const availableDurations = useMemo(
     () => Array.isArray(selectedModel?.supportedDurations) ? selectedModel.supportedDurations.map(Number).filter(Number.isFinite) : [],
     [selectedModel]
@@ -443,14 +457,14 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
         </section>
 
         <aside className="bb-panel order-1 h-fit rounded-3xl border p-5 xl:order-2 xl:sticky xl:top-[150px]">
-          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Video size={22}/></span><div><div className="bb-text-primary text-sm font-black">توليد فيديو AI</div><div className="bb-text-tertiary text-[11px]">{selectedModel?.name || 'اختر نموذج فيديو'}</div></div></div>
+          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Video size={22}/></span><div className="min-w-0"><div className="flex items-center gap-2"><div className="bb-text-primary truncate text-sm font-black">توليد فيديو AI</div>{selectedModel && <span className="bb-accent-soft shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black">{selectedModelBadge}</span>}</div><div className="bb-text-tertiary mt-0.5 truncate text-[11px]">{selectedModel?.name || 'اختر نموذج فيديو'}</div></div></div>
 
           <label htmlFor="video-prompt" className="bb-text-secondary mt-6 block text-xs font-black">وصف الفيديو</label>
           <textarea id="video-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value.slice(0, 1000))} maxLength={1000} placeholder="صف المشهد، الحركة، زاوية الكاميرا والإضاءة..." className="bb-input mt-2 min-h-40 w-full resize-none rounded-2xl border p-4 text-sm leading-7 outline-none" />
           <div className="bb-text-tertiary mt-1 text-left text-[10px]">{prompt.length}/1000</div>
 
           <div className="mt-5 space-y-4">
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select value={modelId} onChange={handleModelChange} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : models.map((model) => <option key={model.modelId} value={model.modelId}>{model.name}</option>)}</select></label>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select aria-label="نماذج الفيديو" value={modelId} onChange={handleModelChange} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : <>{recommendedVideoModels.length > 0 && <optgroup label="موصى به">{recommendedVideoModels.map((model) => <option key={model.modelId} value={model.modelId}>{videoModelOptionLabel(model)}</option>)}</optgroup>}{otherVideoModels.length > 0 && <optgroup label="كل النماذج">{otherVideoModels.map((model) => <option key={model.modelId} value={model.modelId}>{videoModelOptionLabel(model)}</option>)}</optgroup>}</>}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={effectiveRatio} onChange={(event) => setRatio(event.target.value)} disabled={!capabilitiesAvailable || availableRatios.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableRatios.map((value) => <option key={value} value={value}>{ratioLabel(value)}</option>)}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={effectiveDuration} onChange={(event) => setDuration(Number(event.target.value))} disabled={!capabilitiesAvailable || availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">الدقة</span><select value={effectiveResolution} onChange={(event) => setResolution(event.target.value)} disabled={!capabilitiesAvailable || availableResolutions.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableResolutions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
