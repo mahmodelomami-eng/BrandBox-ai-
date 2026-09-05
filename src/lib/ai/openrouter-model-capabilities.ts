@@ -271,14 +271,21 @@ function normalizeImageModel(modelId: string, row: Record<string, unknown>): Ope
 }
 
 function normalizeVideoModel(modelId: string, row: Record<string, unknown>): OpenRouterModelCapabilities {
-  const supportedParameters = stringArray(row.supported_parameters);
+  // Current /videos/models returns dedicated capability fields plus
+  // allowed_passthrough_parameters. Older snapshots may also expose a
+  // supported_parameters array, so combine both without trusting either alone.
+  const supportedParameters = [
+    ...stringArray(row.supported_parameters),
+    ...stringArray(row.allowed_passthrough_parameters),
+  ].filter((value, index, values) => values.indexOf(value) === index);
+  const architecture = metadataObject(row.architecture);
   return {
     modelId,
     tool: 'video',
     source: 'openrouter-live',
     supportedParameters,
-    inputModalities: stringArray(metadataObject(row.architecture).input_modalities),
-    outputModalities: stringArray(metadataObject(row.architecture).output_modalities),
+    inputModalities: stringArray(architecture.input_modalities),
+    outputModalities: stringArray(architecture.output_modalities),
     contextLength: null,
     maxCompletionTokens: null,
     video: {
@@ -286,8 +293,8 @@ function normalizeVideoModel(modelId: string, row: Record<string, unknown>): Ope
       resolutions: stringArray(row.supported_resolutions),
       aspectRatios: stringArray(row.supported_aspect_ratios),
       frameImages: stringArray(row.supported_frame_images),
-      supportsAudio: row.supports_audio === true || row.supports_audio_generation === true || supportedParameters.includes('generate_audio'),
-      supportsSeed: supportedParameters.includes('seed'),
+      supportsAudio: row.generate_audio === true || row.supports_audio === true || row.supports_audio_generation === true,
+      supportsSeed: supportedParameters.includes('seed') || row.seed === true,
     },
   };
 }
