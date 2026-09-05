@@ -26,13 +26,13 @@ const CONFIG = {
     icon: Video,
     promptLabel: 'وصف الفيديو',
     placeholder: 'صف المشهد، الحركة، زاوية الكاميرا، الإضاءة والتسلسل الزمني...',
-    model: 'Runway Gen-3 Alpha',
-    notice: 'مزود الفيديو ما زال في مرحلة التجهيز. يمكنك حفظ وصف الفيديو وإعداداته داخل المشروع الآن، وسيكون جاهزًا للتوليد عند تفعيل المزود.',
+    model: 'Video Draft',
+    notice: 'استخدم استوديو الفيديو المباشر للتوليد. هذه المساحة القديمة تبقى للمسودات المحفوظة فقط.',
     matchesProject: (type) => /فيديو|video/i.test(type || ''),
     settings: [
-      { key: 'ratio', label: 'النسبة', values: ['16:9', '9:16', '1:1'] },
-      { key: 'duration', label: 'المدة', values: ['5 ثوانٍ', '10 ثوانٍ', '15 ثانية'] },
-      { key: 'quality', label: 'الجودة', values: ['720p', '1080p'] },
+      { key: 'ratio', label: 'النسبة المرجعية للمسودة', values: ['16:9', '9:16', '1:1'] },
+      { key: 'duration', label: 'المدة المرجعية للمسودة', values: ['5 ثوانٍ', '10 ثوانٍ', '15 ثانية'] },
+      { key: 'quality', label: 'الجودة المرجعية للمسودة', values: ['720p', '1080p'] },
     ],
   },
   audio: {
@@ -42,13 +42,11 @@ const CONFIG = {
     icon: Mic2,
     promptLabel: 'النص أو وصف الصوت',
     placeholder: 'اكتب النص المراد تحويله إلى صوت أو صف النبرة، الأسلوب واللغة...',
-    model: 'Brand Box Voice',
-    notice: 'مزود الصوت المباشر لم يتم تفعيله بعد. يتم حفظ النص وإعدادات الصوت داخل المشروع حتى لا تضيع تجهيزاتك.',
+    model: 'OpenRouter TTS Draft',
+    notice: 'التوليد الصوتي المباشر لم يتم تفعيله بعد. إذا وُجد موديل TTS مفعّل في الكتالوج فستظهر أصواته وصيغه المدعومة هنا للمسودة فقط، دون تشغيل المزود أو خصم نقاط.',
     matchesProject: (type) => /صوت|audio/i.test(type || ''),
     settings: [
-      { key: 'voice', label: 'نوع الصوت', values: ['محايد', 'إعلاني', 'وثائقي', 'هادئ'] },
-      { key: 'language', label: 'اللغة', values: ['العربية', 'الإنجليزية'] },
-      { key: 'speed', label: 'السرعة', values: ['0.9x', '1.0x', '1.1x'] },
+      { key: 'language', label: 'لغة المحتوى (إعداد للمسودة)', values: ['العربية', 'الإنجليزية'] },
     ],
   },
 };
@@ -67,6 +65,19 @@ function friendlyLoadError(error, fallback) {
   return fallback;
 }
 
+function normalizeAudioModel(model) {
+  return {
+    id: model.modelId,
+    name: model.name || model.modelId,
+    vendor: model.vendor || 'OpenRouter',
+    minimumCredits: Number(model.minimumCredits || 0),
+    capabilitiesAvailable: model.capabilitiesAvailable === true,
+    voices: Array.isArray(model.voices) ? model.voices.filter(Boolean) : [],
+    responseFormats: Array.isArray(model.responseFormats) ? model.responseFormats.filter(Boolean) : [],
+    supportsSpeed: model.supportsSpeed === true,
+  };
+}
+
 export default function MediaProjectWorkspace({ tool = 'video', projectId, initialPrompt = '', templateSettings = {} }) {
   const config = CONFIG[tool] || CONFIG.video;
   const Icon = config.icon;
@@ -76,6 +87,11 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
   const [itemsOwnerId, setItemsOwnerId] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
   const [settings, setSettings] = useState(() => resolveTemplateSettings(config, templateSettings));
+  const [audioModels, setAudioModels] = useState([]);
+  const [audioModelsAvailable, setAudioModelsAvailable] = useState(true);
+  const [selectedAudioModelId, setSelectedAudioModelId] = useState('');
+  const [audioVoice, setAudioVoice] = useState('');
+  const [audioFormat, setAudioFormat] = useState('');
   const [loading, setLoading] = useState(true);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -86,11 +102,50 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
     : null);
 
   const visibleItems = itemsOwnerId === projectId ? items : [];
+  const selectedAudioModel = audioModels.find((model) => model.id === selectedAudioModelId) || audioModels[0] || null;
+
+  useEffect(() => {
+    if (tool !== 'audio' || !selectedAudioModel) return;
+    if (selectedAudioModel.voices.length && !selectedAudioModel.voices.includes(audioVoice)) {
+      setAudioVoice(selectedAudioModel.voices[0]);
+    }
+    if (!selectedAudioModel.voices.length && audioVoice) setAudioVoice('');
+    if (selectedAudioModel.responseFormats.length && !selectedAudioModel.responseFormats.includes(audioFormat)) {
+      setAudioFormat(selectedAudioModel.responseFormats[0]);
+    }
+    if (!selectedAudioModel.responseFormats.length && audioFormat) setAudioFormat('');
+  }, [audioFormat, audioVoice, selectedAudioModel, tool]);
 
   const getToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token || null;
   }, [supabase]);
+
+  const loadAudioModels = useCallback(async () => {
+    if (tool !== 'audio') return;
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('SESSION_REQUIRED');
+      const response = await fetch('/api/v1/audio-models', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'AUDIO_MODEL_CATALOG_UNAVAILABLE');
+      const nextModels = (Array.isArray(payload.models) ? payload.models : [])
+        .map(normalizeAudioModel)
+        .filter((model) => model.id);
+      setAudioModels(nextModels);
+      setAudioModelsAvailable(true);
+      setSelectedAudioModelId((current) => nextModels.some((model) => model.id === current) ? current : (nextModels[0]?.id || ''));
+    } catch {
+      setAudioModels([]);
+      setAudioModelsAvailable(false);
+      setSelectedAudioModelId('');
+      setAudioVoice('');
+      setAudioFormat('');
+    }
+  }, [getToken, tool]);
 
   const loadItems = useCallback(async (targetProjectId = projectId) => {
     if (!targetProjectId) return false;
@@ -130,7 +185,7 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
       const found = projects.find((item) => item.id === projectId && config.matchesProject(item.type)) || null;
       if (!found) throw new Error(`المشروع غير موجود ضمن ${config.projectLabel} أو لا تملك صلاحية الوصول إليه.`);
       setProject(found);
-      await loadItems(found.id);
+      await Promise.all([loadItems(found.id), loadAudioModels()]);
     } catch (error) {
       setProject(null);
       setItems([]);
@@ -139,7 +194,7 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
     } finally {
       setLoading(false);
     }
-  }, [config, loadItems, projectId]);
+  }, [config, loadAudioModels, loadItems, projectId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -151,10 +206,27 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
   function reuseDraft(item) {
     setPrompt(String(item.prompt || '').slice(0, 4000));
     setSettings(resolveTemplateSettings(config, item.settings || {}));
-    setMessage({ type: 'info', text: 'تم تحميل المسودة في المحرر كنقطة بداية. أي حفظ جديد سيُنشئ نسخة مسودة جديدة.' });
+    if (tool === 'audio') {
+      const savedModelId = typeof item.settings?.modelId === 'string' ? item.settings.modelId : '';
+      if (audioModels.some((model) => model.id === savedModelId)) setSelectedAudioModelId(savedModelId);
+      setAudioVoice(typeof item.settings?.voice === 'string' ? item.settings.voice : '');
+      setAudioFormat(typeof item.settings?.responseFormat === 'string' ? item.settings.responseFormat : '');
+    }
+    setMessage({ type: 'info', text: 'تم تحميل المسودة في المحرر كنقطة بداية. سيتم تصحيح أي إعداد مزود قديم إلى قدرات الموديل الحالي.' });
     if (typeof document !== 'undefined') {
       document.getElementById('media-draft-composer')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  function draftSettings() {
+    if (tool !== 'audio') return settings;
+    return {
+      ...settings,
+      ...(selectedAudioModel?.capabilitiesAvailable ? { modelId: selectedAudioModel.id } : {}),
+      ...(selectedAudioModel?.capabilitiesAvailable && audioVoice ? { voice: audioVoice } : {}),
+      ...(selectedAudioModel?.capabilitiesAvailable && audioFormat ? { responseFormat: audioFormat } : {}),
+      ...(selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.supportsSpeed ? { speed: 1 } : {}),
+    };
   }
 
   async function saveDraft() {
@@ -167,7 +239,7 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
       const response = await fetch('/api/v1/project-tool-items', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, tool, prompt: prompt.trim(), settings, status: 'draft', itemType: 'draft' }),
+        body: JSON.stringify({ projectId, tool, prompt: prompt.trim(), settings: draftSettings(), status: 'draft', itemType: 'draft' }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.item) {
@@ -272,7 +344,7 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
         </section>
 
         <aside id="media-draft-composer" className="bb-panel order-1 h-fit scroll-mt-28 rounded-3xl border p-5 xl:order-2 xl:sticky xl:top-[150px]">
-          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Icon size={22} /></span><div><div className="bb-text-primary text-sm font-black">أدوات {config.label}</div><div className="bb-text-tertiary text-[11px]">{config.model}</div></div></div>
+          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Icon size={22} /></span><div><div className="bb-text-primary text-sm font-black">أدوات {config.label}</div><div className="bb-text-tertiary text-[11px]">{tool === 'audio' && selectedAudioModel ? `${selectedAudioModel.name} · ${selectedAudioModel.vendor}` : config.model}</div></div></div>
           <div className="mt-6 flex items-center justify-between gap-3"><label htmlFor="media-draft-prompt" className="bb-text-secondary text-xs font-black">{config.promptLabel}</label><span className="bb-text-tertiary text-[10px]">{prompt.length} / 4000</span></div>
           <textarea id="media-draft-prompt" maxLength={4000} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={config.placeholder} className="bb-input mt-2 min-h-44 w-full resize-none rounded-2xl border p-4 text-sm leading-7 outline-none" />
 
@@ -288,6 +360,17 @@ export default function MediaProjectWorkspace({ tool = 'video', projectId, initi
                 </div>
               </label>
             ))}
+
+            {tool === 'audio' && <div className="bb-surface-1 bb-border rounded-2xl border p-4">
+              <div className="bb-text-primary text-xs font-black">إعدادات OpenRouter TTS</div>
+              {!audioModelsAvailable ? <p className="bb-text-warning mt-2 text-[10px] leading-5">تعذر قراءة كتالوج الصوت. لم نعرض أصواتًا أو صيغًا بالتخمين.</p> : audioModels.length === 0 ? <p className="bb-text-tertiary mt-2 text-[10px] leading-5">لا يوجد موديل TTS مفعّل ومرئي حاليًا، لذلك لا توجد إعدادات مزود لعرضها.</p> : <div className="mt-3 space-y-3">
+                <label className="block"><span className="bb-text-secondary mb-1.5 block text-[10px] font-black">الموديل</span><select value={selectedAudioModelId} onChange={(event) => setSelectedAudioModelId(event.target.value)} className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs font-bold">{audioModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</select></label>
+                {selectedAudioModel && !selectedAudioModel.capabilitiesAvailable && <p className="bb-text-warning text-[10px] leading-5">الموديل موجود لكن قدراته غير مؤكدة؛ لن نعرض Voice أو Format.</p>}
+                {selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.voices.length > 0 && <label className="block"><span className="bb-text-secondary mb-1.5 block text-[10px] font-black">Voice</span><select value={audioVoice} onChange={(event) => setAudioVoice(event.target.value)} className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs font-bold">{selectedAudioModel.voices.map((voice) => <option key={voice} value={voice}>{voice}</option>)}</select></label>}
+                {selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.responseFormats.length > 0 && <label className="block"><span className="bb-text-secondary mb-1.5 block text-[10px] font-black">Output format</span><select value={audioFormat} onChange={(event) => setAudioFormat(event.target.value)} className="bb-input w-full rounded-xl border px-3 py-2.5 text-xs font-bold">{selectedAudioModel.responseFormats.map((format) => <option key={format} value={format}>{format}</option>)}</select></label>}
+                {selectedAudioModel?.capabilitiesAvailable && selectedAudioModel.supportsSpeed && <div className="bb-text-tertiary rounded-lg border border-[var(--bb-border)] px-3 py-2 text-[10px]">Speed مدعوم بواسطة هذا الموديل؛ إلى أن يعلن الكتالوج Range دقيقًا نحفظ القيمة الآمنة 1.0 فقط ولا نعرض Range تخمينيًا.</div>}
+              </div>}
+            </div>}
           </div>
 
           {message && <div className={`mt-4 rounded-xl border px-3 py-2 text-xs leading-5 ${messageClass}`} role={message.type === 'error' ? 'alert' : 'status'}>{message.text}</div>}
