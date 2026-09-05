@@ -3,6 +3,7 @@ import { createPrivilegedSupabaseClient, createServerSupabaseClient } from '@/li
 import { AdminRole, checkPermission } from '@/lib/auth/rbac-engine';
 import { isKnownRole } from '@/lib/admin/admin-user-policy';
 import { isActiveProfileStatus } from '@/lib/auth/user-status';
+import { hasVideoPricingMatrix, minimumVideoCreditsPerSecond } from '@/lib/ai/video-pricing';
 
 type Actor = { userId: string; email: string; role: AdminRole };
 
@@ -45,6 +46,11 @@ function brandboxCreditsPerSecond(metadata: unknown): number {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return 0;
   const value = Number((metadata as Record<string, unknown>).brandbox_credits_per_second || 0);
   return Number.isInteger(value) && value >= 1 ? value : 0;
+}
+
+function videoPricingConfigured(provider: string, metadata: unknown): boolean {
+  if (provider === 'openrouter') return minimumVideoCreditsPerSecond(metadata) !== null;
+  return brandboxCreditsPerSecond(metadata) >= 1;
 }
 
 export async function GET(request: NextRequest) {
@@ -116,7 +122,7 @@ export async function PATCH(request: NextRequest) {
       if (!providerConfigured(existingModel.provider)) {
         return NextResponse.json({ error: 'VIDEO_PROVIDER_SECRET_REQUIRED' }, { status: 409 });
       }
-      if (brandboxCreditsPerSecond(existingModel.metadata) < 1) {
+      if (!videoPricingConfigured(existingModel.provider, existingModel.metadata)) {
         return NextResponse.json({ error: 'VIDEO_PRICING_REQUIRED' }, { status: 409 });
       }
     }
@@ -241,6 +247,9 @@ export async function PATCH(request: NextRequest) {
       }
       if (!['runway', 'openrouter'].includes(currentModel.data.provider) || currentModel.data.generation_type !== 'video') {
         return NextResponse.json({ error: 'VIDEO_PRICING_FIELD_NOT_APPLICABLE' }, { status: 400 });
+      }
+      if (currentModel.data.provider === 'openrouter' && hasVideoPricingMatrix(currentModel.data.metadata)) {
+        return NextResponse.json({ error: 'VIDEO_PRICING_MATRIX_MANAGED' }, { status: 409 });
       }
       const metadata = currentModel.data.metadata && typeof currentModel.data.metadata === 'object' && !Array.isArray(currentModel.data.metadata)
         ? currentModel.data.metadata as Record<string, unknown>
