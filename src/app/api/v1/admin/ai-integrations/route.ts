@@ -106,8 +106,16 @@ export async function PATCH(request: NextRequest) {
       .maybeSingle();
     if (existingError || !existingModel) return NextResponse.json({ error: 'MODEL_NOT_FOUND' }, { status: 404 });
 
-    if (body.isEnabled === true && existingModel.provider === 'runway' && existingModel.generation_type === 'video') {
-      if (!hasRunwaySecret()) return NextResponse.json({ error: 'RUNWAY_SECRET_REQUIRED' }, { status: 409 });
+    if (body.isEnabled === true && existingModel.generation_type === 'video') {
+      if (existingModel.provider === 'runway' && !hasRunwaySecret()) {
+        return NextResponse.json({ error: 'RUNWAY_SECRET_REQUIRED' }, { status: 409 });
+      }
+      if (existingModel.provider === 'openrouter' && !hasOpenRouterSecret()) {
+        return NextResponse.json({ error: 'OPENROUTER_SECRET_REQUIRED' }, { status: 409 });
+      }
+      if (!providerConfigured(existingModel.provider)) {
+        return NextResponse.json({ error: 'VIDEO_PROVIDER_SECRET_REQUIRED' }, { status: 409 });
+      }
       if (brandboxCreditsPerSecond(existingModel.metadata) < 1) {
         return NextResponse.json({ error: 'VIDEO_PRICING_REQUIRED' }, { status: 409 });
       }
@@ -231,7 +239,7 @@ export async function PATCH(request: NextRequest) {
       if (!Number.isInteger(value) || value < 0 || value > 1000000) {
         return NextResponse.json({ error: 'INVALID_BRANDBOX_CREDITS_PER_SECOND' }, { status: 400 });
       }
-      if (currentModel.data.provider !== 'runway' || currentModel.data.generation_type !== 'video') {
+      if (!['runway', 'openrouter'].includes(currentModel.data.provider) || currentModel.data.generation_type !== 'video') {
         return NextResponse.json({ error: 'VIDEO_PRICING_FIELD_NOT_APPLICABLE' }, { status: 400 });
       }
       const metadata = currentModel.data.metadata && typeof currentModel.data.metadata === 'object' && !Array.isArray(currentModel.data.metadata)
