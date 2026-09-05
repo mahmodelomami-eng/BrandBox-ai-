@@ -18,20 +18,29 @@ import { createBrowserSupabaseClient } from '../lib/supabase/client';
 import { useAuth } from '../context/AuthContext';
 import ProjectToolNav from './ProjectToolNav';
 
-const RATIOS = [
-  { value: '1280:720', label: '16:9 أفقي' },
-  { value: '720:1280', label: '9:16 عمودي' },
-];
-const DURATIONS = Array.from({ length: 9 }, (_, index) => index + 2);
-
-function initialRatio(value) {
-  if (value === '9:16' || value === '720:1280') return '720:1280';
-  return '1280:720';
+function ratioLabel(value) {
+  if (value === '16:9' || value === '1280:720') return '16:9 أفقي';
+  if (value === '9:16' || value === '720:1280') return '9:16 عمودي';
+  if (value === '1:1') return '1:1 مربع';
+  return value;
 }
 
-function initialDuration(value) {
+function ratioAlias(value, allowed = []) {
+  if (allowed.includes(value)) return value;
+  if ((value === '16:9' || value === '1280:720')) {
+    if (allowed.includes('16:9')) return '16:9';
+    if (allowed.includes('1280:720')) return '1280:720';
+  }
+  if ((value === '9:16' || value === '720:1280')) {
+    if (allowed.includes('9:16')) return '9:16';
+    if (allowed.includes('720:1280')) return '720:1280';
+  }
+  return allowed[0] || '';
+}
+
+function parseDuration(value) {
   const parsed = Number.parseInt(String(value || '').replace(/[^0-9]/g, ''), 10);
-  return Number.isInteger(parsed) && parsed >= 2 && parsed <= 10 ? parsed : 5;
+  return Number.isInteger(parsed) ? parsed : 0;
 }
 
 function statusMeta(status) {
@@ -51,43 +60,71 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
   const [drafts, setDrafts] = useState([]);
   const [prompt, setPrompt] = useState(initialPrompt.slice(0, 1000));
   const [modelId, setModelId] = useState('');
-  const [ratio, setRatio] = useState(() => initialRatio(templateSettings?.ratio));
-  const [duration, setDuration] = useState(() => initialDuration(templateSettings?.duration));
+  const [ratio, setRatio] = useState(String(templateSettings?.ratio || ''));
+  const [duration, setDuration] = useState(() => parseDuration(templateSettings?.duration));
+  const [resolution, setResolution] = useState(String(templateSettings?.quality || ''));
+  const [generateAudio, setGenerateAudio] = useState(false);
   const [loading, setLoading] = useState(true);
   const [workspaceLoadFailed, setWorkspaceLoadFailed] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [refreshingId, setRefreshingId] = useState('');
-  const [message, setMessage] = useState(initialPrompt ? { type: 'success', text: 'تم تحميل برومبت القالب وإعداداته. يمكنك تعديله قبل التوليد.' } : null);
+  const [message, setMessage] = useState(initialPrompt ? { type: 'success', text: 'تم تحميل برومبت القالب وإعداداته. سيتم ضبط القيم تلقائيًا حسب النموذج الذي تختاره.' } : null);
 
   const selectedModel = models.find((model) => model.modelId === modelId) || models[0] || null;
-  const availableDurations = useMemo(() => {
-    const minimum = Number(selectedModel?.minimumDuration ?? 2);
-    const maximum = Number(selectedModel?.maximumDuration ?? 10);
-    return DURATIONS.filter((value) => value >= minimum && value <= maximum);
-  }, [selectedModel]);
+  const availableDurations = useMemo(
+    () => Array.isArray(selectedModel?.supportedDurations) ? selectedModel.supportedDurations.map(Number).filter(Number.isFinite) : [],
+    [selectedModel]
+  );
+  const availableRatios = useMemo(
+    () => Array.isArray(selectedModel?.supportedRatios) ? selectedModel.supportedRatios.filter(Boolean) : [],
+    [selectedModel]
+  );
+  const availableResolutions = useMemo(
+    () => Array.isArray(selectedModel?.supportedResolutions) ? selectedModel.supportedResolutions.filter(Boolean) : [],
+    [selectedModel]
+  );
   const selectedProviderConfigured = Boolean(selectedModel?.configured);
-  const priceEstimate = selectedModel?.creditsPerSecond
+  const capabilitiesAvailable = Boolean(selectedModel?.capabilitiesAvailable);
+  const priceEstimate = selectedModel?.creditsPerSecond && duration
     ? Math.max(Number(selectedModel.minimumCredits || 0), selectedModel.creditsPerSecond * duration)
     : null;
   const generationReady = Boolean(
     selectedProviderConfigured
+    && capabilitiesAvailable
     && selectedModel?.pricingReady
     && selectedModel?.creditsPerSecond
     && availableDurations.includes(duration)
+    && availableRatios.includes(ratio)
+    && availableResolutions.includes(resolution)
   );
   const insufficientCredits = Boolean(priceEstimate && creditBalance !== null && creditBalance !== undefined && priceEstimate > creditBalance);
+
+  useEffect(() => {
+    if (!selectedModel) return;
+    const nextRatio = ratioAlias(ratio, availableRatios);
+    if (nextRatio !== ratio) setRatio(nextRatio);
+    if (availableDurations.length > 0 && !availableDurations.includes(duration)) {
+      setDuration(availableDurations[0]);
+    }
+    if (availableResolutions.length > 0 && !availableResolutions.includes(resolution)) {
+      setResolution(availableResolutions[0]);
+    }
+    if (!selectedModel.supportsAudio && generateAudio) setGenerateAudio(false);
+  }, [availableDurations, availableRatios, availableResolutions, duration, generateAudio, ratio, resolution, selectedModel]);
 
   function handleModelChange(event) {
     const nextModelId = event.target.value;
     const nextModel = models.find((model) => model.modelId === nextModelId) || null;
-    const minimum = Number(nextModel?.minimumDuration ?? 2);
-    const maximum = Number(nextModel?.maximumDuration ?? 10);
-    const nextAvailableDurations = DURATIONS.filter((value) => value >= minimum && value <= maximum);
     setModelId(nextModelId);
-    if (nextAvailableDurations.length > 0 && !nextAvailableDurations.includes(duration)) {
-      setDuration(nextAvailableDurations[0]);
-    }
+    if (!nextModel) return;
+    const nextDurations = Array.isArray(nextModel.supportedDurations) ? nextModel.supportedDurations.map(Number).filter(Number.isFinite) : [];
+    const nextRatios = Array.isArray(nextModel.supportedRatios) ? nextModel.supportedRatios.filter(Boolean) : [];
+    const nextResolutions = Array.isArray(nextModel.supportedResolutions) ? nextModel.supportedResolutions.filter(Boolean) : [];
+    setDuration((current) => nextDurations.includes(current) ? current : (nextDurations[0] || 0));
+    setRatio((current) => ratioAlias(current, nextRatios));
+    setResolution((current) => nextResolutions.includes(current) ? current : (nextResolutions[0] || ''));
+    if (!nextModel.supportsAudio) setGenerateAudio(false);
   }
 
   const getToken = useCallback(async () => {
@@ -216,25 +253,30 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           modelId: selectedModel.modelId,
           prompt: prompt.trim(),
           requestId,
-          settings: { ratio, duration, quality: 'standard' },
+          settings: { ratio, duration, resolution, generateAudio, quality: 'standard' },
         }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.generationId) throw new Error(result.errorMessage || result.error || 'تعذر بدء توليد الفيديو.');
+      const finalSettings = result.normalizedSettings || { ratio, duration, resolution, generateAudio, quality: 'standard' };
+      setRatio(finalSettings.ratio || ratio);
+      setDuration(Number(finalSettings.duration || duration));
+      setResolution(finalSettings.resolution || resolution);
+      setGenerateAudio(finalSettings.generateAudio === true);
       setGenerations((current) => [{
         id: result.generationId,
         project_id: projectId,
         provider: selectedModel.provider,
         model: selectedModel.modelId,
         prompt: prompt.trim(),
-        settings: { ratio, duration, quality: 'standard' },
+        settings: finalSettings,
         status: result.status,
         credits_reserved: result.creditsReserved,
         credits_consumed: result.creditsConsumed,
         created_at: new Date().toISOString(),
         resultUrl: null,
       }, ...current.filter((item) => item.id !== result.generationId)]);
-      setMessage({ type: 'success', text: 'تم إرسال الفيديو للتوليد. ستتحدث حالته تلقائيًا كل عدة ثوانٍ.' });
+      setMessage({ type: 'success', text: 'تم إرسال الفيديو بالإعدادات المدعومة فعليًا من النموذج. ستتحدث حالته تلقائيًا.' });
       if (refreshProfile) void refreshProfile();
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'تعذر بدء توليد الفيديو.' });
@@ -257,7 +299,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           projectId,
           tool: 'video',
           prompt: prompt.trim(),
-          settings: { ratio: ratio === '1280:720' ? '16:9' : '9:16', duration: `${duration} ثوانٍ`, quality: selectedModel?.quality || '720p' },
+          settings: { ratio, duration: `${duration} ثوانٍ`, quality: resolution, generateAudio, modelId },
           status: 'draft',
           itemType: 'draft',
         }),
@@ -275,10 +317,12 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
 
   function retryGeneration(item) {
     setPrompt(String(item.prompt || '').slice(0, 1000));
-    const itemRatio = item.settings?.ratio;
-    setRatio(itemRatio === '720:1280' || itemRatio === '9:16' ? '720:1280' : '1280:720');
-    setDuration(initialDuration(item.settings?.duration));
-    setMessage({ type: 'info', text: 'تم تحميل إعدادات المحاولة السابقة. راجعها ثم اضغط توليد الفيديو لبدء مهمة جديدة.' });
+    if (models.some((model) => model.modelId === item.model)) setModelId(item.model);
+    setRatio(String(item.settings?.ratio || item.settings?.aspectRatio || ratio));
+    setDuration(parseDuration(item.settings?.duration));
+    setResolution(String(item.settings?.resolution || item.settings?.quality || resolution));
+    setGenerateAudio(item.settings?.generateAudio === true);
+    setMessage({ type: 'info', text: 'تم تحميل إعدادات المحاولة السابقة وسيتم تصحيح أي قيمة لم تعد مدعومة بواسطة النموذج المحدد.' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -326,7 +370,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           <div className="space-y-5 p-4 sm:p-5">
             {!generationReady && (
               <div className="bb-warning-surface rounded-2xl border p-4 text-xs leading-6">
-                <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير متاح بعد</div><p className="bb-text-secondary mt-1">{models.length === 0 ? 'لا يوجد نموذج فيديو مفعّل ومرئي من لوحة الإدارة.' : !selectedProviderConfigured ? 'مفتاح مزود الفيديو المحدد غير مهيأ على الخادم.' : !selectedModel?.pricingReady ? 'النموذج موجود لكن سعر Brand Box لكل ثانية لم يُضبط بعد.' : 'اختر مدة مدعومة بواسطة النموذج.'} يمكنك الاستمرار في حفظ المسودات دون أي تكلفة.</p></div></div>
+                <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير متاح بهذه الإعدادات</div><p className="bb-text-secondary mt-1">{models.length === 0 ? 'لا يوجد نموذج فيديو مفعّل ومرئي من لوحة الإدارة.' : !selectedProviderConfigured ? 'مفتاح مزود الفيديو المحدد غير مهيأ على الخادم.' : !selectedModel?.pricingReady ? 'النموذج موجود لكن سعر Brand Box لكل ثانية لم يُضبط بعد.' : !capabilitiesAvailable ? 'تعذر التحقق من قدرات النموذج، لذلك لن نعرض أو نرسل إعدادات بالتخمين.' : 'اختر قيمة مدعومة من القوائم المتاحة.'} يمكنك الاستمرار في حفظ المسودات دون أي تكلفة.</p></div></div>
               </div>
             )}
 
@@ -345,7 +389,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
                         <div className="p-4">
                           <div className="flex flex-wrap items-center justify-between gap-2"><span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${status.className}`}>{status.label}</span><span className="bb-text-tertiary flex items-center gap-1 text-[10px]"><Clock3 size={12}/>{item.created_at ? new Date(item.created_at).toLocaleString('ar-LY') : ''}</span></div>
                           <p className="bb-text-secondary mt-3 line-clamp-3 text-sm leading-7">{item.prompt}</p>
-                          <div className="mt-3 flex flex-wrap gap-1.5"><span className="bb-button-secondary rounded-lg border px-2 py-1 text-[10px]">{item.settings?.ratio || '—'}</span><span className="bb-button-secondary rounded-lg border px-2 py-1 text-[10px]">{item.settings?.duration || '—'} ث</span><span className="bb-button-secondary rounded-lg border px-2 py-1 text-[10px]">حجز {item.credits_reserved || 0} نقطة</span></div>
+                          <div className="mt-3 flex flex-wrap gap-1.5"><span className="bb-button-secondary rounded-lg border px-2 py-1 text-[10px]">{item.settings?.ratio || '—'}</span><span className="bb-button-secondary rounded-lg border px-2 py-1 text-[10px]">{item.settings?.duration || '—'} ث</span>{item.settings?.resolution && <span className="bb-button-secondary rounded-lg border px-2 py-1 text-[10px]">{item.settings.resolution}</span>}<span className="bb-button-secondary rounded-lg border px-2 py-1 text-[10px]">حجز {item.credits_reserved || 0} نقطة</span></div>
                           <div className="mt-4 flex flex-wrap gap-2">
                             {active && <button onClick={() => void refreshGeneration(item.id)} disabled={refreshingId === item.id} className="bb-button-secondary flex min-h-10 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black text-[var(--bb-info)] disabled:opacity-50">{refreshingId === item.id ? <Loader2 size={14} className="animate-spin"/> : <RefreshCw size={14}/>} تحديث الحالة</button>}
                             {(item.status === 'failed' || item.status === 'cancelled') && <button onClick={() => retryGeneration(item)} className="bb-warning-surface flex min-h-10 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black"><RotateCcw size={14}/> إعادة المحاولة</button>}
@@ -375,12 +419,14 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
 
           <div className="mt-5 space-y-4">
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select value={modelId} onChange={handleModelChange} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : models.map((model) => <option key={model.modelId} value={model.modelId}>{model.name}</option>)}</select></label>
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={ratio} onChange={(event) => setRatio(event.target.value)} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none">{RATIOS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={duration} onChange={(event) => setDuration(Number(event.target.value))} disabled={availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
-            <div className="bb-input rounded-xl border px-4 py-3"><div className="bb-text-tertiary text-[10px] font-bold">الجودة</div><div className="bb-text-primary mt-1 text-sm font-black">{selectedModel?.quality || '—'} · Standard</div></div>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={ratio} onChange={(event) => setRatio(event.target.value)} disabled={!capabilitiesAvailable || availableRatios.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableRatios.map((value) => <option key={value} value={value}>{ratioLabel(value)}</option>)}</select></label>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={duration} onChange={(event) => setDuration(Number(event.target.value))} disabled={!capabilitiesAvailable || availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">الدقة</span><select value={resolution} onChange={(event) => setResolution(event.target.value)} disabled={!capabilitiesAvailable || availableResolutions.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableResolutions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            {selectedModel?.supportsAudio && <label className="bb-input flex items-center justify-between rounded-xl border px-4 py-3"><span><span className="bb-text-primary block text-xs font-black">توليد الصوت مع الفيديو</span><span className="bb-text-tertiary mt-1 block text-[10px]">هذا الخيار يظهر فقط لأن النموذج المحدد يعلنه كقدرة مدعومة.</span></span><input type="checkbox" checked={generateAudio} onChange={(event) => setGenerateAudio(event.target.checked)} className="h-4 w-4" /></label>}
           </div>
 
           <div className="bb-surface-1 bb-border bb-text-secondary mt-5 rounded-2xl border p-3 text-xs leading-6">
+            {capabilitiesAvailable ? <><span>قدرات النموذج:</span> <strong className="bb-text-primary">{availableResolutions.join(' / ')} · {availableDurations.join(', ')} ث</strong><br/></> : <><span className="bb-text-danger font-black">تعذر تأكيد قدرات النموذج، لذلك تم تعطيل التوليد.</span><br/></>}
             {selectedModel?.creditsPerSecond ? <><span>التكلفة المؤكدة من الخادم:</span> <strong className="bb-text-primary">{selectedModel.creditsPerSecond} نقطة/ث</strong><br/><span>إجمالي هذه المهمة:</span> <strong className="bb-text-accent">{priceEstimate} نقطة</strong></> : 'لن يتم حجز أي نقاط حتى يضبط المسؤول سعر Brand Box لكل ثانية.'}
             {creditBalance !== null && creditBalance !== undefined && <><br/><span>رصيدك الحالي:</span> <strong className="bb-text-primary">{creditBalance}</strong></>}
           </div>
