@@ -7,6 +7,8 @@ const home = readFileSync(join(root, 'src/components/HomeExperience.jsx'), 'utf8
 const about = readFileSync(join(root, 'src/app/about/page.jsx'), 'utf8');
 const contact = readFileSync(join(root, 'src/app/contact/page.jsx'), 'utf8');
 const dashboardPreview = readFileSync(join(root, 'src/components/MarketingDashboardPreview.jsx'), 'utf8');
+const rootLayout = readFileSync(join(root, 'src/app/layout.jsx'), 'utf8');
+const robots = readFileSync(join(root, 'src/app/robots.js'), 'utf8');
 
 for (const [name, source] of [
   ['Home', home],
@@ -51,4 +53,13 @@ assert.ok(contact.includes('user_id: userId'));
 assert.ok(contact.includes('إرسال الطلب'));
 assert.ok(contact.includes("href=\"/auth?next=%2Fcontact\""));
 
-console.log('Approved marketing light-theme implementation guard passed.');
+// Launch SEO policy: public metadata has an explicit canonical host base and crawlers are kept out of private surfaces.
+assert.ok(rootLayout.includes("const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.brandbox-ai.com'"));
+assert.ok(rootLayout.includes('metadataBase: new URL(siteUrl)'));
+assert.ok(rootLayout.includes("locale: 'ar_LY'"));
+assert.ok(robots.includes("host: 'https://www.brandbox-ai.com'"));
+for (const privatePath of ['/admin', '/api', '/auth', '/dashboard', '/projects', '/brand-kit', '/support']) {
+  assert.ok(robots.includes(`'${privatePath}'`), `robots policy must disallow ${privatePath}`);
+}
+
+console.log('Approved marketing light-theme and launch metadata guard passed.');
