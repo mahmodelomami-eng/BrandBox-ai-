@@ -37,6 +37,7 @@ const adminSupportRequests = source('src/app/api/v1/admin/support-requests/route
 const adminCreditPackage = source('src/app/api/v1/admin/credit-packages/[id]/route.ts');
 const adminStoreFinance = source('src/app/api/v1/admin/store/finance/route.ts');
 const adminStoreInventory = source('src/app/api/v1/admin/store/inventory/route.ts');
+const mobileBootstrap = source('src/app/api/v1/mobile/bootstrap/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -165,6 +166,15 @@ assertContract('admin Store inventory requires an active profile before code-sto
   adminStoreInventory.includes("from '@/lib/auth/user-status'") &&
   adminStoreInventory.includes('!isActiveProfileStatus(profile.status)') &&
   !adminStoreInventory.includes("profile.status === 'suspended'"),
+);
+
+assertContract('mobile bootstrap remains owner-scoped and fails closed on subscription lookup errors',
+  mobileBootstrap.includes('authenticateActiveUser(request)') &&
+  mobileBootstrap.includes(".eq('owner_id', auth.user.id)") &&
+  mobileBootstrap.includes(".eq('user_id', auth.user.id)") &&
+  mobileBootstrap.includes('{ data: subscription, error: subscriptionError }') &&
+  mobileBootstrap.includes("if (subscriptionError) return NextResponse.json({ error: 'SUBSCRIPTION_UNAVAILABLE' }, { status: 503 });") &&
+  !mobileBootstrap.includes('subscriptionError.message'),
 );
 
 const protectedApiRoutes = [
