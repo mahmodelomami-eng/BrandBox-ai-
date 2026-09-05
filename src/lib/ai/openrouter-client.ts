@@ -8,6 +8,7 @@ const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
 
 export const OPENROUTER_IMAGE_MODELS = [
   'openai/gpt-image-2',
+  'bytedance-seed/seedream-4.5',
   'bytedance-seed/seedream-5-0-lite',
   'google/gemini-3.1-flash-lite-image',
 ] as const;

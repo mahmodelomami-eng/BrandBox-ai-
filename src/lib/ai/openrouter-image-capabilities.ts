@@ -11,6 +11,11 @@ const IMAGE_CAPABILITIES: Record<string, OpenRouterImageCapabilities> = {
     supportedResolutions: [],
     maxCount: 10,
   },
+  'bytedance-seed/seedream-4.5': {
+    supportedResolutions: ['1K', '2K', '4K'],
+    defaultResolution: '2K',
+    maxCount: 4,
+  },
   'bytedance-seed/seedream-5-0-lite': {
     supportedResolutions: ['2K', '4K'],
     defaultResolution: '2K',
