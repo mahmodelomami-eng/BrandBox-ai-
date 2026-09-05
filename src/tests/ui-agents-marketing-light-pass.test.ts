@@ -9,6 +9,7 @@ const contact = readFileSync(join(root, 'src/app/contact/page.jsx'), 'utf8');
 const dashboardPreview = readFileSync(join(root, 'src/components/MarketingDashboardPreview.jsx'), 'utf8');
 const rootLayout = readFileSync(join(root, 'src/app/layout.jsx'), 'utf8');
 const robots = readFileSync(join(root, 'src/app/robots.js'), 'utf8');
+const sitemap = readFileSync(join(root, 'src/app/sitemap.js'), 'utf8');
 
 for (const [name, source] of [
   ['Home', home],
@@ -57,9 +58,19 @@ assert.ok(contact.includes("href=\"/auth?next=%2Fcontact\""));
 assert.ok(rootLayout.includes("const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.brandbox-ai.com'"));
 assert.ok(rootLayout.includes('metadataBase: new URL(siteUrl)'));
 assert.ok(rootLayout.includes("locale: 'ar_LY'"));
-assert.ok(robots.includes("host: 'https://www.brandbox-ai.com'"));
+assert.ok(robots.includes("host: siteUrl"));
+assert.ok(robots.includes("sitemap: `${siteUrl}/sitemap.xml`"), 'robots must advertise the canonical sitemap');
 for (const privatePath of ['/admin', '/api', '/auth', '/dashboard', '/projects', '/brand-kit', '/support']) {
   assert.ok(robots.includes(`'${privatePath}'`), `robots policy must disallow ${privatePath}`);
 }
+
+// Sitemap must enumerate only intentional public launch surfaces and never private/authenticated areas.
+for (const publicPath of ['/', '/about', '/contact', '/pricing', '/templates', '/marketing-plans', '/store', '/print']) {
+  assert.ok(sitemap.includes(`'${publicPath}'`), `sitemap must include public route ${publicPath}`);
+}
+for (const privatePath of ['/admin', '/api', '/auth', '/dashboard', '/projects', '/brand-kit', '/support', '/billing', '/settings']) {
+  assert.ok(!sitemap.includes(`'${privatePath}'`), `sitemap must not include private route ${privatePath}`);
+}
+assert.ok(sitemap.includes("process.env.NEXT_PUBLIC_SITE_URL || 'https://www.brandbox-ai.com'"));
 
 console.log('Approved marketing light-theme and launch metadata guard passed.');
