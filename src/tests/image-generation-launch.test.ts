@@ -33,8 +33,10 @@ for (const snippet of [
 ]) assert.ok(post.includes(snippet), `missing image server guard: ${snippet}`);
 
 const get = route.slice(route.indexOf('export async function GET'), route.indexOf('export async function POST'));
-for (const snippet of ["decorateModel('image'", 'supported_resolutions', 'supported_aspect_ratios', 'max_count', 'imageModelsAvailable']) {
-  assert.ok(get.includes(snippet), `image GET must expose selected-model capability data: ${snippet}`);
+assert.ok(get.includes("decorateModel('image'"), 'image GET must decorate catalog models with selected-model capabilities');
+assert.ok(get.includes('imageModelsAvailable'), 'image GET must expose model catalog availability');
+for (const snippet of ['supported_resolutions', 'supported_aspect_ratios', 'max_count']) {
+  assert.ok(route.includes(snippet), `shared image decorator must expose selected-model capability data: ${snippet}`);
 }
 assert.ok(!get.includes('OPENROUTER_IMAGE_MODELS.includes'), 'visible catalog models must not be hidden by a static browser/server allowlist');
 
