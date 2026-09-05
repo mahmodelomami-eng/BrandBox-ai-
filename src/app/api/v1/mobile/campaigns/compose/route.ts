@@ -134,7 +134,8 @@ export async function POST(request: NextRequest) {
       .maybeSingle(),
   ]);
 
-  if (projectError || !project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
+  if (projectError) return NextResponse.json({ error: 'PROJECT_LOOKUP_UNAVAILABLE' }, { status: 503 });
+  if (!project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
   if (brandKitError) return NextResponse.json({ error: 'BRAND_KIT_UNAVAILABLE' }, { status: 503 });
   if (modelError) return NextResponse.json({ error: 'CHAT_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
   if (!model) return NextResponse.json({ error: 'CHAT_MODEL_NOT_AVAILABLE' }, { status: 503 });

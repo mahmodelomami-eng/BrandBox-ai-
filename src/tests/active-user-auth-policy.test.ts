@@ -38,6 +38,7 @@ const adminCreditPackage = source('src/app/api/v1/admin/credit-packages/[id]/rou
 const adminStoreFinance = source('src/app/api/v1/admin/store/finance/route.ts');
 const adminStoreInventory = source('src/app/api/v1/admin/store/inventory/route.ts');
 const mobileBootstrap = source('src/app/api/v1/mobile/bootstrap/route.ts');
+const mobileCampaignCompose = source('src/app/api/v1/mobile/campaigns/compose/route.ts');
 
 assertContract('client auth resolves profile before exposing protected content',
   authContext.includes('profileResolved') &&
@@ -175,6 +176,14 @@ assertContract('mobile bootstrap remains owner-scoped and fails closed on subscr
   mobileBootstrap.includes('{ data: subscription, error: subscriptionError }') &&
   mobileBootstrap.includes("if (subscriptionError) return NextResponse.json({ error: 'SUBSCRIPTION_UNAVAILABLE' }, { status: 503 });") &&
   !mobileBootstrap.includes('subscriptionError.message'),
+);
+
+assertContract('mobile campaign project lookup remains owner-scoped and distinguishes backend failure from not-found',
+  mobileCampaignCompose.includes('authenticateActiveUser(request)') &&
+  mobileCampaignCompose.includes(".eq('owner_id', auth.user.id)") &&
+  mobileCampaignCompose.includes("if (projectError) return NextResponse.json({ error: 'PROJECT_LOOKUP_UNAVAILABLE' }, { status: 503 });") &&
+  mobileCampaignCompose.includes("if (!project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });") &&
+  !mobileCampaignCompose.includes('projectError.message'),
 );
 
 const protectedApiRoutes = [
