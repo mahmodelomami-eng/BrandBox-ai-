@@ -226,7 +226,7 @@ export default function AuthPage() {
         <section className="hidden border-l border-[#242936] bg-[radial-gradient(circle_at_top_right,rgba(243,19,37,.22),transparent_42%),linear-gradient(145deg,#0d1018,#090b10)] p-10 lg:flex lg:flex-col lg:justify-between">
           <div>
             <div className="inline-flex rounded-full border border-red-500/20 bg-red-500/5 px-4 py-2 text-xs font-black text-red-300">Brand Box AI</div>
-            <div className="mt-10 grid grid-cols-2 gap-3">
+            <div className="mt-10 grid grid-cols-2 gap-3" aria-hidden="true">
               <div className="h-28 rounded-3xl border border-white/[.06] bg-[linear-gradient(145deg,#171a22,#0b0d12)]" />
               <div className="h-28 translate-y-7 rounded-3xl border border-[#f31325]/20 bg-[linear-gradient(145deg,#301015,#0b0d12)] shadow-[0_18px_50px_rgba(243,19,37,.08)]" />
               <div className="h-28 -translate-y-2 rounded-3xl border border-[#f31325]/15 bg-[radial-gradient(circle_at_center,rgba(243,19,37,.2),transparent_50%),#0b0d12]" />
@@ -237,70 +237,94 @@ export default function AuthPage() {
           <div className="text-xs text-gray-600">التسجيل متاح بالبريد الإلكتروني أو Google أو Apple.</div>
         </section>
 
-        <section className="p-6 sm:p-10">
-          <div className="mb-7 flex rounded-2xl border border-white/10 bg-[#080a0f] p-1.5">
-            <button type="button" onClick={() => { setMode('login'); setError(''); setMessage(''); }} className={`flex-1 rounded-xl py-3 text-sm font-black transition ${mode === 'login' ? 'bg-[#f31325] text-white' : 'text-gray-500 hover:text-gray-300'}`}>تسجيل الدخول</button>
-            <button type="button" onClick={() => { setMode('signup'); setError(''); setMessage(''); }} className={`flex-1 rounded-xl py-3 text-sm font-black transition ${mode === 'signup' ? 'bg-[#f31325] text-white' : 'text-gray-500 hover:text-gray-300'}`}>إنشاء حساب</button>
+        <section className="p-6 sm:p-10" aria-labelledby="auth-heading">
+          <div className="mb-7 flex rounded-2xl border border-white/10 bg-[#080a0f] p-1.5" role="tablist" aria-label="نوع حساب Brand Box">
+            <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => { setMode('login'); setError(''); setMessage(''); }} className={`flex-1 rounded-xl py-3 text-sm font-black transition ${mode === 'login' ? 'bg-[#f31325] text-white' : 'text-gray-500 hover:text-gray-300'}`}>تسجيل الدخول</button>
+            <button type="button" role="tab" aria-selected={mode === 'signup'} onClick={() => { setMode('signup'); setError(''); setMessage(''); }} className={`flex-1 rounded-xl py-3 text-sm font-black transition ${mode === 'signup' ? 'bg-[#f31325] text-white' : 'text-gray-500 hover:text-gray-300'}`}>إنشاء حساب</button>
           </div>
 
-          {mode === 'signup' && <h1 className="text-3xl font-black">أنشئ حسابك</h1>}
+          <h1 id="auth-heading" className={mode === 'signup' ? 'text-3xl font-black' : 'sr-only'}>{mode === 'signup' ? 'أنشئ حسابك' : 'تسجيل الدخول إلى Brand Box AI'}</h1>
           <p className={`${mode === 'signup' ? 'mt-2' : ''} text-sm leading-7 text-gray-500`}>استخدم بريدك الإلكتروني أو حساب Google أو Apple.</p>
 
-          <form onSubmit={submit} className="mt-7 space-y-4">
+          <form onSubmit={submit} className="mt-7 space-y-4" aria-describedby="auth-feedback">
             {mode === 'signup' && (
               <>
                 <div className="grid grid-cols-2 gap-3">
-                  <input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="الاسم الأول" className="rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
-                  <input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="اسم العائلة" className="rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                  <label className="block">
+                    <span className="sr-only">الاسم الأول</span>
+                    <input id="auth-first-name" name="given-name" autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="الاسم الأول" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                  </label>
+                  <label className="block">
+                    <span className="sr-only">اسم العائلة</span>
+                    <input id="auth-last-name" name="family-name" autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="اسم العائلة" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                  </label>
                 </div>
-                <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="رقم الهاتف +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
-                <input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} placeholder="رقم واتساب للإشعارات - اختياري" dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                <label className="block">
+                  <span className="sr-only">رقم الهاتف</span>
+                  <input id="auth-phone" name="tel" type="tel" autoComplete="tel" inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="رقم الهاتف +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                </label>
+                <label className="block">
+                  <span className="sr-only">رقم واتساب للإشعارات - اختياري</span>
+                  <input id="auth-whatsapp" name="whatsapp" type="tel" inputMode="tel" value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} placeholder="رقم واتساب للإشعارات - اختياري" dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none transition focus:border-[#f31325]" />
+                </label>
               </>
             )}
 
             <label className="flex items-center gap-3 rounded-2xl border border-[#303747] bg-[#151923] px-4 transition focus-within:border-[#f31325]">
-              <Mail size={18} className="text-gray-500" />
-              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="البريد الإلكتروني / Gmail" className="w-full bg-transparent py-4 text-sm outline-none" />
+              <span className="sr-only">البريد الإلكتروني</span>
+              <Mail size={18} className="text-gray-500" aria-hidden="true" />
+              <input id="auth-email" name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="البريد الإلكتروني / Gmail" className="w-full bg-transparent py-4 text-sm outline-none" />
             </label>
 
             <label className="flex items-center gap-3 rounded-2xl border border-[#303747] bg-[#151923] px-4 transition focus-within:border-[#f31325]">
-              <LockKeyhole size={18} className="text-gray-500" />
-              <input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="كلمة المرور" className="w-full bg-transparent py-4 text-sm outline-none" />
-              <button type="button" onClick={() => setShowPassword((value) => !value)} className="text-gray-500 transition hover:text-white" aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+              <span className="sr-only">كلمة المرور</span>
+              <LockKeyhole size={18} className="text-gray-500" aria-hidden="true" />
+              <input id="auth-password" name="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder="كلمة المرور" className="w-full bg-transparent py-4 text-sm outline-none" />
+              <button type="button" onClick={() => setShowPassword((value) => !value)} className="grid min-h-11 min-w-11 place-items-center text-gray-500 transition hover:text-white" aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'} aria-pressed={showPassword}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>
             </label>
 
-            {error && !onboardingOpen && <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-3 text-xs text-red-300">{error}</div>}
-            {message && <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 text-xs text-emerald-300">{message}</div>}
+            <div id="auth-feedback" aria-live="polite" aria-atomic="true">
+              {error && !onboardingOpen && <div className="rounded-xl border border-red-500/25 bg-red-500/5 p-3 text-xs text-red-300" role="alert">{error}</div>}
+              {message && <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3 text-xs text-emerald-300" role="status">{message}</div>}
+            </div>
 
-            <button disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f31325] py-4 text-sm font-black transition hover:bg-[#ff2637] disabled:cursor-not-allowed disabled:opacity-50">
-              {mode === 'login' ? <LogIn size={18} /> : <UserPlus size={18} />}
+            <button type="submit" disabled={loading} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#f31325] py-4 text-sm font-black transition hover:bg-[#ff2637] disabled:cursor-not-allowed disabled:opacity-50">
+              {mode === 'login' ? <LogIn size={18} aria-hidden="true" /> : <UserPlus size={18} aria-hidden="true" />}
               {loading ? 'جاري التنفيذ...' : mode === 'login' ? 'تسجيل الدخول' : 'إنشاء الحساب والمتابعة'}
             </button>
           </form>
 
-          <div className="my-6 flex items-center gap-3 text-xs text-gray-600"><span className="h-px flex-1 bg-[#30343e]" /><span>أو</span><span className="h-px flex-1 bg-[#30343e]" /></div>
+          <div className="my-6 flex items-center gap-3 text-xs text-gray-600" aria-hidden="true"><span className="h-px flex-1 bg-[#30343e]" /><span>أو</span><span className="h-px flex-1 bg-[#30343e]" /></div>
           <div className="space-y-3">
-            <button type="button" onClick={() => social('google')} className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#3a3f49] bg-[#101319] py-4 text-sm font-black transition hover:border-[#f31325]/50 hover:bg-[#12161d]"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-white font-black text-[#4285F4]">G</span> المتابعة باستخدام Google</button>
-            <button type="button" onClick={() => social('apple')} className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#3a3f49] bg-[#101319] py-4 text-sm font-black transition hover:border-[#f31325]/50 hover:bg-[#12161d]"><span className="text-xl">●</span> المتابعة باستخدام Apple</button>
+            <button type="button" onClick={() => social('google')} className="flex min-h-11 w-full items-center justify-center gap-3 rounded-2xl border border-[#3a3f49] bg-[#101319] py-4 text-sm font-black transition hover:border-[#f31325]/50 hover:bg-[#12161d]"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-white font-black text-[#4285F4]" aria-hidden="true">G</span> المتابعة باستخدام Google</button>
+            <button type="button" onClick={() => social('apple')} className="flex min-h-11 w-full items-center justify-center gap-3 rounded-2xl border border-[#3a3f49] bg-[#101319] py-4 text-sm font-black transition hover:border-[#f31325]/50 hover:bg-[#12161d]"><span className="text-xl" aria-hidden="true">●</span> المتابعة باستخدام Apple</button>
           </div>
         </section>
       </div>
 
       {onboardingOpen && (
-        <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/85 p-4">
-          <form onSubmit={saveSocialContact} className="relative w-full max-w-md rounded-[28px] border border-[#303747] bg-[#11151d] p-7 shadow-2xl">
-            <button type="button" onClick={() => setOnboardingOpen(false)} className="absolute left-5 top-5 text-gray-500 hover:text-white"><X size={19} /></button>
+        <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/85 p-4" role="presentation">
+          <form onSubmit={saveSocialContact} className="relative w-full max-w-md rounded-[28px] border border-[#303747] bg-[#11151d] p-7 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="social-onboarding-title" aria-describedby="social-onboarding-description">
+            <button type="button" onClick={() => setOnboardingOpen(false)} className="absolute left-5 top-5 grid min-h-11 min-w-11 place-items-center text-gray-500 hover:text-white" aria-label="إغلاق نافذة إكمال الحساب"><X size={19} aria-hidden="true" /></button>
             <div className="text-xs font-black text-[#ff3344]">إكمال الحساب</div>
-            <h2 className="mt-2 text-2xl font-black">بيانات الاتصال</h2>
-            <p className="mt-2 text-sm leading-7 text-gray-500">أضف رقم الهاتف. رقم واتساب اختياري لاستخدامه في الإشعارات.</p>
+            <h2 id="social-onboarding-title" className="mt-2 text-2xl font-black">بيانات الاتصال</h2>
+            <p id="social-onboarding-description" className="mt-2 text-sm leading-7 text-gray-500">أضف رقم الهاتف. رقم واتساب اختياري لاستخدامه في الإشعارات.</p>
 
             <div className="mt-6 space-y-3">
-              <input value={onboardingPhone} onChange={(event) => setOnboardingPhone(event.target.value)} placeholder="رقم الهاتف +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
-              <input value={onboardingWhatsapp} onChange={(event) => setOnboardingWhatsapp(event.target.value)} placeholder="رقم واتساب - اختياري" dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
+              <label className="block">
+                <span className="sr-only">رقم الهاتف</span>
+                <input name="onboarding-phone" type="tel" autoComplete="tel" inputMode="tel" value={onboardingPhone} onChange={(event) => setOnboardingPhone(event.target.value)} placeholder="رقم الهاتف +218..." dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
+              </label>
+              <label className="block">
+                <span className="sr-only">رقم واتساب - اختياري</span>
+                <input name="onboarding-whatsapp" type="tel" inputMode="tel" value={onboardingWhatsapp} onChange={(event) => setOnboardingWhatsapp(event.target.value)} placeholder="رقم واتساب - اختياري" dir="ltr" className="w-full rounded-2xl border border-[#303747] bg-[#151923] p-4 text-sm outline-none focus:border-[#f31325]" />
+              </label>
             </div>
 
-            {error && <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/5 p-3 text-xs text-red-300">{error}</div>}
-            <button disabled={onboardingLoading} className="mt-5 w-full rounded-2xl bg-[#f31325] py-4 text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">{onboardingLoading ? 'جاري الحفظ...' : 'حفظ والمتابعة'}</button>
+            <div aria-live="polite" aria-atomic="true">
+              {error && <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/5 p-3 text-xs text-red-300" role="alert">{error}</div>}
+            </div>
+            <button type="submit" disabled={onboardingLoading} className="mt-5 min-h-11 w-full rounded-2xl bg-[#f31325] py-4 text-sm font-black transition hover:bg-[#ff2637] disabled:opacity-50">{onboardingLoading ? 'جاري الحفظ...' : 'حفظ والمتابعة'}</button>
           </form>
         </div>
       )}
