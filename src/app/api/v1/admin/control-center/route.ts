@@ -45,10 +45,15 @@ export async function GET(request: NextRequest) {
   if (!actor) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
   const database = createPrivilegedSupabaseClient();
+  const canViewUsers = checkPermission(actor.role, 'users.read');
+  const canViewProjects = checkPermission(actor.role, 'projects.read');
+  const canViewSubscriptions = checkPermission(actor.role, 'subscriptions.read');
+  const canViewPayments = checkPermission(actor.role, 'payments.read');
   const canViewCommercial = checkPermission(actor.role, 'plans.read') || checkPermission(actor.role, 'packages.read');
   const canViewAudit = checkPermission(actor.role, 'audit.read');
   const canViewCredits = checkPermission(actor.role, 'credits.read');
   const canViewAI = checkPermission(actor.role, 'providers.read') || checkPermission(actor.role, 'models.read') || checkPermission(actor.role, 'generations.read');
+  const canViewAssets = checkPermission(actor.role, 'assets.read');
 
   const [
     profilesResult,
@@ -62,26 +67,34 @@ export async function GET(request: NextRequest) {
     packagesResult,
     auditResult,
   ] = await Promise.all([
-    database
-      .from('profiles')
-      .select('id,email,first_name,last_name,phone,avatar_url,role,status,credit_balance,last_seen_at,created_at,updated_at')
-      .order('created_at', { ascending: false })
-      .limit(1000),
-    database
-      .from('projects')
-      .select('id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,is_favorite,created_at,updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(250),
-    database
-      .from('subscriptions')
-      .select('id,user_id,plan_id,status,provider,current_period_start,current_period_end,auto_renew,cancelled_at,created_at,updated_at')
-      .order('created_at', { ascending: false })
-      .limit(250),
-    database
-      .from('payment_transactions')
-      .select('id,order_reference,user_id,provider,provider_tx_id,amount_lyd,currency,status,item_type,created_at,updated_at')
-      .order('created_at', { ascending: false })
-      .limit(250),
+    canViewUsers
+      ? database
+          .from('profiles')
+          .select('id,email,first_name,last_name,phone,avatar_url,role,status,credit_balance,last_seen_at,created_at,updated_at')
+          .order('created_at', { ascending: false })
+          .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+    canViewProjects
+      ? database
+          .from('projects')
+          .select('id,owner_id,name,type,description,industry,target_audience,language,tone,thumbnail_url,is_favorite,created_at,updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(250)
+      : Promise.resolve({ data: [], error: null }),
+    canViewSubscriptions
+      ? database
+          .from('subscriptions')
+          .select('id,user_id,plan_id,status,provider,current_period_start,current_period_end,auto_renew,cancelled_at,created_at,updated_at')
+          .order('created_at', { ascending: false })
+          .limit(250)
+      : Promise.resolve({ data: [], error: null }),
+    canViewPayments
+      ? database
+          .from('payment_transactions')
+          .select('id,order_reference,user_id,provider,provider_tx_id,amount_lyd,currency,status,item_type,created_at,updated_at')
+          .order('created_at', { ascending: false })
+          .limit(250)
+      : Promise.resolve({ data: [], error: null }),
     canViewAI
       ? database
           .from('generations')
@@ -89,7 +102,7 @@ export async function GET(request: NextRequest) {
           .order('created_at', { ascending: false })
           .limit(250)
       : Promise.resolve({ data: [], error: null }),
-    canViewAI
+    canViewAssets
       ? database
           .from('assets')
           .select('id,user_id,project_id,generation_id,name,file_path,mime_type,width,height,created_at')
@@ -166,7 +179,7 @@ export async function GET(request: NextRequest) {
       changeRoles: checkPermission(actor.role, 'roles.assign'),
       deleteUsers: checkPermission(actor.role, 'users.delete'),
       viewCommercial: canViewCommercial,
-      viewPayments: checkPermission(actor.role, 'payments.read'),
+      viewPayments: canViewPayments,
       viewAudit: canViewAudit,
       viewCredits: canViewCredits,
       viewAI: canViewAI,

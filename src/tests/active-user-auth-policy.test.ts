@@ -100,6 +100,19 @@ assertContract('admin control center also requires an active profile before priv
   adminControlCenter.includes('!isActiveProfileStatus(profile.status)'),
 );
 
+assertContract('admin control center scopes sensitive datasets to their matching read permissions',
+  adminControlCenter.includes("const canViewUsers = checkPermission(actor.role, 'users.read')") &&
+  adminControlCenter.includes("const canViewProjects = checkPermission(actor.role, 'projects.read')") &&
+  adminControlCenter.includes("const canViewSubscriptions = checkPermission(actor.role, 'subscriptions.read')") &&
+  adminControlCenter.includes("const canViewPayments = checkPermission(actor.role, 'payments.read')") &&
+  adminControlCenter.includes("const canViewAssets = checkPermission(actor.role, 'assets.read')") &&
+  adminControlCenter.includes("canViewUsers\n      ? database\n          .from('profiles')") &&
+  adminControlCenter.includes("canViewProjects\n      ? database\n          .from('projects')") &&
+  adminControlCenter.includes("canViewSubscriptions\n      ? database\n          .from('subscriptions')") &&
+  adminControlCenter.includes("canViewPayments\n      ? database\n          .from('payment_transactions')") &&
+  adminControlCenter.includes("canViewAssets\n      ? database\n          .from('assets')"),
+);
+
 assertContract('admin settings requires an active profile before privileged reads or writes',
   adminSettings.includes("from '@/lib/auth/user-status'") &&
   adminSettings.includes('!isActiveProfileStatus(profile.status)') &&
