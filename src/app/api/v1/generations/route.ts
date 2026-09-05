@@ -2,52 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { GenerationEngine, GenerationRequest } from '@/lib/generations/generation-engine';
-import {
-  OPENROUTER_IMAGE_ASPECT_RATIOS,
-  OPENROUTER_IMAGE_MODELS,
-} from '@/lib/ai/openrouter-client';
-import { getOpenRouterImageCapabilities } from '@/lib/ai/openrouter-image-capabilities';
+import { getOpenRouterModelCapabilities, isCapabilityKnown } from '@/lib/ai/openrouter-model-capabilities';
+import { applyChatCapabilityPolicy, applyImageCapabilityPolicy } from '@/lib/ai/openrouter-settings-policy';
 import { generationTypeToProjectTool, projectTypeMatchesTool } from '@/lib/projects/project-scope';
 
 type HistoryGenerationType = 'chat' | 'image';
 
-const imageAspectRatios = new Set<string>(OPENROUTER_IMAGE_ASPECT_RATIOS);
 const imageStyleIds = new Set(['none', 'photo', 'cinematic', 'minimal', 'formal']);
-
-function validImageSettings(modelId: string, settings: Record<string, unknown> | undefined): boolean {
-  const capabilities = getOpenRouterImageCapabilities(modelId);
-  if (!capabilities) return false;
-
-  const aspectRatio = typeof settings?.aspectRatio === 'string' ? settings.aspectRatio : '1:1';
-  const resolution = settings?.resolution;
-  const count = Number(settings?.count ?? 1);
-  const style = settings?.style;
-  const useBrandKit = settings?.useBrandKit;
-
-  if (!imageAspectRatios.has(aspectRatio)) return false;
-  if (resolution !== undefined && typeof resolution !== 'string') return false;
-  if (!Number.isInteger(count) || count < 1 || count > capabilities.maxCount) return false;
-  if (style !== undefined && (typeof style !== 'string' || !imageStyleIds.has(style))) return false;
-  if (useBrandKit !== undefined && typeof useBrandKit !== 'boolean') return false;
-  return true;
-}
-
-function normalizeImageSettings(
-  modelId: string,
-  settings: Record<string, unknown> | undefined,
-): Record<string, unknown> {
-  const capabilities = getOpenRouterImageCapabilities(modelId);
-  const normalized = { ...(settings || {}) };
-  if (!capabilities) return normalized;
-
-  const requestedResolution = typeof normalized.resolution === 'string' ? normalized.resolution : undefined;
-  if (capabilities.supportedResolutions.length === 0) {
-    delete normalized.resolution;
-  } else if (!requestedResolution || !(capabilities.supportedResolutions as readonly string[]).includes(requestedResolution)) {
-    normalized.resolution = capabilities.defaultResolution || capabilities.supportedResolutions[0];
-  }
-  return normalized;
-}
 
 function projectChatSystemPrompt(
   project: Record<string, unknown>,
@@ -115,6 +76,31 @@ function projectImagePromptSuffix(
   ].filter(Boolean).join('\n').slice(0, 2400);
 }
 
+async function decorateModel(
+  tool: HistoryGenerationType,
+  model: Record<string, unknown>,
+) {
+  const modelId = String(model.model_id || '');
+  const capabilities = await getOpenRouterModelCapabilities(tool, modelId, {
+    fallbackMetadata: model.metadata,
+  });
+  const known = isCapabilityKnown(capabilities);
+  return {
+    ...model,
+    capabilitiesAvailable: known,
+    capabilitySource: capabilities.source,
+    capabilities,
+    ...(tool === 'image' ? {
+      supported_resolutions: known ? (capabilities.image?.resolutions || []) : [],
+      supported_aspect_ratios: known ? (capabilities.image?.aspectRatios || []) : [],
+      max_count: known ? (capabilities.image?.countRange?.max || 1) : 0,
+    } : {
+      context_length: capabilities.contextLength,
+      max_completion_tokens: capabilities.maxCompletionTokens,
+    }),
+  };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await authenticateActiveUser(request);
   if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
@@ -170,7 +156,7 @@ export async function GET(request: NextRequest) {
     generationQuery,
     assetQuery,
     database.from('ai_model_catalog')
-      .select('model_id,display_name_ar,display_name_en,minimum_credits,sort_order')
+      .select('model_id,display_name_ar,display_name_en,minimum_credits,sort_order,metadata')
       .eq('provider', 'openrouter')
       .eq('generation_type', 'chat')
       .eq('is_enabled', true)
@@ -190,24 +176,19 @@ export async function GET(request: NextRequest) {
     const { data, error } = await database.storage.from('generation-assets').createSignedUrl(asset.file_path, 3600);
     return { ...asset, signed_url: error ? null : data?.signedUrl || null };
   }));
-  const supportedImageModels = (imageModels || [])
-    .filter((model) => OPENROUTER_IMAGE_MODELS.includes(model.model_id as typeof OPENROUTER_IMAGE_MODELS[number]))
-    .map((model) => {
-      const capabilities = getOpenRouterImageCapabilities(model.model_id);
-      return {
-        ...model,
-        supported_resolutions: capabilities?.supportedResolutions || [],
-        default_resolution: capabilities?.defaultResolution || null,
-        max_count: capabilities?.maxCount || 1,
-      };
-    });
+  const decoratedChatModels = chatModelsError
+    ? []
+    : await Promise.all((chatModels || []).map((model) => decorateModel('chat', model as unknown as Record<string, unknown>)));
+  const decoratedImageModels = imageModelsError
+    ? []
+    : await Promise.all((imageModels || []).map((model) => decorateModel('image', model as unknown as Record<string, unknown>)));
 
   return NextResponse.json({
     generations: generations || [],
     assets: signedAssets,
-    chatModels: chatModelsError ? [] : (chatModels || []),
+    chatModels: decoratedChatModels,
     chatModelsAvailable: !chatModelsError,
-    imageModels: imageModelsError ? [] : supportedImageModels,
+    imageModels: decoratedImageModels,
     imageModelsAvailable: !imageModelsError,
   });
 }
@@ -232,61 +213,63 @@ export async function POST(request: NextRequest) {
   if (!/^[a-zA-Z0-9_-]{8,80}$/.test(requestId)) {
     return NextResponse.json({ error: 'INVALID_GENERATION_REQUEST_ID' }, { status: 400 });
   }
-  if (generationType === 'image' && !OPENROUTER_IMAGE_MODELS.includes(body.modelId as typeof OPENROUTER_IMAGE_MODELS[number])) {
-    return NextResponse.json({ error: 'IMAGE_MODEL_NOT_SUPPORTED' }, { status: 400 });
-  }
-  if (generationType === 'image' && !validImageSettings(body.modelId, body.settings)) {
-    return NextResponse.json({ error: 'INVALID_IMAGE_SETTINGS' }, { status: 400 });
-  }
-
-  const executionBody: GenerationRequest = generationType === 'image'
-    ? { ...body, settings: normalizeImageSettings(body.modelId, body.settings) }
-    : body;
 
   const database = createPrivilegedSupabaseClient();
-  let unitCredits: number | undefined;
-
-  if (generationType === 'chat') {
-    const { data: model, error: modelError } = await database
-      .from('ai_model_catalog')
-      .select('model_id,minimum_credits')
-      .eq('model_id', body.modelId)
-      .eq('provider', 'openrouter')
-      .eq('generation_type', 'chat')
-      .eq('is_enabled', true)
-      .eq('is_visible_to_users', true)
-      .maybeSingle();
-
-    if (modelError) return NextResponse.json({ error: 'CHAT_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
-    if (!model) return NextResponse.json({ error: 'CHAT_MODEL_NOT_AVAILABLE' }, { status: 400 });
-
-    const minimumCredits = Number(model.minimum_credits);
-    if (!Number.isFinite(minimumCredits) || minimumCredits < 1) {
-      return NextResponse.json({ error: 'CHAT_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
-    }
-    unitCredits = Math.max(1, Math.trunc(minimumCredits));
+  const { data: model, error: modelError } = await database
+    .from('ai_model_catalog')
+    .select('model_id,minimum_credits,metadata')
+    .eq('model_id', body.modelId)
+    .eq('provider', 'openrouter')
+    .eq('generation_type', generationType)
+    .eq('is_enabled', true)
+    .eq('is_visible_to_users', true)
+    .maybeSingle();
+  if (modelError) {
+    return NextResponse.json({ error: generationType === 'chat' ? 'CHAT_MODEL_CATALOG_UNAVAILABLE' : 'IMAGE_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
+  }
+  if (!model) {
+    return NextResponse.json({ error: generationType === 'chat' ? 'CHAT_MODEL_NOT_AVAILABLE' : 'IMAGE_MODEL_NOT_AVAILABLE' }, { status: 400 });
   }
 
-  if (generationType === 'image') {
-    const { data: model, error: modelError } = await database
-      .from('ai_model_catalog')
-      .select('model_id,minimum_credits')
-      .eq('model_id', body.modelId)
-      .eq('provider', 'openrouter')
-      .eq('generation_type', 'image')
-      .eq('is_enabled', true)
-      .eq('is_visible_to_users', true)
-      .maybeSingle();
-
-    if (modelError) return NextResponse.json({ error: 'IMAGE_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
-    if (!model) return NextResponse.json({ error: 'IMAGE_MODEL_NOT_AVAILABLE' }, { status: 400 });
-
-    const minimumCredits = Number(model.minimum_credits);
-    if (!Number.isFinite(minimumCredits) || minimumCredits < 1) {
-      return NextResponse.json({ error: 'IMAGE_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
-    }
-    unitCredits = Math.max(1, Math.trunc(minimumCredits));
+  const capabilities = await getOpenRouterModelCapabilities(generationType, body.modelId, {
+    fallbackMetadata: model.metadata,
+  });
+  if (!isCapabilityKnown(capabilities)) {
+    return NextResponse.json({
+      error: generationType === 'chat' ? 'CHAT_MODEL_CAPABILITIES_UNAVAILABLE' : 'IMAGE_MODEL_CAPABILITIES_UNAVAILABLE',
+    }, { status: 503 });
   }
+
+  let normalizedSettings: Record<string, unknown>;
+  try {
+    if (generationType === 'image') {
+      const style = body.settings?.style;
+      const useBrandKit = body.settings?.useBrandKit;
+      if (style !== undefined && (typeof style !== 'string' || !imageStyleIds.has(style))) {
+        return NextResponse.json({ error: 'INVALID_IMAGE_SETTINGS' }, { status: 400 });
+      }
+      if (useBrandKit !== undefined && typeof useBrandKit !== 'boolean') {
+        return NextResponse.json({ error: 'INVALID_IMAGE_SETTINGS' }, { status: 400 });
+      }
+      const policy = applyImageCapabilityPolicy(capabilities, body.settings || {});
+      normalizedSettings = {
+        ...policy.settings,
+        ...(style !== undefined ? { style } : {}),
+        ...(useBrandKit !== undefined ? { useBrandKit } : {}),
+      };
+    } else {
+      normalizedSettings = applyChatCapabilityPolicy(capabilities, body.settings || {}).settings;
+    }
+  } catch {
+    return NextResponse.json({ error: generationType === 'chat' ? 'INVALID_CHAT_SETTINGS' : 'INVALID_IMAGE_SETTINGS' }, { status: 400 });
+  }
+
+  const executionBody: GenerationRequest = { ...body, settings: normalizedSettings };
+  const minimumCredits = Number(model.minimum_credits);
+  if (!Number.isFinite(minimumCredits) || minimumCredits < 1) {
+    return NextResponse.json({ error: generationType === 'chat' ? 'CHAT_MODEL_PRICING_UNAVAILABLE' : 'IMAGE_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
+  }
+  const unitCredits = Math.max(1, Math.trunc(minimumCredits));
 
   let chatSystemPrompt: string | undefined;
   let imagePromptSuffix: string | undefined;
@@ -314,7 +297,7 @@ export async function POST(request: NextRequest) {
       chatSystemPrompt = projectChatSystemPrompt(project, brandKit || null);
     }
 
-    if (generationType === 'image' && body.settings?.useBrandKit === true) {
+    if (generationType === 'image' && normalizedSettings.useBrandKit === true) {
       const { data: brandKit } = await database
         .from('brand_kits')
         .select('brand_name,tagline,description,primary_color,secondary_color,accent_color,font_family,tone_of_voice')
@@ -330,7 +313,7 @@ export async function POST(request: NextRequest) {
     { unitCredits, chatSystemPrompt, imagePromptSuffix }
   );
   if (result.retryable) {
-    return NextResponse.json(result, { status: 202, headers: { 'Retry-After': '2' } });
+    return NextResponse.json({ ...result, normalizedSettings }, { status: 202, headers: { 'Retry-After': '2' } });
   }
-  return NextResponse.json(result, { status: result.success ? 200 : 502 });
+  return NextResponse.json({ ...result, normalizedSettings }, { status: result.success ? 200 : 502 });
 }

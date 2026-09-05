@@ -14,12 +14,14 @@ const generationExecution = postRoute.indexOf('GenerationEngine.executeGeneratio
 assert.ok(postCatalogCheck >= 0, 'chat POST must consult ai_model_catalog');
 assert.ok(generationExecution > postCatalogCheck, 'POST model catalog authorization must occur before GenerationEngine/credit deduction');
 assert.ok(postRoute.includes(".eq('provider', 'openrouter')"));
-assert.ok(postRoute.includes(".eq('generation_type', 'chat')"));
+assert.ok(postRoute.includes(".eq('generation_type', generationType)"), 'shared chat/image catalog lookup must be scoped by the authenticated generation type');
 assert.ok(postRoute.includes(".eq('is_enabled', true)"));
 assert.ok(postRoute.includes(".eq('is_visible_to_users', true)"));
-assert.ok(postRoute.includes("error: 'CHAT_MODEL_NOT_AVAILABLE'"));
-assert.ok(postRoute.includes("error: 'CHAT_MODEL_PRICING_UNAVAILABLE'"));
+assert.ok(postRoute.includes("'CHAT_MODEL_NOT_AVAILABLE'"));
+assert.ok(postRoute.includes("'CHAT_MODEL_PRICING_UNAVAILABLE'"));
 assert.ok(postRoute.includes('minimum_credits'));
+assert.ok(postRoute.includes("getOpenRouterModelCapabilities(generationType, body.modelId"), 'chat must resolve model capabilities before spending credits');
+assert.ok(postRoute.includes('applyChatCapabilityPolicy(capabilities'), 'chat settings must be normalized by the model capability policy');
 assert.ok(postRoute.includes('projectChatSystemPrompt(project, brandKit || null)'));
 assert.ok(postRoute.includes(".from('brand_kits')"), 'chat context must load Brand Kit server-side');
 assert.ok(postRoute.includes(".eq('user_id', user.id)"), 'Brand Kit context must remain tenant-scoped');
@@ -56,7 +58,9 @@ assert.ok(!chatClient.includes('error?.message'), 'chat client must not expose r
 assert.ok(workspace.includes('payload.chatModels'));
 assert.ok(workspace.includes('payload.chatModelsAvailable'));
 assert.ok(workspace.includes("new URLSearchParams({ projectId, generationType: 'chat' })"));
-assert.ok(workspace.includes('النماذج المفعّلة من لوحة الإدارة'));
+assert.ok(workspace.includes('.map(normalizeChatModel)'), 'chat UI must derive each model from server-returned capability data');
+assert.ok(workspace.includes('buildChatSettings(selectedModel)'), 'chat UI must build provider settings from the selected model capabilities');
+assert.ok(workspace.includes('selectedCapabilitiesAvailable'), 'chat UI must fail closed when selected model capabilities are unavailable');
 assert.ok(!workspace.includes('const MODELS = ['), 'chat model list must no longer be hardcoded in the browser');
 assert.ok(!workspace.includes(".filter((item) => item.project_id === projectId"), 'chat history filtering must happen on the server');
 
@@ -86,7 +90,7 @@ assert.ok(workspace.includes('const insufficientCredits ='));
 assert.ok(workspace.includes('selectedModel.cost > balance'));
 assert.ok(workspace.includes('href="/pricing"'));
 assert.ok(workspace.includes('رصيدك الحالي أقل من الحد الأدنى المتوقع'));
-assert.ok(workspace.includes('disabled={sending || !prompt.trim() || !modelId || !modelCatalogAvailable || insufficientCredits}'));
+assert.ok(workspace.includes('!selectedCapabilitiesAvailable || insufficientCredits'), 'send action must be disabled when model capabilities cannot be confirmed');
 assert.ok(workspace.includes('إعادة المحاولة'));
 
 console.log('Chat/OpenRouter launch + semantic theme guard passed.');

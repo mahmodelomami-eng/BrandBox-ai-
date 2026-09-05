@@ -35,7 +35,19 @@ async function run() {
     { role: 'user', content: 'hello' },
   ]);
   assert.equal(chatBody.temperature, 2);
-  assert.equal(chatBody.max_tokens, 4000);
+  assert.equal(chatBody.max_tokens, 99999);
+
+  const defaultCalls: Array<{ init?: RequestInit }> = [];
+  await createOpenRouterChatCompletion({ model: 'openai/gpt-4o-mini', prompt: 'hello' }, {
+    apiKey: 'test-key',
+    fetchImpl: async (_input, init) => {
+      defaultCalls.push({ init });
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }), { status: 200 });
+    },
+  });
+  const defaultBody = JSON.parse(String(defaultCalls[0].init?.body));
+  assert.equal('temperature' in defaultBody, false, 'client must not invent temperature for a model');
+  assert.equal('max_tokens' in defaultBody, false, 'client must not invent max_tokens for a model');
 
   await assert.rejects(
     () => createOpenRouterChatCompletion({ model: 'openai/gpt-4o-mini', prompt: 'hello' }, {
@@ -109,65 +121,71 @@ async function run() {
   ]);
   assert.equal(imageResult.costUsd, 0.03);
 
-  const seedreamCalls: Array<{ url: string; init?: RequestInit }> = [];
+  const explicitCalls: Array<{ init?: RequestInit }> = [];
   await createOpenRouterImageGeneration({
     model: 'bytedance-seed/seedream-5-0-lite',
     prompt: 'a product photo',
     aspectRatio: '1:1',
+    resolution: '2K',
     count: 1,
   }, {
     apiKey: 'test-key',
-    fetchImpl: async (input, init) => {
-      seedreamCalls.push({ url: String(input), init });
+    fetchImpl: async (_input, init) => {
+      explicitCalls.push({ init });
       return new Response(JSON.stringify({
         data: [{ b64_json: 'c2VlZHJlYW0=', media_type: 'image/png' }],
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     },
   });
-  assert.equal(JSON.parse(String(seedreamCalls[0].init?.body)).resolution, '2K');
+  assert.equal(JSON.parse(String(explicitCalls[0].init?.body)).resolution, '2K');
+
+  const noResolutionCalls: Array<{ init?: RequestInit }> = [];
+  await createOpenRouterImageGeneration({
+    model: 'bytedance-seed/seedream-5-0-lite', prompt: 'hello', count: 1, aspectRatio: '1:1',
+  }, {
+    apiKey: 'test-key',
+    fetchImpl: async (_input, init) => {
+      noResolutionCalls.push({ init });
+      return new Response(JSON.stringify({ data: [{ b64_json: 'eA==', media_type: 'image/png' }] }), { status: 200 });
+    },
+  });
+  assert.equal('resolution' in JSON.parse(String(noResolutionCalls[0].init?.body)), false, 'client must not invent a model resolution');
+
+  await createOpenRouterImageGeneration({
+    model: 'new-vendor/new-image-model', prompt: 'catalog-authorized model', count: 1, aspectRatio: '1:1',
+  }, {
+    apiKey: 'test-key',
+    fetchImpl: async () => new Response(JSON.stringify({ data: [{ b64_json: 'eA==', media_type: 'image/png' }] }), { status: 200 }),
+  });
 
   await assert.rejects(
     () => createOpenRouterImageGeneration({
-      model: 'bytedance-seed/seedream-5-0-lite', prompt: 'hello', resolution: '1K', count: 1,
-    }, { apiKey: 'test-key', fetchImpl: imageFetch }),
-    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_IMAGE_RESOLUTION'
-  );
-
-  await assert.rejects(
-    () => createOpenRouterImageGeneration({
-      model: 'google/gemini-3.1-flash-lite-image', prompt: 'hello', resolution: '1K', count: 2,
+      model: 'google/gemini-3.1-flash-lite-image', prompt: 'hello', aspectRatio: '1:1', count: 21,
     }, { apiKey: 'test-key', fetchImpl: imageFetch }),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_IMAGE_COUNT'
   );
 
   await assert.rejects(
-    () => createOpenRouterImageGeneration({
-      model: 'openai/gpt-image-2', prompt: 'hello', resolution: '4K', count: 1,
-    }, { apiKey: 'test-key', fetchImpl: imageFetch }),
-    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_IMAGE_RESOLUTION'
-  );
-
-  await assert.rejects(
-    () => createOpenRouterImageGeneration({ model: 'unknown/image-model', prompt: 'hello' }, { apiKey: 'test-key', fetchImpl }),
+    () => createOpenRouterImageGeneration({ model: 'malformed-model-id', prompt: 'hello', aspectRatio: '1:1' }, { apiKey: 'test-key', fetchImpl }),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_MODEL_NOT_ALLOWED'
   );
 
   await assert.rejects(
-    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello' }, {
+    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello', aspectRatio: '1:1' }, {
       apiKey: 'test-key',
       fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'do not leak quota internals' } }), { status: 429 }),
     }),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_RATE_LIMITED'
   );
   await assert.rejects(
-    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello' }, {
+    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello', aspectRatio: '1:1' }, {
       apiKey: 'test-key',
       fetchImpl: async () => new Response(JSON.stringify({ error: { message: 'do not leak provider stack' } }), { status: 503 }),
     }),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_PROVIDER_UNAVAILABLE'
   );
   await assert.rejects(
-    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello' }, {
+    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello', aspectRatio: '1:1' }, {
       apiKey: 'test-key',
       fetchImpl: async () => new Response('not-json', { status: 200, headers: { 'Content-Type': 'application/json' } }),
     }),
@@ -175,7 +193,7 @@ async function run() {
   );
   await assert.rejects(
     () => createOpenRouterImageGeneration(
-      { model: 'openai/gpt-image-2', prompt: 'hello' },
+      { model: 'openai/gpt-image-2', prompt: 'hello', aspectRatio: '1:1' },
       { apiKey: 'test-key', fetchImpl: timeoutFetch, timeoutMs: 1 }
     ),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_TIMEOUT'

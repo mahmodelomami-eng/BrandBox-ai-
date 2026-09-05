@@ -1,14 +1,14 @@
 const OPENROUTER_VIDEO_BASE = 'https://openrouter.ai/api/v1/videos';
 
+// Verified launch fallback only. These constants are no longer the authority
+// for all OpenRouter video models; per-model capability policy is resolved by
+// openrouter-model-capabilities.ts before this client is called.
 export const OPENROUTER_VIDEO_MODELS = ['bytedance/seedance-2.0-mini'] as const;
 export const OPENROUTER_VIDEO_RATIOS = ['16:9', '9:16'] as const;
 export const OPENROUTER_VIDEO_RESOLUTIONS = ['480p'] as const;
 export const OPENROUTER_VIDEO_MIN_DURATION = 4;
 export const OPENROUTER_VIDEO_MAX_DURATION = 15;
 
-export type OpenRouterVideoModel = typeof OPENROUTER_VIDEO_MODELS[number];
-export type OpenRouterVideoRatio = typeof OPENROUTER_VIDEO_RATIOS[number];
-export type OpenRouterVideoResolution = typeof OPENROUTER_VIDEO_RESOLUTIONS[number];
 export type OpenRouterVideoTaskStatus = 'queued' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
 
 export interface OpenRouterVideoRequest {
@@ -18,6 +18,7 @@ export interface OpenRouterVideoRequest {
   resolution?: string;
   aspectRatio: string;
   generateAudio?: boolean;
+  seed?: number;
 }
 
 export interface OpenRouterVideoCreatedTask {
@@ -86,36 +87,44 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
 }
 
 export function validateOpenRouterVideoRequest(request: OpenRouterVideoRequest): {
-  model: OpenRouterVideoModel;
+  model: string;
   prompt: string;
   duration: number;
-  resolution: OpenRouterVideoResolution;
-  aspectRatio: OpenRouterVideoRatio;
-  generateAudio: boolean;
+  resolution?: string;
+  aspectRatio: string;
+  generateAudio?: boolean;
+  seed?: number;
 } {
-  if (!OPENROUTER_VIDEO_MODELS.includes(request.model as OpenRouterVideoModel)) {
-    throw new Error('OPENROUTER_VIDEO_MODEL_NOT_ALLOWED');
-  }
+  const model = String(request.model || '').trim();
+  if (!/^[^/\s]+\/.{1,200}$/.test(model)) throw new Error('OPENROUTER_VIDEO_MODEL_NOT_ALLOWED');
+
   const prompt = request.prompt.trim();
   if (!prompt || prompt.length > 1000) throw new Error('OPENROUTER_VIDEO_INVALID_PROMPT');
+
   const duration = Number(request.duration);
-  if (!Number.isInteger(duration) || duration < OPENROUTER_VIDEO_MIN_DURATION || duration > OPENROUTER_VIDEO_MAX_DURATION) {
+  // Coarse protocol/safety bound only. Exact model durations are enforced by
+  // the capability policy before this client runs.
+  if (!Number.isInteger(duration) || duration < 1 || duration > 120) {
     throw new Error('OPENROUTER_VIDEO_INVALID_DURATION');
   }
-  const resolution = request.resolution || '480p';
-  if (!OPENROUTER_VIDEO_RESOLUTIONS.includes(resolution as OpenRouterVideoResolution)) {
-    throw new Error('OPENROUTER_VIDEO_INVALID_RESOLUTION');
-  }
-  if (!OPENROUTER_VIDEO_RATIOS.includes(request.aspectRatio as OpenRouterVideoRatio)) {
-    throw new Error('OPENROUTER_VIDEO_INVALID_RATIO');
-  }
+
+  const resolution = typeof request.resolution === 'string' ? request.resolution.trim() : '';
+  if (resolution.length > 24) throw new Error('OPENROUTER_VIDEO_INVALID_RESOLUTION');
+
+  const aspectRatio = String(request.aspectRatio || '').trim();
+  if (!/^\d{1,4}:\d{1,4}$/.test(aspectRatio)) throw new Error('OPENROUTER_VIDEO_INVALID_RATIO');
+
+  const seed = request.seed === undefined ? undefined : Number(request.seed);
+  if (seed !== undefined && (!Number.isInteger(seed) || seed < 0)) throw new Error('OPENROUTER_VIDEO_INVALID_SEED');
+
   return {
-    model: request.model as OpenRouterVideoModel,
+    model,
     prompt,
     duration,
-    resolution: resolution as OpenRouterVideoResolution,
-    aspectRatio: request.aspectRatio as OpenRouterVideoRatio,
-    generateAudio: request.generateAudio === true,
+    ...(resolution ? { resolution } : {}),
+    aspectRatio,
+    ...(request.generateAudio !== undefined ? { generateAudio: request.generateAudio === true } : {}),
+    ...(seed !== undefined ? { seed } : {}),
   };
 }
 
@@ -137,9 +146,10 @@ export async function createOpenRouterVideoTask(
         model: input.model,
         prompt: input.prompt,
         duration: input.duration,
-        resolution: input.resolution,
+        ...(input.resolution ? { resolution: input.resolution } : {}),
         aspect_ratio: input.aspectRatio,
-        generate_audio: input.generateAudio,
+        ...(input.generateAudio !== undefined ? { generate_audio: input.generateAudio } : {}),
+        ...(input.seed !== undefined ? { seed: input.seed } : {}),
       }),
     });
     if (!response.ok) throw new Error(videoHttpErrorCode(response.status));

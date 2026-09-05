@@ -3,18 +3,15 @@ import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { projectTypeMatchesTool } from '@/lib/projects/project-scope';
 import { RUNWAY_VIDEO_MODELS, validateRunwayVideoRequest } from '@/lib/ai/runway-client';
-import {
-  OPENROUTER_VIDEO_MODELS,
-  OPENROUTER_VIDEO_MIN_DURATION,
-  OPENROUTER_VIDEO_MAX_DURATION,
-  validateOpenRouterVideoRequest,
-} from '@/lib/ai/openrouter-video-client';
+import { getOpenRouterModelCapabilities, isCapabilityKnown } from '@/lib/ai/openrouter-model-capabilities';
+import { applyVideoCapabilityPolicy } from '@/lib/ai/openrouter-settings-policy';
 import { VideoGenerationService } from '@/lib/generations/video-generation-service';
 import { OpenRouterVideoGenerationService } from '@/lib/generations/openrouter-video-generation-service';
 import { emitServerError, getRequestCorrelationId } from '@/lib/observability/telemetry';
 
 const VIDEO_BUCKET = 'generation-video-assets';
 type VideoProvider = 'runway' | 'openrouter';
+type PricedAudioMode = 'off' | 'on';
 
 function runwayConfigured(): boolean {
   return Boolean(process.env.RUNWAYML_API_SECRET);
@@ -36,42 +33,116 @@ function modelCreditsPerSecond(metadata: unknown): number | null {
   return Number.isInteger(value) && value >= 1 ? value : null;
 }
 
+function metadataStringArray(metadata: unknown, key: string): string[] {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
+  const raw = (metadata as Record<string, unknown>)[key];
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim()))];
+}
+
+function modelPricedResolutions(metadata: unknown): string[] {
+  return metadataStringArray(metadata, 'brandbox_priced_resolutions');
+}
+
+function modelPricedAudioModes(metadata: unknown): PricedAudioMode[] {
+  return metadataStringArray(metadata, 'brandbox_priced_audio_modes')
+    .filter((value): value is PricedAudioMode => value === 'off' || value === 'on');
+}
+
+function openRouterPricingScopeMatches(metadata: unknown, settings: Record<string, unknown>): boolean {
+  const resolution = typeof settings.resolution === 'string' ? settings.resolution.trim() : '';
+  const audioMode: PricedAudioMode = settings.generateAudio === true ? 'on' : 'off';
+  const resolutions = modelPricedResolutions(metadata);
+  const audioModes = modelPricedAudioModes(metadata);
+  return Boolean(resolution && resolutions.includes(resolution) && audioModes.includes(audioMode));
+}
+
 function safeMinimumCredits(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function safeVideoModel(model: Record<string, unknown>) {
-  const provider = String(model.provider || '');
+function safeRunwayModel(model: Record<string, unknown>) {
   const creditsPerSecond = modelCreditsPerSecond(model.metadata);
   const minimumCredits = safeMinimumCredits(model.minimum_credits) ?? 0;
-  const isOpenRouter = provider === 'openrouter';
   return {
     modelId: model.model_id,
-    provider,
+    provider: 'runway',
     name: model.display_name_ar || model.display_name_en || model.model_id,
-    vendor: model.vendor_name || (isOpenRouter ? 'OpenRouter / ByteDance' : 'Runway'),
+    vendor: model.vendor_name || 'Runway',
     minimumCredits,
     creditsPerSecond,
     sortOrder: Number(model.sort_order || 0),
     pricingReady: creditsPerSecond !== null,
-    configured: providerConfigured(provider),
-    minimumDuration: isOpenRouter ? OPENROUTER_VIDEO_MIN_DURATION : 2,
-    maximumDuration: isOpenRouter ? Math.min(10, OPENROUTER_VIDEO_MAX_DURATION) : 10,
+    configured: runwayConfigured(),
+    capabilitiesAvailable: true,
+    supportedDurations: Array.from({ length: 9 }, (_, index) => index + 2),
+    minimumDuration: 2,
+    maximumDuration: 10,
     supportedRatios: ['1280:720', '720:1280'],
-    quality: isOpenRouter ? '480p' : '720p',
+    supportedResolutions: ['720p'],
+    supportsAudio: false,
+    quality: '720p',
   };
 }
 
-function openRouterRatio(value: string): '16:9' | '9:16' | '' {
-  if (value === '1280:720' || value === '16:9') return '16:9';
-  if (value === '720:1280' || value === '9:16') return '9:16';
-  return '';
+async function safeOpenRouterModel(model: Record<string, unknown>) {
+  const modelId = String(model.model_id || '');
+  const creditsPerSecond = modelCreditsPerSecond(model.metadata);
+  const minimumCredits = safeMinimumCredits(model.minimum_credits) ?? 0;
+  const capabilities = await getOpenRouterModelCapabilities('video', modelId, {
+    fallbackMetadata: model.metadata,
+  });
+  const known = isCapabilityKnown(capabilities);
+  const video = capabilities.video;
+  const durations = known ? (video?.durations || []) : [];
+  const resolutions = known ? (video?.resolutions || []) : [];
+  const ratios = known ? (video?.aspectRatios || []) : [];
+  const pricedResolutions = creditsPerSecond !== null ? modelPricedResolutions(model.metadata) : [];
+  const pricedAudioModes = creditsPerSecond !== null ? modelPricedAudioModes(model.metadata) : [];
+  const selectableResolutions = creditsPerSecond !== null
+    ? resolutions.filter((resolution) => pricedResolutions.includes(resolution))
+    : resolutions;
+  const pricingReady = creditsPerSecond !== null
+    && pricedResolutions.length > 0
+    && pricedAudioModes.length > 0
+    && selectableResolutions.length > 0;
+  return {
+    modelId,
+    provider: 'openrouter',
+    name: model.display_name_ar || model.display_name_en || model.model_id,
+    vendor: model.vendor_name || 'OpenRouter',
+    minimumCredits,
+    creditsPerSecond,
+    sortOrder: Number(model.sort_order || 0),
+    pricingReady,
+    configured: openRouterConfigured(),
+    capabilitiesAvailable: known,
+    capabilitySource: capabilities.source,
+    supportedDurations: durations,
+    minimumDuration: durations.length ? Math.min(...durations) : null,
+    maximumDuration: durations.length ? Math.max(...durations) : null,
+    supportedRatios: ratios,
+    supportedResolutions: selectableResolutions,
+    supportsAudio: video?.supportsAudio === true
+      && (creditsPerSecond === null || pricedAudioModes.includes('on')),
+    supportsSeed: video?.supportsSeed === true,
+    frameImages: video?.frameImages || [],
+    quality: selectableResolutions[0] || null,
+  };
+}
+
+function openRouterRatio(value: string): string {
+  if (value === '1280:720') return '16:9';
+  if (value === '720:1280') return '9:16';
+  return value;
 }
 
 function supportedVideoModel(provider: string, modelId: string): boolean {
   if (provider === 'runway') return RUNWAY_VIDEO_MODELS.includes(modelId as typeof RUNWAY_VIDEO_MODELS[number]);
-  if (provider === 'openrouter') return OPENROUTER_VIDEO_MODELS.includes(modelId as typeof OPENROUTER_VIDEO_MODELS[number]);
+  if (provider === 'openrouter') return /^[^/]+\/.+/.test(modelId);
   return false;
 }
 
@@ -117,9 +188,11 @@ export async function GET(request: NextRequest) {
   if (modelsError) return NextResponse.json({ error: 'VIDEO_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
   if (generationsError) return NextResponse.json({ error: 'VIDEO_HISTORY_UNAVAILABLE' }, { status: 503 });
 
-  const supportedModels = (models || [])
+  const supportedModels = await Promise.all((models || [])
     .filter((model) => supportedVideoModel(String(model.provider || ''), String(model.model_id || '')))
-    .map((model) => safeVideoModel(model as unknown as Record<string, unknown>));
+    .map(async (model) => String(model.provider || '') === 'openrouter'
+      ? safeOpenRouterModel(model as unknown as Record<string, unknown>)
+      : safeRunwayModel(model as unknown as Record<string, unknown>)));
 
   const rows = await Promise.all((generations || []).map(async (generation) => {
     let resultUrl: string | null = null;
@@ -139,7 +212,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     project: ownership.project,
-    providerConfigured: supportedModels.some((model) => model.configured && model.pricingReady),
+    providerConfigured: supportedModels.some((model) => model.configured && model.pricingReady && model.capabilitiesAvailable),
     models: supportedModels,
     generations: rows,
   });
@@ -160,7 +233,9 @@ export async function POST(request: NextRequest) {
   const settings = body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings)
     ? body.settings as Record<string, unknown>
     : {};
-  const ratio = typeof settings.ratio === 'string' ? settings.ratio : '';
+  const ratio = typeof settings.ratio === 'string'
+    ? settings.ratio
+    : typeof settings.aspectRatio === 'string' ? settings.aspectRatio : '';
   const duration = Number(settings.duration);
   const quality = typeof settings.quality === 'string' ? settings.quality : 'standard';
 
@@ -188,20 +263,32 @@ export async function POST(request: NextRequest) {
   const provider = String(model.provider || '') as VideoProvider;
   if (!supportedVideoModel(provider, modelId)) return NextResponse.json({ error: 'VIDEO_MODEL_NOT_AVAILABLE' }, { status: 400 });
 
-  let normalizedRatio = ratio;
+  let normalizedSettings: Record<string, unknown> = { ratio, duration, quality };
   try {
     if (provider === 'runway') {
       validateRunwayVideoRequest({ model: modelId, promptText: prompt, ratio, duration });
     } else if (provider === 'openrouter') {
-      normalizedRatio = openRouterRatio(ratio);
-      validateOpenRouterVideoRequest({
-        model: modelId,
-        prompt,
-        duration,
-        resolution: '480p',
-        aspectRatio: normalizedRatio,
-        generateAudio: false,
+      const capabilities = await getOpenRouterModelCapabilities('video', modelId, {
+        fallbackMetadata: model.metadata,
       });
+      if (!isCapabilityKnown(capabilities)) {
+        return NextResponse.json({ error: 'VIDEO_MODEL_CAPABILITIES_UNAVAILABLE' }, { status: 503 });
+      }
+      const policy = applyVideoCapabilityPolicy(capabilities, {
+        duration,
+        resolution: settings.resolution,
+        aspectRatio: openRouterRatio(ratio),
+        generateAudio: settings.generateAudio,
+        seed: settings.seed,
+      });
+      normalizedSettings = {
+        ratio: String(policy.settings.aspectRatio || ''),
+        duration: Number(policy.settings.duration),
+        quality,
+        resolution: policy.settings.resolution,
+        generateAudio: policy.settings.generateAudio === true,
+        ...(policy.settings.seed !== undefined ? { seed: policy.settings.seed } : {}),
+      };
     } else {
       return NextResponse.json({ error: 'VIDEO_MODEL_NOT_AVAILABLE' }, { status: 400 });
     }
@@ -214,6 +301,9 @@ export async function POST(request: NextRequest) {
   if (!creditsPerSecond || minimumCredits === null) {
     return NextResponse.json({ error: 'VIDEO_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
   }
+  if (provider === 'openrouter' && !openRouterPricingScopeMatches(model.metadata, normalizedSettings)) {
+    return NextResponse.json({ error: 'VIDEO_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
+  }
   if (!providerConfigured(provider)) return NextResponse.json({ error: 'VIDEO_PROVIDER_NOT_CONFIGURED' }, { status: 503 });
 
   try {
@@ -223,7 +313,7 @@ export async function POST(request: NextRequest) {
       prompt,
       projectId,
       requestId,
-      settings: { ratio: normalizedRatio, duration, quality },
+      settings: normalizedSettings as { ratio: string; duration: number; quality?: string },
     };
     const result = provider === 'openrouter'
       ? await OpenRouterVideoGenerationService.start(actor, generationRequest, { creditsPerSecond, minimumCredits })
@@ -240,7 +330,7 @@ export async function POST(request: NextRequest) {
         wasRefunded: result.wasRefunded === true,
       });
     }
-    return NextResponse.json(result, { status });
+    return NextResponse.json({ ...result, normalizedSettings }, { status });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'VIDEO_GENERATION_FAILED';
     if (code === 'INVALID_VIDEO_REQUEST_ID') return NextResponse.json({ error: code }, { status: 400 });

@@ -10,10 +10,43 @@ import ProjectToolNav from './ProjectToolNav';
 function apiErrorMessage(code) {
   if (code === 'CHAT_MODEL_NOT_AVAILABLE') return 'هذا النموذج غير متاح حاليًا. تم تحديث قائمة النماذج المفعّلة.';
   if (code === 'CHAT_MODEL_CATALOG_UNAVAILABLE') return 'تعذر التحقق من نماذج الشات المتاحة حاليًا.';
+  if (code === 'CHAT_MODEL_CAPABILITIES_UNAVAILABLE') return 'تعذر التحقق من إعدادات هذا النموذج في OpenRouter، لذلك تم إيقاف الإرسال بدل استخدام قيم غير مؤكدة.';
   if (code === 'CHAT_MODEL_PRICING_UNAVAILABLE') return 'تسعير هذا النموذج غير مكتمل، لذلك لم يتم تنفيذ الطلب.';
   if (code === 'PROJECT_NOT_FOUND') return 'المشروع غير موجود أو لا تملك صلاحية الوصول إليه.';
   if (code === 'PROJECT_TOOL_MISMATCH') return 'هذا المشروع غير مخصص لأداة الشات.';
   return code || 'تعذر تنفيذ المحادثة.';
+}
+
+function normalizeChatModel(item) {
+  const chat = item?.capabilities?.chat && typeof item.capabilities.chat === 'object' ? item.capabilities.chat : {};
+  const maxCompletionTokens = Number(item?.max_completion_tokens ?? item?.capabilities?.maxCompletionTokens ?? 0);
+  return {
+    id: item.model_id,
+    name: item.display_name_ar || item.display_name_en || item.model_id,
+    cost: Number.isFinite(Number(item.minimum_credits)) ? Math.max(1, Math.trunc(Number(item.minimum_credits))) : null,
+    capabilitiesAvailable: item?.capabilitiesAvailable === true,
+    capabilitySource: item?.capabilitySource || 'unknown',
+    contextLength: Number(item?.context_length ?? item?.capabilities?.contextLength ?? 0) || null,
+    maxCompletionTokens: Number.isFinite(maxCompletionTokens) && maxCompletionTokens > 0 ? maxCompletionTokens : null,
+    supportsTemperature: chat.supportsTemperature === true,
+    supportsTopP: chat.supportsTopP === true,
+    supportsMaxTokens: chat.supportsMaxTokens === true || chat.supportsMaxCompletionTokens === true,
+    supportsReasoning: chat.supportsReasoning === true,
+    supportsTools: chat.supportsTools === true,
+    supportsStructuredOutput: chat.supportsStructuredOutput === true || chat.supportsResponseFormat === true,
+    supportsWebSearch: chat.supportsWebSearch === true,
+  };
+}
+
+function buildChatSettings(model) {
+  if (!model?.capabilitiesAvailable) return null;
+  const settings = {};
+  if (model.supportsTemperature) settings.temperature = 0.7;
+  if (model.supportsMaxTokens) {
+    const preferred = 1400;
+    settings.maxTokens = model.maxCompletionTokens ? Math.min(preferred, model.maxCompletionTokens) : preferred;
+  }
+  return settings;
 }
 
 export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) {
@@ -31,6 +64,7 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
   const [balance, setBalance] = useState(null);
 
   const selectedModel = models.find((model) => model.id === modelId) || models[0] || null;
+  const selectedCapabilitiesAvailable = Boolean(selectedModel?.capabilitiesAvailable);
   const insufficientCredits = Boolean(selectedModel?.cost && balance !== null && selectedModel.cost > balance);
 
   const getToken = useCallback(async () => {
@@ -48,11 +82,7 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
     const rows = (Array.isArray(payload.generations) ? payload.generations : []).reverse();
     const availableModels = (Array.isArray(payload.chatModels) ? payload.chatModels : [])
       .filter((item) => typeof item?.model_id === 'string' && item.model_id)
-      .map((item) => ({
-        id: item.model_id,
-        name: item.display_name_ar || item.display_name_en || item.model_id,
-        cost: Number.isFinite(Number(item.minimum_credits)) ? Math.max(1, Math.trunc(Number(item.minimum_credits))) : null,
-      }));
+      .map(normalizeChatModel);
 
     setHistory(rows);
     setModels(availableModels);
@@ -92,7 +122,12 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
   }, [loadWorkspace]);
 
   async function sendMessage() {
-    if (!prompt.trim() || !modelId || sending || insufficientCredits) return;
+    if (!prompt.trim() || !modelId || sending || insufficientCredits || !selectedCapabilitiesAvailable) return;
+    const settings = buildChatSettings(selectedModel);
+    if (!settings) {
+      setError('تعذر تأكيد إعدادات هذا النموذج من OpenRouter. لم يتم إرسال الطلب.');
+      return;
+    }
     setSending(true);
     setError('');
     try {
@@ -107,7 +142,7 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
           modelId,
           prompt: prompt.trim(),
           projectId,
-          settings: { temperature: 0.7, maxTokens: 1400 },
+          settings,
         }),
       });
       const result = await response.json().catch(() => ({}));
@@ -180,10 +215,11 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
           <div className="bb-surface-2 bb-divider border-t p-4">
             {error && <div className="bb-danger-surface mb-3 rounded-xl border px-3 py-2 text-xs font-bold" role="alert">{error}</div>}
             {!modelCatalogAvailable && <div className="bb-warning-surface mb-3 rounded-xl border px-3 py-2 text-xs font-bold" role="alert">قائمة نماذج الشات غير متاحة مؤقتًا، لذلك تم إيقاف الإرسال لحماية الرصيد.</div>}
+            {selectedModel && !selectedCapabilitiesAvailable && <div className="bb-warning-surface mb-3 rounded-xl border px-3 py-2 text-xs font-bold" role="alert">تعذر تأكيد Parameters هذا النموذج من OpenRouter. لن نرسل temperature أو max tokens أو أي إعداد بالتخمين.</div>}
             {insufficientCredits && <div className="bb-warning-surface mb-3 rounded-xl border px-3 py-2 text-xs font-bold" role="alert">رصيدك الحالي أقل من الحد الأدنى المتوقع لهذا النموذج. <Link href="/pricing" className="bb-text-accent font-black underline underline-offset-4">شحن الرصيد</Link></div>}
             <div className="flex gap-2">
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="اكتب رسالتك أو المهمة التي تريد تنفيذها داخل هذا المشروع..." className="bb-input min-h-24 flex-1 resize-none rounded-2xl border p-4 text-sm leading-7 outline-none" />
-              <button type="button" onClick={sendMessage} disabled={sending || !prompt.trim() || !modelId || !modelCatalogAvailable || insufficientCredits} className="bb-button-primary flex w-28 shrink-0 items-center justify-center gap-2 rounded-2xl text-sm font-black transition disabled:opacity-50">
+              <button type="button" onClick={sendMessage} disabled={sending || !prompt.trim() || !modelId || !modelCatalogAvailable || !selectedCapabilitiesAvailable || insufficientCredits} className="bb-button-primary flex w-28 shrink-0 items-center justify-center gap-2 rounded-2xl text-sm font-black transition disabled:opacity-50">
                 {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />} إرسال
               </button>
             </div>
@@ -191,7 +227,7 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
         </section>
 
         <aside className="bb-panel order-1 h-fit rounded-3xl border p-5 xl:order-2 xl:sticky xl:top-[150px]">
-          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><MessageSquare size={22} /></span><div><div className="bb-text-primary text-sm font-black">إعدادات الشات</div><div className="bb-text-tertiary text-[11px]">النماذج المفعّلة من لوحة الإدارة</div></div></div>
+          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><MessageSquare size={22} /></span><div><div className="bb-text-primary text-sm font-black">إعدادات الشات</div><div className="bb-text-tertiary text-[11px]">الإعدادات تتبع قدرات النموذج المحدد</div></div></div>
           {project?.description && <div className="bb-surface-1 bb-border bb-text-secondary mt-5 rounded-2xl border p-4 text-xs leading-6"><div className="bb-text-primary mb-2 font-black">سياق المشروع</div>{project.description}</div>}
           <label className="bb-text-secondary mt-6 block text-xs font-black">النموذج</label>
           <div className="relative mt-2">
@@ -201,7 +237,21 @@ export default function ChatProjectWorkspace({ projectId, initialPrompt = '' }) 
             </select>
             <ChevronDown size={16} className="bb-text-tertiary pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" />
           </div>
-          <div className="bb-surface-1 bb-border bb-text-secondary mt-5 rounded-2xl border p-4 text-xs leading-6"><Sparkles size={17} className="bb-text-accent mb-2" /> النموذج والتكلفة يتحقق منهما الخادم قبل خصم أي نقطة، وسياق المشروع يُضاف بعد التحقق من الملكية.</div>
+
+          {selectedModel?.capabilitiesAvailable && <div className="bb-surface-1 bb-border mt-4 rounded-2xl border p-4 text-[10px] leading-6">
+            <div className="bb-text-primary mb-2 text-xs font-black">قدرات النموذج المستخدمة</div>
+            <div className="flex flex-wrap gap-1.5">
+              {selectedModel.supportsTemperature && <span className="bb-accent-soft rounded-lg border px-2 py-1">temperature</span>}
+              {selectedModel.supportsMaxTokens && <span className="bb-accent-soft rounded-lg border px-2 py-1">max tokens</span>}
+              {selectedModel.supportsReasoning && <span className="bb-accent-soft rounded-lg border px-2 py-1">reasoning</span>}
+              {selectedModel.supportsTools && <span className="bb-accent-soft rounded-lg border px-2 py-1">tools</span>}
+              {selectedModel.supportsStructuredOutput && <span className="bb-accent-soft rounded-lg border px-2 py-1">structured output</span>}
+              {selectedModel.supportsWebSearch && <span className="bb-accent-soft rounded-lg border px-2 py-1">web search</span>}
+            </div>
+            {selectedModel.maxCompletionTokens && <div className="bb-text-tertiary mt-2">أقصى إخراج معلن: {selectedModel.maxCompletionTokens.toLocaleString('ar-LY')} token</div>}
+          </div>}
+
+          <div className="bb-surface-1 bb-border bb-text-secondary mt-5 rounded-2xl border p-4 text-xs leading-6"><Sparkles size={17} className="bb-text-accent mb-2" /> Brand Box لا يرسل أي Parameter اختياري إلا إذا أعلن النموذج دعمه؛ مثلًا لن نرسل temperature لموديل لا يدعمه.</div>
           <div className="bb-accent-soft mt-4 flex items-center justify-between rounded-xl border px-4 py-3 text-xs"><span className="bb-text-secondary">الرصيد</span><span className="font-black">{balance ?? '—'} نقطة</span></div>
           {selectedModel?.cost !== null && selectedModel?.cost !== undefined && <div className="bb-text-tertiary mt-2 text-[10px]">الحد الأدنى الحالي للنموذج: <strong className="bb-text-primary">{selectedModel.cost} نقطة</strong></div>}
         </aside>
