@@ -44,9 +44,24 @@ function safeMinimumCredits(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function safeModelPresentation(metadata: unknown, pricingReady: boolean) {
+  const record = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {};
+  const configuredBadge = typeof record.brandbox_badge === 'string' && record.brandbox_badge.trim()
+    ? record.brandbox_badge.trim().slice(0, 30)
+    : 'متاح';
+  return {
+    featured: record.brandbox_featured === true,
+    badge: pricingReady ? configuredBadge : 'غير مسعّر',
+  };
+}
+
 function safeRunwayModel(model: Record<string, unknown>) {
   const creditsPerSecond = modelCreditsPerSecond(model.metadata);
   const minimumCredits = safeMinimumCredits(model.minimum_credits) ?? 0;
+  const pricingReady = creditsPerSecond !== null;
+  const presentation = safeModelPresentation(model.metadata, pricingReady);
   return {
     modelId: model.model_id,
     provider: 'runway',
@@ -57,7 +72,9 @@ function safeRunwayModel(model: Record<string, unknown>) {
     minimumCreditsPerSecond: creditsPerSecond,
     pricingOptions: creditsPerSecond ? [{ resolution: '720p', audioMode: 'off', creditsPerSecond }] : [],
     sortOrder: Number(model.sort_order || 0),
-    pricingReady: creditsPerSecond !== null,
+    pricingReady,
+    featured: presentation.featured,
+    badge: presentation.badge,
     configured: runwayConfigured(),
     capabilitiesAvailable: true,
     supportedDurations: Array.from({ length: 9 }, (_, index) => index + 2),
@@ -94,6 +111,7 @@ async function safeOpenRouterModel(model: Record<string, unknown>) {
     ? pricingOptions[0].creditsPerSecond
     : null;
   const pricingReady = minimumCreditsPerSecond !== null && selectableResolutions.length > 0;
+  const presentation = safeModelPresentation(model.metadata, pricingReady);
   return {
     modelId,
     provider: 'openrouter',
@@ -105,6 +123,8 @@ async function safeOpenRouterModel(model: Record<string, unknown>) {
     pricingOptions,
     sortOrder: Number(model.sort_order || 0),
     pricingReady,
+    featured: presentation.featured,
+    badge: presentation.badge,
     configured: openRouterConfigured(),
     capabilitiesAvailable: known,
     capabilitySource: capabilities.source,
