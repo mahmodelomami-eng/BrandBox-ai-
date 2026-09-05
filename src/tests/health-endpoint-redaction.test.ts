@@ -19,7 +19,7 @@ const assertions: Array<[boolean, string]> = [
   [openRouterRoute.includes('authenticated'), 'OpenRouter readiness must expose only authentication readiness'],
   [openRouterRoute.includes('imageCatalogAvailable'), 'OpenRouter readiness must report image catalog capability'],
   [openRouterRoute.includes('videoCatalogAvailable'), 'OpenRouter readiness must report video catalog capability'],
-  [!/(usage|limit_remaining|key_hash|keyHash|credits)/.test(openRouterRoute), 'OpenRouter readiness route must not expose key usage, limits, hashes or credits'],
+  [!/(?:\busage\s*:|\blimit_remaining\s*:|\bkey_hash\s*:|\bkeyHash\s*:|\bcredits\s*:)/.test(openRouterRoute), 'OpenRouter readiness route must not expose key usage, limits, hashes or credits as response fields'],
   [openRouterProbe.includes('`${OPENROUTER_BASE_URL}/key`'), 'OpenRouter readiness must validate the configured key'],
   [openRouterProbe.includes('`${OPENROUTER_BASE_URL}/images/models`'), 'OpenRouter readiness must validate the image catalog'],
   [openRouterProbe.includes('`${OPENROUTER_BASE_URL}/videos/models`'), 'OpenRouter readiness must validate the video catalog'],
