@@ -11,6 +11,7 @@ import { emitServerError, getRequestCorrelationId } from '@/lib/observability/te
 
 const VIDEO_BUCKET = 'generation-video-assets';
 type VideoProvider = 'runway' | 'openrouter';
+type PricedAudioMode = 'off' | 'on';
 
 function runwayConfigured(): boolean {
   return Boolean(process.env.RUNWAYML_API_SECRET);
@@ -30,6 +31,32 @@ function modelCreditsPerSecond(metadata: unknown): number | null {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
   const value = Number((metadata as Record<string, unknown>).brandbox_credits_per_second);
   return Number.isInteger(value) && value >= 1 ? value : null;
+}
+
+function metadataStringArray(metadata: unknown, key: string): string[] {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
+  const raw = (metadata as Record<string, unknown>)[key];
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim()))];
+}
+
+function modelPricedResolutions(metadata: unknown): string[] {
+  return metadataStringArray(metadata, 'brandbox_priced_resolutions');
+}
+
+function modelPricedAudioModes(metadata: unknown): PricedAudioMode[] {
+  return metadataStringArray(metadata, 'brandbox_priced_audio_modes')
+    .filter((value): value is PricedAudioMode => value === 'off' || value === 'on');
+}
+
+function openRouterPricingScopeMatches(metadata: unknown, settings: Record<string, unknown>): boolean {
+  const resolution = typeof settings.resolution === 'string' ? settings.resolution.trim() : '';
+  const audioMode: PricedAudioMode = settings.generateAudio === true ? 'on' : 'off';
+  const resolutions = modelPricedResolutions(metadata);
+  const audioModes = modelPricedAudioModes(metadata);
+  return Boolean(resolution && resolutions.includes(resolution) && audioModes.includes(audioMode));
 }
 
 function safeMinimumCredits(value: unknown): number | null {
@@ -73,6 +100,15 @@ async function safeOpenRouterModel(model: Record<string, unknown>) {
   const durations = known ? (video?.durations || []) : [];
   const resolutions = known ? (video?.resolutions || []) : [];
   const ratios = known ? (video?.aspectRatios || []) : [];
+  const pricedResolutions = creditsPerSecond !== null ? modelPricedResolutions(model.metadata) : [];
+  const pricedAudioModes = creditsPerSecond !== null ? modelPricedAudioModes(model.metadata) : [];
+  const selectableResolutions = creditsPerSecond !== null
+    ? resolutions.filter((resolution) => pricedResolutions.includes(resolution))
+    : resolutions;
+  const pricingReady = creditsPerSecond !== null
+    && pricedResolutions.length > 0
+    && pricedAudioModes.length > 0
+    && selectableResolutions.length > 0;
   return {
     modelId,
     provider: 'openrouter',
@@ -81,7 +117,7 @@ async function safeOpenRouterModel(model: Record<string, unknown>) {
     minimumCredits,
     creditsPerSecond,
     sortOrder: Number(model.sort_order || 0),
-    pricingReady: creditsPerSecond !== null,
+    pricingReady,
     configured: openRouterConfigured(),
     capabilitiesAvailable: known,
     capabilitySource: capabilities.source,
@@ -89,11 +125,12 @@ async function safeOpenRouterModel(model: Record<string, unknown>) {
     minimumDuration: durations.length ? Math.min(...durations) : null,
     maximumDuration: durations.length ? Math.max(...durations) : null,
     supportedRatios: ratios,
-    supportedResolutions: resolutions,
-    supportsAudio: video?.supportsAudio === true,
+    supportedResolutions: selectableResolutions,
+    supportsAudio: video?.supportsAudio === true
+      && (creditsPerSecond === null || pricedAudioModes.includes('on')),
     supportsSeed: video?.supportsSeed === true,
     frameImages: video?.frameImages || [],
-    quality: resolutions[0] || null,
+    quality: selectableResolutions[0] || null,
   };
 }
 
@@ -262,6 +299,9 @@ export async function POST(request: NextRequest) {
   const creditsPerSecond = modelCreditsPerSecond(model.metadata);
   const minimumCredits = safeMinimumCredits(model.minimum_credits);
   if (!creditsPerSecond || minimumCredits === null) {
+    return NextResponse.json({ error: 'VIDEO_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
+  }
+  if (provider === 'openrouter' && !openRouterPricingScopeMatches(model.metadata, normalizedSettings)) {
     return NextResponse.json({ error: 'VIDEO_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
   }
   if (!providerConfigured(provider)) return NextResponse.json({ error: 'VIDEO_PROVIDER_NOT_CONFIGURED' }, { status: 503 });
