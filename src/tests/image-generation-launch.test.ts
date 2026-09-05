@@ -54,7 +54,7 @@ assert.ok(engine.includes("'generation_failure_refund'"));
 assert.ok(engine.includes('wasRefunded: refundRes.success'));
 
 assert.ok(capabilityService.includes("`${OPENROUTER_API_BASE}/images/models`"), 'image capability discovery must use the dedicated OpenRouter image-model catalog');
-assert.ok(capabilityService.includes("mediaCatalogCache"), 'image/video model-list responses must be shared rather than fetched once per model');
+assert.ok(capabilityService.includes('mediaCatalogCache'), 'image/video model-list responses must be shared rather than fetched once per model');
 assert.ok(capabilityService.includes("tool === 'image'"));
 assert.ok(capabilityService.includes('resolutions: enumValues(supported.resolution)'));
 assert.ok(capabilityService.includes('aspectRatios: enumValues(supported.aspect_ratio)'));
@@ -123,9 +123,13 @@ for (const modelId of [
 ]) {
   assert.ok(popularMigration.includes(`'${modelId}'`), `popular image catalog must include ${modelId}`);
 }
-assert.match(popularMigration, /'bytedance-seed\/seedream-5-0-lite'[\s\S]*?"supported_resolutions":\["2K","4K"\]/, 'Seedream 5 Lite fallback must never advertise unsupported 1K');
-assert.ok(!popularMigration.match(/'bytedance-seed\/seedream-5-0-lite'[\s\S]*?"supported_resolutions":\[[^\]]*"1K"/), 'Seedream 5 Lite must not regress to 1K');
-assert.ok(popularMigration.includes("FALSE, FALSE, sort_order"), 'new paid media models must be disabled/hidden by default in production');
+const seedreamLiteStart = popularMigration.indexOf("'bytedance-seed/seedream-5-0-lite'");
+const seedreamProStart = popularMigration.indexOf("'bytedance-seed/seedream-5-0-pro'", seedreamLiteStart + 1);
+assert.ok(seedreamLiteStart >= 0 && seedreamProStart > seedreamLiteStart, 'Seedream Lite catalog row must be isolated for regression validation');
+const seedreamLiteCatalogRow = popularMigration.slice(seedreamLiteStart, seedreamProStart);
+assert.ok(seedreamLiteCatalogRow.includes('"supported_resolutions":["2K","4K"]'), 'Seedream 5 Lite fallback must advertise 2K/4K');
+assert.ok(!seedreamLiteCatalogRow.includes('"1K"'), 'Seedream 5 Lite must never regress to unsupported 1K');
+assert.ok(popularMigration.includes('FALSE, FALSE, sort_order'), 'new paid media models must be disabled/hidden by default in production');
 assert.ok(popularMigration.includes('ON CONFLICT (model_id) DO UPDATE SET'));
 assert.ok(!popularMigration.includes('is_enabled = EXCLUDED.is_enabled'), 'catalog reruns must preserve administrator activation decisions');
 
