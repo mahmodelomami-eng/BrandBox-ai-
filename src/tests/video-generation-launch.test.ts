@@ -20,15 +20,12 @@ const popularMigration = readFileSync(join(root, 'supabase/migrations/2026090519
 const extendedMigration = readFileSync(join(root, 'supabase/migrations/20260905200500_openrouter_extended_video_catalog.sql'), 'utf8');
 const pricingScopeMigration = readFileSync(join(root, 'supabase/migrations/20260905202500_seedance_video_pricing_scope.sql'), 'utf8');
 
-// Existing Runway provider remains supported and server-secret protected.
 assert.ok(runwayClient.includes("RUNWAY_VIDEO_MODELS = ['gen4.5']"));
 assert.ok(runwayClient.includes('/v1/text_to_video'));
 assert.ok(runwayClient.includes('/v1/tasks/'));
 assert.ok(runwayClient.includes('process.env.RUNWAYML_API_SECRET'));
 assert.ok(!runwayClient.includes('error?.message'));
 
-// OpenRouter client keeps only coarse protocol/safety validation. Model-specific
-// values are resolved before this client through the capability policy.
 assert.ok(openRouterClient.includes("const OPENROUTER_VIDEO_BASE = 'https://openrouter.ai/api/v1/videos'"));
 assert.ok(openRouterClient.includes("if (!/^[^/\\s]+\\/.{1,200}$/.test(model))"));
 assert.ok(openRouterClient.includes('duration < 1 || duration > 120'));
@@ -42,7 +39,6 @@ assert.ok(openRouterClient.includes('/content?index=0'));
 assert.ok(openRouterClient.includes('process.env.OPENROUTER_API_KEY'));
 assert.ok(!openRouterClient.includes('error?.message'));
 
-// Current OpenRouter video model fields + one shared media-catalog snapshot.
 for (const snippet of [
   'mediaCatalogCache',
   "const endpoint = tool === 'image' ? 'images/models' : 'videos/models'",
@@ -60,8 +56,6 @@ assert.ok(settingsPolicy.includes('video.durations'));
 assert.ok(settingsPolicy.includes('video.resolutions'));
 assert.ok(settingsPolicy.includes('video.aspectRatios'));
 
-// Route authorizes catalog + capabilities + exact verified pricing scope before
-// any credit reservation/provider start.
 const post = route.slice(route.indexOf('export async function POST'), route.indexOf('export async function PATCH'));
 const catalogIndex = post.indexOf(".from('ai_model_catalog')");
 const capabilityIndex = post.indexOf("getOpenRouterModelCapabilities('video', modelId");
@@ -89,13 +83,11 @@ for (const snippet of [
   'VideoGenerationService.start',
   'VideoGenerationService.refresh',
 ]) assert.ok(route.includes(snippet), `video route missing ${snippet}`);
-assert.ok(!route.includes("OPENROUTER_VIDEO_MODELS.includes"), 'OpenRouter catalog must not be restricted to the original launch model');
-assert.ok(!post.includes("resolution: '480p'"), 'route must not impose 480p on every OpenRouter model');
-assert.ok(!post.includes('generateAudio: false'), 'route must not disable model-supported audio globally');
+assert.ok(!route.includes("OPENROUTER_VIDEO_MODELS.includes"));
+assert.ok(!post.includes("resolution: '480p'"));
+assert.ok(!post.includes('generateAudio: false'));
 assert.ok(!route.includes('CreditEngine.calculateRequiredCredits'));
 
-// GET exposes full capabilities for unpriced staging models, but for a model with
-// a Brand Box rate it only exposes the subset covered by that verified rate.
 for (const snippet of [
   'async function safeOpenRouterModel',
   'capabilitiesAvailable: known',
@@ -107,7 +99,6 @@ for (const snippet of [
   'pricingReady',
 ]) assert.ok(route.includes(snippet), `video model decoration/pricing scope missing ${snippet}`);
 
-// Both lifecycle services retain tenant isolation, refunds, durable MP4 storage.
 for (const service of [runwayService, openRouterService]) {
   for (const snippet of [
     "status: 'queued'", "status: 'processing'", "status: 'completed'", "status: 'failed'",
@@ -123,7 +114,6 @@ assert.ok(openRouterService.includes('const seed = providerSettings.seed'));
 assert.ok(openRouterService.includes('downloadOpenRouterVideoContent(task.taskId)'));
 assert.ok(openRouterService.includes('MAX_VIDEO_BYTES'));
 
-// Video UI follows the selected model, not global duration/resolution lists.
 assert.ok(page.includes('VideoProjectWorkspace'));
 assert.ok(!page.includes('MediaProjectWorkspace'));
 for (const snippet of [
@@ -131,22 +121,25 @@ for (const snippet of [
   'selectedModel?.supportedRatios',
   'selectedModel?.supportedResolutions',
   'selectedModel?.capabilitiesAvailable',
-  'availableDurations.includes(duration)',
-  'availableRatios.includes(ratio)',
-  'availableResolutions.includes(resolution)',
-  'if (!selectedModel.supportsAudio && generateAudio) setGenerateAudio(false)',
+  'const effectiveRatio = ratioAlias(ratio, availableRatios)',
+  'const effectiveDuration = availableDurations.includes(duration)',
+  'const effectiveResolution = availableResolutions.includes(resolution)',
+  'const effectiveGenerateAudio = Boolean(selectedModel?.supportsAudio && generateAudio)',
   'function handleModelChange(event)',
-  'settings: { ratio, duration, resolution, generateAudio, quality:',
+  'ratio: effectiveRatio',
+  'duration: effectiveDuration',
+  'resolution: effectiveResolution',
+  'generateAudio: effectiveGenerateAudio',
   'selectedModel?.creditsPerSecond',
   'priceEstimate > creditBalance',
   "fetch('/api/v1/video-generations'",
   "method: 'PATCH'",
   '<video controls',
-]) assert.ok(workspace.includes(snippet), `Video Studio missing adaptive behavior ${snippet}`);
+]) assert.ok(workspace.includes(snippet), `Video Studio missing derived adaptive behavior ${snippet}`);
 assert.ok(!workspace.includes('const DURATIONS ='));
 assert.ok(!workspace.includes('const RATIOS ='));
+assert.ok(!workspace.includes('useEffect(() => {\n    if (!selectedModel)'), 'selected-model normalization must not synchronously rewrite state in an effect');
 
-// Admin still requires provider secret + Brand Box pricing before activation.
 for (const snippet of [
   'function hasRunwaySecret', 'function hasOpenRouterSecret',
   'runwayConfigured: hasRunwaySecret()',
@@ -154,7 +147,6 @@ for (const snippet of [
   "error: 'OPENROUTER_SECRET_REQUIRED'", "error: 'VIDEO_PRICING_REQUIRED'",
 ]) assert.ok(adminRoute.includes(snippet), `admin activation guard missing ${snippet}`);
 
-// Existing storage and verified Seedance launch stay intact.
 assert.ok(runwayMigration.includes("'generation-video-assets'"));
 assert.ok(runwayMigration.includes("ARRAY['video/mp4']"));
 assert.ok(runwayPricingMigration.includes('minimum_credits = 50'));
@@ -165,17 +157,12 @@ assert.ok(seedanceMigration.includes("'brandbox_credits_per_second', 5"));
 assert.ok(seedanceMigration.includes("'runtime_verified_on', '2026-09-05'"));
 assert.ok(!seedanceMigration.includes('is_enabled = EXCLUDED.is_enabled'));
 
-// The current Seedance rate is explicitly scoped to the runtime-verified launch
-// envelope. Higher resolution/audio must fail closed until #227 adds a matrix.
 assert.ok(pricingScopeMigration.includes("'brandbox_priced_resolutions', jsonb_build_array('480p')"));
 assert.ok(pricingScopeMigration.includes("'brandbox_priced_audio_modes', jsonb_build_array('off')"));
 assert.ok(pricingScopeMigration.includes("'bytedance/seedance-2.0-mini'"));
 assert.ok(!pricingScopeMigration.includes('is_enabled ='));
 assert.ok(!pricingScopeMigration.includes('is_visible_to_users ='));
 
-// Popular + extended general-purpose OpenRouter video catalogs. Production
-// defaults stay disabled/hidden; Sora is intentionally absent because of its
-// announced 2026-09-24 removal.
 const popularVideoModels = [
   'bytedance/seedance-2.0-mini', 'bytedance/seedance-2.5', 'google/veo-3.1-lite',
   'bytedance/seedance-2.0-fast', 'bytedance/seedance-2.0', 'x-ai/grok-imagine-video',
