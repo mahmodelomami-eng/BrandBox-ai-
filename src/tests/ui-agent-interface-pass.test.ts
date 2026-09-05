@@ -7,6 +7,7 @@ const dashboard = readFileSync(join(root, 'src/components/StableUserDashboard.js
 const navigation = readFileSync(join(root, 'src/components/GlobalNavigation.jsx'), 'utf8');
 const appNavigationWrapper = readFileSync(join(root, 'src/components/layout/AppNavigationWrapper.jsx'), 'utf8');
 const mobileReview = readFileSync(join(root, 'src/app/mobile-review/page.tsx'), 'utf8');
+const auth = readFileSync(join(root, 'src/app/auth/page.jsx'), 'utf8');
 const pricing = readFileSync(join(root, 'src/app/pricing/page.jsx'), 'utf8');
 const account = readFileSync(join(root, 'src/app/dashboard/account/page.jsx'), 'utf8');
 const plansApi = readFileSync(join(root, 'src/app/api/v1/plans/route.ts'), 'utf8');
@@ -91,5 +92,16 @@ assert.ok(mobileReview.includes('aria-label="التنقل الرئيسي لنس�
 assert.ok(mobileReview.includes("aria-current={active ? 'page' : undefined}"), 'active bottom-navigation item must be exposed to assistive technology');
 assert.ok(mobileReview.includes('minHeight: 48'), 'bottom-navigation controls must preserve a usable touch target');
 assert.ok(mobileReview.includes('minHeight: 44'), 'primary review controls must preserve a minimum touch target');
+
+// Core auth form controls must have durable accessible names, useful browser semantics, and announced feedback.
+assert.ok(auth.includes('<span className="sr-only">البريد الإلكتروني</span>'), 'email input must have an accessible label independent of its placeholder');
+assert.ok(auth.includes('<span className="sr-only">كلمة المرور</span>'), 'password input must have an accessible label independent of its placeholder');
+assert.ok(auth.includes('autoComplete="email"'), 'email field should expose autocomplete semantics');
+assert.ok(auth.includes("autoComplete={mode === 'login' ? 'current-password' : 'new-password'}"), 'password autocomplete must match login/signup mode');
+assert.ok(auth.includes('type="tel" autoComplete="tel" inputMode="tel"'), 'phone inputs must expose telephone semantics');
+assert.ok(auth.includes('aria-live="polite" aria-atomic="true"'), 'auth feedback must be announced to assistive technology');
+assert.ok(auth.includes('role="dialog" aria-modal="true"'), 'social onboarding must be exposed as a modal dialog');
+assert.ok(auth.includes('aria-label="إغلاق نافذة إكمال الحساب"'), 'icon-only onboarding close control needs an accessible name');
+assert.ok(auth.includes('min-h-11 min-w-11'), 'small icon controls must preserve a usable touch target');
 
 console.log('Product/Monitoring interface pass guard passed.');
