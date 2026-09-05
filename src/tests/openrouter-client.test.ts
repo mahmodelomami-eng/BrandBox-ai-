@@ -151,6 +151,13 @@ async function run() {
   });
   assert.equal('resolution' in JSON.parse(String(noResolutionCalls[0].init?.body)), false, 'client must not invent a model resolution');
 
+  await createOpenRouterImageGeneration({
+    model: 'new-vendor/new-image-model', prompt: 'catalog-authorized model', count: 1, aspectRatio: '1:1',
+  }, {
+    apiKey: 'test-key',
+    fetchImpl: async () => new Response(JSON.stringify({ data: [{ b64_json: 'eA==', media_type: 'image/png' }] }), { status: 200 }),
+  });
+
   await assert.rejects(
     () => createOpenRouterImageGeneration({
       model: 'google/gemini-3.1-flash-lite-image', prompt: 'hello', aspectRatio: '1:1', count: 21,
@@ -159,7 +166,7 @@ async function run() {
   );
 
   await assert.rejects(
-    () => createOpenRouterImageGeneration({ model: 'unknown/image-model', prompt: 'hello', aspectRatio: '1:1' }, { apiKey: 'test-key', fetchImpl }),
+    () => createOpenRouterImageGeneration({ model: 'malformed-model-id', prompt: 'hello', aspectRatio: '1:1' }, { apiKey: 'test-key', fetchImpl }),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_MODEL_NOT_ALLOWED'
   );
 
