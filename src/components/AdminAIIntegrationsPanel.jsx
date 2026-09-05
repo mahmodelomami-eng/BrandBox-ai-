@@ -34,14 +34,10 @@ function matrixCreditsLabel(model) {
   return rates.length ? rates.join(' / ') : '—';
 }
 
-function adminErrorMessage(status, code, fallback) {
+function safeAdminAIError(status, fallback) {
   if (status === 401) return 'انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.';
   if (status === 403) return 'لا تملك الصلاحية المطلوبة لإدارة تكاملات الذكاء الاصطناعي.';
-  if (code === 'MODEL_PRICING_REQUIRED') return 'لا يمكن إظهار هذا النموذج للمستخدم قبل إضافة سعر Brand Box صالح له.';
-  if (code === 'MODEL_PROVIDER_SECRET_REQUIRED') return 'لا يمكن إظهار النموذج قبل تهيئة مفتاح المزود على الخادم.';
-  if (code === 'MODEL_ENABLE_REQUIRED') return 'فعّل النموذج أولًا ثم اختر إظهاره للمستخدم.';
-  if (code === 'DIRECT_FREE_PROVIDER_BYPASS_DISABLED') return 'المسار المجاني المباشر معطّل: حتى نموذج المزود المجاني يُباع للمستخدم بنقاط Brand Box.';
-  if (status === 409) return 'تعذر حفظ التعديل بسبب تعارض في الحالة الحالية.';
+  if (status === 409) return 'تعذر حفظ التعديل: تحقق من تفعيل النموذج وتسعيره وتهيئة المزود قبل إظهاره للمستخدم.';
   if (status === 429) return 'طلبات كثيرة مؤقتًا. حاول مجددًا بعد قليل.';
   return fallback;
 }
@@ -72,7 +68,7 @@ export default function AdminAIIntegrationsPanel() {
       const response = await fetch('/api/v1/admin/ai-integrations', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(adminErrorMessage(response.status, result.error, 'تعذر تحميل تكاملات الذكاء الاصطناعي.'));
+        setError(safeAdminAIError(response.status, 'تعذر تحميل تكاملات الذكاء الاصطناعي.'));
         return;
       }
       setPayload(result);
@@ -105,9 +101,9 @@ export default function AdminAIIntegrationsPanel() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const result = await response.json().catch(() => ({}));
+      await response.json().catch(() => ({}));
       if (!response.ok) {
-        setError(adminErrorMessage(response.status, result.error, 'تعذر حفظ التعديل.'));
+        setError(safeAdminAIError(response.status, 'تعذر حفظ التعديل.'));
         return;
       }
       setMessage('تم تحديث إعدادات النموذج وتسجيل العملية في Audit Log.');
@@ -183,7 +179,7 @@ export default function AdminAIIntegrationsPanel() {
 
     <div className="grid gap-4 lg:grid-cols-3">
       {providers.map((provider) => <div key={provider.id} className="bb-card rounded-3xl border p-5"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 font-black"><Cpu size={18} className="bb-text-accent"/>{provider.id}</div><StatusBadge label={provider.configured ? 'Configured' : 'Missing secret'} tone={provider.configured ? 'success' : 'danger'} /></div><div className="bb-text-tertiary mt-4 text-xs">{provider.enabledModelCount} مفعّل · {provider.userVisibleModelCount ?? 0} ظاهر للمستخدم · {provider.modelCount} إجمالي</div></div>)}
-      <div className="bb-warning-surface rounded-3xl border p-5"><div className="flex items-center gap-2 font-black"><KeyRound size={18}/> سياسة الأسرار</div><div className="mt-4 text-xs leading-6">OpenRouter: {secretPolicy.openrouterConfigured ? 'مهيأ على الخادم' : 'غير مهيأ'}<br/>Runway: {secretPolicy.runwayConfigured ? 'مهيأ على الخادم' : 'غير مهيأ'}<br/>Browser exposure: {secretPolicy.exposedToBrowser ? 'غير آمن' : 'لا يتم كشف الأسرار'}</div></div>
+      <div className="bb-warning-surface rounded-3xl border p-5"><div className="flex items-center gap-2 font-black"><KeyRound size={18}/> سياسة الأسرار</div><div className="mt-4 text-xs leading-6">OpenRouter: {secretPolicy.openrouterConfigured ? 'مهيأ على الخادم' : 'غير مهيأ'}<br/>Runway: {secretPolicy.runwayConfigured ? 'مهيأ على الخادم' : 'غير مهيأ'}<br/>Browser exposure: {secretPolicy.exposedToBrowser ? 'غير آمن' : 'لا يتم كشف الأسرار'}<br/>إدارة الأسرار محجوزة لصلاحية providers.secrets_manage</div></div>
       <div className="bb-card rounded-3xl border p-5"><div className="flex items-center gap-2 font-black"><Database size={18} style={{ color: 'var(--bb-success)' }}/> سياسة التكلفة</div><div className="bb-text-tertiary mt-4 text-xs leading-6">FX: {billing.market_usd_lyd ?? '—'} LYD/USD<br/>Risk buffer: {billing.risk_buffer_pct ?? '—'}%<br/>Target margin: {billing.target_gross_margin_pct ?? '—'}%<br/>مرجع النقطة: {billing.reference_credit_value_lyd ?? '—'} د.ل</div></div>
     </div>
 
