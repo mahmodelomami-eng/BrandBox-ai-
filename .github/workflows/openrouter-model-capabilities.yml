@@ -1,0 +1,45 @@
+name: OpenRouter Model Capabilities
+
+on:
+  pull_request:
+    paths:
+      - 'src/lib/ai/openrouter-model-capabilities.ts'
+      - 'src/lib/ai/openrouter-settings-policy.ts'
+      - 'src/lib/ai/openrouter-client.ts'
+      - 'src/app/api/v1/ai/model-capabilities/**'
+      - 'src/app/api/v1/generations/**'
+      - 'src/app/api/v1/video-generations/**'
+      - 'src/components/ChatProjectWorkspace.jsx'
+      - 'src/components/ImageStudioWorkspace.jsx'
+      - 'src/components/VideoProjectWorkspace.jsx'
+      - 'src/components/MediaProjectWorkspace.jsx'
+      - 'src/tests/openrouter-model-capabilities.test.ts'
+      - 'src/tests/openrouter-settings-policy.test.ts'
+      - '.github/workflows/openrouter-model-capabilities.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Capability discovery tests
+        run: node --import tsx src/tests/openrouter-model-capabilities.test.ts
+      - name: Capability settings policy tests
+        run: node --import tsx src/tests/openrouter-settings-policy.test.ts
+      - name: Existing regression suite
+        run: npm test
+      - name: Production build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+        run: npm run build
