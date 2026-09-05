@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
   }
 
   const database = createPrivilegedSupabaseClient();
-  const [{ data: project, error: projectError }, { data: brandKit }, { data: model, error: modelError }] = await Promise.all([
+  const [{ data: project, error: projectError }, { data: brandKit, error: brandKitError }, { data: model, error: modelError }] = await Promise.all([
     database.from('projects')
       .select('id,name,description,industry,target_audience,language,tone')
       .eq('id', projectId)
@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
   ]);
 
   if (projectError || !project) return NextResponse.json({ error: 'PROJECT_NOT_FOUND' }, { status: 404 });
+  if (brandKitError) return NextResponse.json({ error: 'BRAND_KIT_UNAVAILABLE' }, { status: 503 });
   if (modelError) return NextResponse.json({ error: 'CHAT_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
   if (!model) return NextResponse.json({ error: 'CHAT_MODEL_NOT_AVAILABLE' }, { status: 503 });
 
