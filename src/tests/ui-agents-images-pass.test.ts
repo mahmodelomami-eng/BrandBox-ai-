@@ -30,7 +30,8 @@ assert.ok(studio.includes('رصيدك غير كافٍ لهذه العملية'))
 assert.ok(studio.includes('href="/pricing"'));
 assert.ok(studio.includes('التكلفة المتوقعة'));
 assert.ok(studio.includes('نقاط للصورة'));
-assert.ok(studio.includes('disabled={generating || !activeProject || !selectedModel || !imageModelsAvailable || insufficientCredits}'));
+assert.ok(studio.includes('disabled={generating || !activeProject || !selectedModel || !imageModelsAvailable || !capabilitiesAvailable || insufficientCredits}'));
+assert.ok(studio.includes('تعذر تأكيد قدرات هذا النموذج'));
 
 // Errors shown to users should be normalized, while successful generation keeps the prompt reusable.
 assert.ok(studio.includes('function friendlyImageError(value)'));
@@ -50,7 +51,7 @@ assert.ok(studio.includes('قد تنتهي صلاحيته لاحقًا'));
 assert.ok(studio.includes('aria-pressed={pressed}'));
 assert.ok(studio.includes('pressed={styleId === style.id}'));
 assert.ok(studio.includes('pressed={aspectRatio === item.value}'));
-assert.ok(studio.includes('pressed={resolution === item.value}'));
+assert.ok(studio.includes('pressed={resolution === value}'));
 assert.ok(studio.includes('aria-pressed={useBrandKit}'));
 assert.ok(studio.includes('aria-haspopup="listbox"'));
 
