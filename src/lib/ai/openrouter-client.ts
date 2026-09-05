@@ -1,6 +1,8 @@
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
 
+// Verified launch models kept for legacy references only. The authenticated
+// Brand Box catalog + capability service is the authority for enabled models.
 export const OPENROUTER_IMAGE_MODELS = [
   'openai/gpt-image-2',
   'bytedance-seed/seedream-4.5',
@@ -81,15 +83,18 @@ function finiteUsageNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function validOpenRouterModelId(value: unknown): boolean {
+  const model = typeof value === 'string' ? value.trim() : '';
+  return /^[^/\s]+\/.{1,200}$/.test(model);
+}
+
 export async function createOpenRouterImageGeneration(
   request: OpenRouterImageRequest,
   options: OpenRouterOptions = {}
 ): Promise<OpenRouterImageResult> {
   const apiKey = options.apiKey || process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY_MISSING');
-  if (!OPENROUTER_IMAGE_MODELS.includes(request.model as typeof OPENROUTER_IMAGE_MODELS[number])) {
-    throw new Error('OPENROUTER_IMAGE_MODEL_NOT_ALLOWED');
-  }
+  if (!validOpenRouterModelId(request.model)) throw new Error('OPENROUTER_IMAGE_MODEL_NOT_ALLOWED');
 
   const prompt = request.prompt.trim();
   if (!prompt) throw new Error('OPENROUTER_INVALID_IMAGE_REQUEST');
