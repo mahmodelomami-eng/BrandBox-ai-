@@ -1,3 +1,5 @@
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.brandbox-ai.com').replace(/\/+$/, '');
+
 export default function robots() {
   return {
     rules: [
@@ -17,6 +19,7 @@ export default function robots() {
         ],
       },
     ],
-    host: 'https://www.brandbox-ai.com',
+    host: siteUrl,
+    sitemap: `${siteUrl}/sitemap.xml`,
   };
 }
