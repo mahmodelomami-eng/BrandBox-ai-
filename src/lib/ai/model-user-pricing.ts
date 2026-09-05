@@ -27,13 +27,18 @@ export function isModelUserPriced(model: UserPricedModelLike): boolean {
   return positiveInteger(model.minimum_credits) !== null;
 }
 
+/**
+ * Returns true only when at least one provider-cost field is explicitly stored
+ * and every explicitly stored provider-cost field is zero. Null/undefined are
+ * unknown and must never be interpreted as a free provider price.
+ */
 export function providerCostIsFree(model: Record<string, unknown>): boolean {
-  const values = [
+  const rawValues = [
     model.input_cost_per_million_usd,
     model.output_cost_per_million_usd,
     model.fixed_provider_cost_usd,
     model.provider_cost_per_second_usd,
-  ].map((value) => Number(value));
-  const finite = values.filter(Number.isFinite);
-  return finite.length > 0 && finite.every((value) => value === 0);
+  ].filter((value) => value !== null && value !== undefined && value !== '');
+  const values = rawValues.map((value) => Number(value)).filter(Number.isFinite);
+  return values.length > 0 && values.length === rawValues.length && values.every((value) => value === 0);
 }
