@@ -1,8 +1,3 @@
-import {
-  isOpenRouterImageCountSupported,
-  resolveOpenRouterImageResolution,
-} from './openrouter-image-capabilities';
-
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
 
@@ -13,16 +8,14 @@ export const OPENROUTER_IMAGE_MODELS = [
   'google/gemini-3.1-flash-lite-image',
 ] as const;
 
+// Coarse platform unions are kept only for legacy typing/compatibility.
+// Per-model validation belongs to openrouter-model-capabilities.ts and the
+// authenticated Brand Box API routes before credits are spent.
 export const OPENROUTER_IMAGE_ASPECT_RATIOS = [
   'auto', '4:1', '3:1', '21:9', '2:1', '17:9', '16:9', '3:2', '4:3',
   '5:4', '1:1', '4:5', '3:4', '2:3', '9:16',
 ] as const;
-
-// Kept as the coarse platform union for request typing/UI compatibility.
-// Model-specific validation is enforced by openrouter-image-capabilities.ts.
 export const OPENROUTER_IMAGE_RESOLUTIONS = ['512', '1K', '2K', '4K'] as const;
-
-const IMAGE_ASPECT_RATIO_SET = new Set<string>(OPENROUTER_IMAGE_ASPECT_RATIOS);
 
 export interface OpenRouterChatRequest {
   model: string;
@@ -52,7 +45,7 @@ export interface OpenRouterImageRequest {
   prompt: string;
   aspectRatio?: string;
   count?: number;
-  resolution?: '512' | '1K' | '2K' | '4K';
+  resolution?: string;
 }
 
 export interface OpenRouterGeneratedImage {
@@ -101,14 +94,12 @@ export async function createOpenRouterImageGeneration(
   const prompt = request.prompt.trim();
   if (!prompt) throw new Error('OPENROUTER_INVALID_IMAGE_REQUEST');
 
-  const aspectRatio = (request.aspectRatio || '1:1').toLowerCase();
-  if (!IMAGE_ASPECT_RATIO_SET.has(aspectRatio)) throw new Error('OPENROUTER_INVALID_ASPECT_RATIO');
-
-  const resolution = resolveOpenRouterImageResolution(request.model, request.resolution);
+  const aspectRatio = String(request.aspectRatio || '').trim().toLowerCase();
+  if (!aspectRatio || aspectRatio.length > 20) throw new Error('OPENROUTER_INVALID_ASPECT_RATIO');
+  const resolution = typeof request.resolution === 'string' ? request.resolution.trim() : '';
+  if (resolution.length > 24) throw new Error('OPENROUTER_INVALID_IMAGE_RESOLUTION');
   const count = Math.trunc(Number(request.count ?? 1));
-  if (!Number.isFinite(count) || !isOpenRouterImageCountSupported(request.model, count)) {
-    throw new Error('OPENROUTER_INVALID_IMAGE_COUNT');
-  }
+  if (!Number.isInteger(count) || count < 1 || count > 20) throw new Error('OPENROUTER_INVALID_IMAGE_COUNT');
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 120_000);
@@ -180,16 +171,17 @@ export async function createOpenRouterChatCompletion(
   if (!request.model || !prompt) throw new Error('OPENROUTER_INVALID_REQUEST');
 
   const systemPrompt = request.systemPrompt?.trim().slice(0, 6000);
-  const temperature = typeof request.temperature === 'number' && Number.isFinite(request.temperature)
-    ? Math.max(0, Math.min(2, request.temperature))
-    : 0.7;
-  const maxTokens = typeof request.maxTokens === 'number' && Number.isFinite(request.maxTokens)
-    ? Math.max(1, Math.min(4000, Math.trunc(request.maxTokens)))
-    : 1200;
   const messages = [
     ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
     { role: 'user', content: prompt },
   ];
+  const providerSettings: Record<string, number> = {};
+  if (typeof request.temperature === 'number' && Number.isFinite(request.temperature)) {
+    providerSettings.temperature = Math.max(0, Math.min(2, request.temperature));
+  }
+  if (typeof request.maxTokens === 'number' && Number.isFinite(request.maxTokens)) {
+    providerSettings.max_tokens = Math.max(1, Math.min(1_000_000, Math.trunc(request.maxTokens)));
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 45_000);
@@ -207,8 +199,7 @@ export async function createOpenRouterChatCompletion(
       body: JSON.stringify({
         model: request.model,
         messages,
-        temperature,
-        max_tokens: maxTokens,
+        ...providerSettings,
       }),
     });
 
