@@ -6,6 +6,7 @@ const root = process.cwd();
 const templatesPage = readFileSync(join(root, 'src/app/templates/page.jsx'), 'utf8');
 const templatesComponent = readFileSync(join(root, 'src/components/TemplatesLivingLibrary.jsx'), 'utf8');
 const imageWorkspace = readFileSync(join(root, 'src/components/ImageStudioWorkspace.jsx'), 'utf8');
+const videoWorkspace = readFileSync(join(root, 'src/components/VideoProjectWorkspace.jsx'), 'utf8');
 const mediaWorkspace = readFileSync(join(root, 'src/components/MediaProjectWorkspace.jsx'), 'utf8');
 const chatPage = readFileSync(join(root, 'src/app/projects/chat/workspace/page.jsx'), 'utf8');
 const videoPage = readFileSync(join(root, 'src/app/projects/video/workspace/page.jsx'), 'utf8');
@@ -40,6 +41,9 @@ assert.ok(templatesComponent.includes("video: { label: 'الفيديو AI', proj
 assert.ok(templatesComponent.includes("audio: { label: 'الصوت AI', projectType: 'صوت'"));
 assert.ok(templatesComponent.includes('type: tool.projectType'), 'template project type must follow the selected tool');
 assert.ok(templatesComponent.includes("new URLSearchParams({ project: project.id, prompt: promptOverride || template.prompt })"));
+assert.ok(templatesComponent.includes("if (template.style) params.set('style', template.style)"));
+assert.ok(templatesComponent.includes("if (template.aspect) params.set('aspect', template.aspect)"));
+assert.ok(templatesComponent.includes("Object.entries(template.settings || {}).forEach(([key, value]) => params.set(key, String(value)))"));
 assert.ok(templatesComponent.includes('const QUICK_FIELDS = {'));
 assert.ok(templatesComponent.includes("token: '[اسم المنتج]'"));
 assert.ok(templatesComponent.includes("token: '[الموضوع]'"));
@@ -77,17 +81,48 @@ assert.ok(templatesComponent.includes('bb-media-canvas'), 'artistic preview canv
 assert.ok(!templatesComponent.includes('className="min-h-[calc(100vh-5rem)] bg-[#050608] text-white"'), 'legacy dark-only Templates root must not return');
 assert.ok(!templatesComponent.includes('border border-white/10 bg-[#0d1016] text-right'), 'mobile template card chrome must not regress to dark-only classes');
 
-assert.ok(imageWorkspace.includes("searchParams.get('prompt')"));
-assert.ok(imageWorkspace.includes("searchParams.get('style')"));
-assert.ok(imageWorkspace.includes("searchParams.get('aspect')"));
-assert.ok(imageWorkspace.includes('useState(promptFromUrl.slice(0, 1000))'));
-assert.ok(imageWorkspace.includes('useState(initialStyleId)'));
-assert.ok(imageWorkspace.includes('useState(initialAspectRatio)'));
+// Image template values are accepted as initial hints, then normalized to the
+// selected model's live OpenRouter capabilities. A template aspect is never a
+// universal allowlist or a reason to send an unsupported value such as 1K.
+for (const snippet of [
+  "searchParams.get('prompt')",
+  "searchParams.get('style')",
+  "searchParams.get('aspect')",
+  'useState(promptFromUrl.slice(0, 1000))',
+  'useState(initialStyleId)',
+  "useState(aspectFromUrl || '')",
+  'const availableAspects = selectedModel?.supportedAspectRatios || []',
+  'const availableResolutions = selectedModel?.supportedResolutions || []',
+  'if (availableAspects.length > 0 && !availableAspects.includes(aspectRatio))',
+  'setAspectRatio(availableAspects[0])',
+  'if (availableResolutions.length === 0)',
+  'setResolution(availableResolutions[0])',
+]) assert.ok(imageWorkspace.includes(snippet), `image template/capability handoff missing ${snippet}`);
+assert.ok(!imageWorkspace.includes('useState(initialAspectRatio)'), 'image templates must not bypass per-model capability normalization');
 
+// Video template values are also hints. The selected model owns the actual
+// duration, ratio and resolution choices before generation becomes ready.
+for (const snippet of [
+  "initialPrompt = ''",
+  'templateSettings = {}',
+  "useState(String(templateSettings?.ratio || ''))",
+  'useState(() => parseDuration(templateSettings?.duration))',
+  "useState(String(templateSettings?.quality || ''))",
+  'selectedModel?.supportedDurations',
+  'selectedModel?.supportedRatios',
+  'selectedModel?.supportedResolutions',
+  'nextDurations.includes(current)',
+  'ratioAlias(current, nextRatios)',
+  'nextResolutions.includes(current)',
+]) assert.ok(videoWorkspace.includes(snippet), `video template/capability handoff missing ${snippet}`);
+
+// Audio remains a draft-only template path but preserves initial text/settings
+// and capability-normalizes provider-specific voice/format fields when present.
 assert.ok(mediaWorkspace.includes("initialPrompt = ''"));
 assert.ok(mediaWorkspace.includes('templateSettings = {}'));
 assert.ok(mediaWorkspace.includes('resolveTemplateSettings(config, templateSettings)'));
 assert.ok(mediaWorkspace.includes('useState(initialPrompt)'));
+assert.ok(mediaWorkspace.includes('selectedAudioModel?.capabilitiesAvailable'));
 
 for (const route of [chatPage, videoPage, audioPage]) {
   assert.ok(route.includes('const params = await searchParams;'), 'workspace route must resolve Next.js searchParams before template handoff');
@@ -100,4 +135,4 @@ assert.ok(audioPage.includes('initialPrompt={initialPrompt}'));
 assert.ok(audioPage.includes('templateSettings={templateSettings}'));
 assert.ok(chatPage.includes('initialPrompt={initialPrompt}'));
 
-console.log('Templates living-library regression guard passed.');
+console.log('Templates living-library capability-aware regression guard passed.');
