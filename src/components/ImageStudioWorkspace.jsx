@@ -94,6 +94,7 @@ function normalizeImageModel(model) {
     name: model?.display_name_ar || model?.display_name_en || model?.model_id || 'نموذج صور',
     provider: model?.vendor_name || 'OpenRouter',
     cost: Number.isFinite(cost) ? cost : 0,
+    featured: metadata.brandbox_featured === true,
     badge: typeof metadata.brandbox_badge === 'string' ? metadata.brandbox_badge : 'متاح',
     capabilitiesAvailable: model?.capabilitiesAvailable === true,
     capabilitySource: model?.capabilitySource || 'unknown',
@@ -125,6 +126,27 @@ function friendlyImageError(value) {
   if (code.includes('SETTING') || code.includes('ASPECT') || code.includes('RESOLUTION') || code.includes('COUNT')) return 'الإعدادات الحالية غير مدعومة بواسطة هذا النموذج. غيّر الدقة أو النسبة أو عدد الصور.';
   if (code.includes('PROVIDER') || code.includes('UPSTREAM')) return 'تعذر الوصول إلى مزود الصور حاليًا. أعد المحاولة بعد قليل.';
   return 'تعذر توليد الصورة. احتفظنا بإعداداتك ويمكنك إعادة المحاولة.';
+}
+
+function handleListboxOptionKeyDown(event, closeMenu, triggerId) {
+  const listbox = event.currentTarget.closest('[role="listbox"]');
+  const options = listbox ? Array.from(listbox.querySelectorAll('[role="option"]')) : [];
+  const currentIndex = options.indexOf(event.currentTarget);
+  let nextIndex = null;
+  if (event.key === 'ArrowDown') nextIndex = Math.min(options.length - 1, currentIndex + 1);
+  if (event.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
+  if (event.key === 'Home') nextIndex = 0;
+  if (event.key === 'End') nextIndex = Math.max(0, options.length - 1);
+  if (nextIndex !== null) {
+    event.preventDefault();
+    options[nextIndex]?.focus();
+    return;
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeMenu();
+    document.getElementById(triggerId)?.focus();
+  }
 }
 
 function SelectTile({ active, children, onClick, pressed, className = '' }) {
@@ -179,6 +201,8 @@ export default function ImageStudioWorkspace() {
     [projects, selectedProjectId],
   );
   const selectedModel = imageModels.find((model) => model.id === selectedModelId) || imageModels[0] || null;
+  const recommendedImageModels = useMemo(() => imageModels.filter((model) => model.featured), [imageModels]);
+  const otherImageModels = useMemo(() => imageModels.filter((model) => !model.featured), [imageModels]);
   const selectedStyle = STYLE_OPTIONS.find((style) => style.id === styleId) || STYLE_OPTIONS[0];
   const availableAspects = selectedModel?.supportedAspectRatios || [];
   const availableResolutions = selectedModel?.supportedResolutions || [];
@@ -320,6 +344,20 @@ export default function ImageStudioWorkspace() {
     await loadHistory(projectId);
   };
 
+  const selectImageModel = (modelId) => {
+    setSelectedModelId(modelId);
+    setModelOpen(false);
+  };
+
+  const openImageModelListFromKeyboard = (event) => {
+    if (event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    setModelOpen(true);
+    window.requestAnimationFrame(() => {
+      document.querySelector('#image-model-listbox [role="option"]')?.focus();
+    });
+  };
+
   const createImageProject = async () => {
     if (creatingProject) return;
     setCreatingProject(true);
@@ -446,6 +484,21 @@ export default function ImageStudioWorkspace() {
     );
   }
 
+  const renderImageModelOption = (model) => (
+    <button
+      key={model.id}
+      type="button"
+      onClick={() => selectImageModel(model.id)}
+      onKeyDown={(event) => handleListboxOptionKeyDown(event, () => setModelOpen(false), 'image-model-trigger')}
+      role="option"
+      aria-selected={selectedModel?.id === model.id}
+      className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-right focus-visible:outline-none focus-visible:ring-2 ${selectedModel?.id === model.id ? 'bb-menu-item-active' : 'bb-menu-item'}`}
+    >
+      <span className="min-w-0"><span className="bb-text-primary block truncate text-xs font-black">{model.name}</span><span className="bb-text-tertiary mt-0.5 block truncate text-[9px]">{model.provider} · {model.cost} نقاط/صورة</span></span>
+      <span className="bb-accent-soft shrink-0 rounded-full px-2 py-1 text-[9px] font-black">{model.badge}</span>
+    </button>
+  );
+
   return (
     <main className="bb-app-canvas min-h-[calc(100vh-5rem)]" dir="rtl">
       <div className="bb-surface-1 bb-border-subtle sticky top-20 z-40 border-b px-4 py-3 shadow-[var(--bb-shadow-sm)] lg:px-6">
@@ -514,15 +567,18 @@ export default function ImageStudioWorkspace() {
 
             <div className="relative">
               <label className="bb-text-secondary mb-2 block text-xs font-black">النموذج (Model)</label>
-              <button type="button" disabled={!imageModelsAvailable || !selectedModel} onClick={() => setModelOpen((value) => !value)} aria-expanded={modelOpen} aria-haspopup="listbox" className="bb-button-secondary flex min-h-12 w-full items-center justify-between rounded-xl border p-3 text-right transition disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-none focus-visible:ring-2">
+              <button id="image-model-trigger" type="button" disabled={!imageModelsAvailable || !selectedModel} onClick={() => setModelOpen((value) => !value)} onKeyDown={openImageModelListFromKeyboard} aria-expanded={modelOpen} aria-haspopup="listbox" aria-controls="image-model-listbox" className="bb-button-secondary flex min-h-12 w-full items-center justify-between rounded-xl border p-3 text-right transition disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline-none focus-visible:ring-2">
                 {selectedModel ? (
                   <span className="flex min-w-0 items-center gap-3"><span className="bb-accent-soft flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"><Sparkles className="h-4 w-4" /></span><span className="min-w-0"><span className="flex items-center gap-2"><span className="bb-text-primary truncate text-xs font-black">{selectedModel.name}</span><span className="bb-accent-soft rounded-full px-2 py-0.5 text-[9px] font-black">{selectedModel.badge}</span></span><span className="bb-text-tertiary mt-1 block truncate text-[9px]">{selectedModel.provider} · {selectedModel.cost} نقاط للصورة</span></span></span>
                 ) : <span className="bb-text-tertiary text-xs font-bold">لا يوجد نموذج صور مفعّل حاليًا</span>}
                 <ChevronDown className={`bb-text-tertiary h-4 w-4 shrink-0 transition ${modelOpen ? 'rotate-180' : ''}`} />
               </button>
               {modelOpen && imageModels.length > 0 && (
-                <div className="bb-menu absolute inset-x-0 top-full z-50 mt-2 rounded-xl border p-1.5" role="listbox" aria-label="نماذج الصور">
-                  {imageModels.map((model) => <button key={model.id} type="button" onClick={() => { setSelectedModelId(model.id); setModelOpen(false); }} role="option" aria-selected={selectedModel?.id === model.id} className={`flex min-h-11 w-full items-center justify-between rounded-lg px-3 py-2.5 text-right focus-visible:outline-none focus-visible:ring-2 ${selectedModel?.id === model.id ? 'bb-menu-item-active' : 'bb-menu-item'}`}><span><span className="bb-text-primary block text-xs font-black">{model.name}</span><span className="bb-text-tertiary mt-0.5 block text-[9px]">{model.provider}</span></span><span className="bb-text-accent text-[10px] font-black">{model.cost} نقاط/صورة</span></button>)}
+                <div id="image-model-listbox" className="bb-menu absolute inset-x-0 top-full z-50 mt-2 max-h-80 overflow-y-auto rounded-xl border p-1.5" role="listbox" aria-label="نماذج الصور">
+                  {recommendedImageModels.length > 0 && <div className="bb-text-accent px-3 pb-1 pt-2 text-[9px] font-black" role="presentation">موصى به</div>}
+                  {recommendedImageModels.map(renderImageModelOption)}
+                  {otherImageModels.length > 0 && <div className="bb-text-tertiary mt-1 border-t border-[var(--bb-border)] px-3 pb-1 pt-2 text-[9px] font-black" role="presentation">كل النماذج</div>}
+                  {otherImageModels.map(renderImageModelOption)}
                 </div>
               )}
               {(!imageModelsAvailable || imageModels.length === 0) && <p className="bb-text-warning mt-2 text-[10px] leading-5">نماذج الصور غير متاحة مؤقتًا. لن يتم خصم نقاط حتى يعود كتالوج النماذج.</p>}

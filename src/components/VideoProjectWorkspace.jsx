@@ -62,6 +62,10 @@ function safePricingOptions(model) {
   ));
 }
 
+function videoModelOptionLabel(model) {
+  return `${model?.name || model?.modelId || 'نموذج فيديو'} — ${model?.badge || 'متاح'}`;
+}
+
 export default function VideoProjectWorkspace({ projectId, initialPrompt = '', templateSettings = {} }) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const { creditBalance, refreshProfile } = useAuth();
@@ -83,6 +87,15 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
   const [message, setMessage] = useState(initialPrompt ? { type: 'success', text: 'تم تحميل برومبت القالب وإعداداته. سيتم ضبط القيم تلقائيًا حسب النموذج الذي تختاره.' } : null);
 
   const selectedModel = models.find((model) => model.modelId === modelId) || models[0] || null;
+  const recommendedVideoModels = useMemo(
+    () => models.filter((model) => model.featured === true),
+    [models]
+  );
+  const otherVideoModels = useMemo(
+    () => models.filter((model) => model.featured !== true),
+    [models]
+  );
+  const selectedModelBadge = selectedModel?.badge || 'متاح';
   const availableDurations = useMemo(
     () => Array.isArray(selectedModel?.supportedDurations) ? selectedModel.supportedDurations.map(Number).filter(Number.isFinite) : [],
     [selectedModel]
@@ -96,14 +109,21 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
     [selectedModel]
   );
   const pricingOptions = useMemo(() => safePricingOptions(selectedModel), [selectedModel]);
+  const resolutionRequired = selectedModel?.resolutionRequired !== false;
   const effectiveRatio = ratioAlias(ratio, availableRatios);
   const effectiveDuration = availableDurations.includes(duration) ? duration : (availableDurations[0] || 0);
   const effectiveResolution = availableResolutions.includes(resolution) ? resolution : (availableResolutions[0] || '');
   const audioPriceAvailable = pricingOptions.length === 0
-    || pricingOptions.some((option) => option.resolution === effectiveResolution && option.audioMode === 'on');
+    || pricingOptions.some((option) => (
+      (option.resolution === '*' || option.resolution === effectiveResolution)
+      && option.audioMode === 'on'
+    ));
   const effectiveGenerateAudio = Boolean(selectedModel?.supportsAudio && generateAudio && audioPriceAvailable);
   const selectedPricing = pricingOptions.find((option) => (
     option.resolution === effectiveResolution
+    && option.audioMode === (effectiveGenerateAudio ? 'on' : 'off')
+  )) || pricingOptions.find((option) => (
+    option.resolution === '*'
     && option.audioMode === (effectiveGenerateAudio ? 'on' : 'off')
   )) || null;
   const selectedCreditsPerSecond = selectedPricing
@@ -123,7 +143,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
     && selectedCreditsPerSecond
     && effectiveDuration
     && effectiveRatio
-    && effectiveResolution
+    && (!resolutionRequired || effectiveResolution)
   );
   const insufficientCredits = Boolean(priceEstimate && creditBalance !== null && creditBalance !== undefined && priceEstimate > creditBalance);
 
@@ -270,7 +290,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           settings: {
             ratio: effectiveRatio,
             duration: effectiveDuration,
-            resolution: effectiveResolution,
+            ...(effectiveResolution ? { resolution: effectiveResolution } : {}),
             generateAudio: effectiveGenerateAudio,
             quality: 'standard',
           },
@@ -281,13 +301,13 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
       const finalSettings = result.normalizedSettings || {
         ratio: effectiveRatio,
         duration: effectiveDuration,
-        resolution: effectiveResolution,
+        ...(effectiveResolution ? { resolution: effectiveResolution } : {}),
         generateAudio: effectiveGenerateAudio,
         quality: 'standard',
       };
       setRatio(finalSettings.ratio || effectiveRatio);
       setDuration(Number(finalSettings.duration || effectiveDuration));
-      setResolution(finalSettings.resolution || effectiveResolution);
+      setResolution(finalSettings.resolution || '');
       setGenerateAudio(finalSettings.generateAudio === true);
       setGenerations((current) => [{
         id: result.generationId,
@@ -328,7 +348,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           settings: {
             ratio: effectiveRatio,
             duration: `${effectiveDuration} ثوانٍ`,
-            quality: effectiveResolution,
+            quality: effectiveResolution || 'تلقائي',
             generateAudio: effectiveGenerateAudio,
             modelId,
           },
@@ -352,7 +372,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
     if (models.some((model) => model.modelId === item.model)) setModelId(item.model);
     setRatio(String(item.settings?.ratio || item.settings?.aspectRatio || ratio));
     setDuration(parseDuration(item.settings?.duration));
-    setResolution(String(item.settings?.resolution || item.settings?.quality || resolution));
+    setResolution(String(item.settings?.resolution || ''));
     setGenerateAudio(item.settings?.generateAudio === true);
     setMessage({ type: 'info', text: 'تم تحميل إعدادات المحاولة السابقة وسيتم تصحيح أي قيمة لم تعد مدعومة بواسطة النموذج المحدد.' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -402,14 +422,14 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           <div className="space-y-5 p-4 sm:p-5">
             {!generationReady && (
               <div className="bb-warning-surface rounded-2xl border p-4 text-xs leading-6">
-                <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير متاح بهذه الإعدادات</div><p className="bb-text-secondary mt-1">{models.length === 0 ? 'لا يوجد نموذج فيديو مفعّل ومرئي من لوحة الإدارة.' : !selectedProviderConfigured ? 'مفتاح مزود الفيديو المحدد غير مهيأ على الخادم.' : !selectedModel?.pricingReady ? 'النموذج موجود لكن مصفوفة تسعير Brand Box لم تُضبط بعد.' : !capabilitiesAvailable ? 'تعذر التحقق من قدرات النموذج، لذلك لن نعرض أو نرسل إعدادات بالتخمين.' : !selectedCreditsPerSecond ? 'تركيبة الدقة والصوت الحالية غير مسعّرة، لذلك لن يتم حجز أي نقاط.' : 'اختر قيمة مدعومة من القوائم المتاحة.'} يمكنك الاستمرار في حفظ المسودات دون أي تكلفة.</p></div></div>
+                <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير متاح بهذه الإعدادات</div><p className="bb-text-secondary mt-1">{models.length === 0 ? 'لا يوجد نموذج فيديو مسعّر ومتاح للمستخدم حاليًا.' : !selectedProviderConfigured ? 'مفتاح مزود الفيديو المحدد غير مهيأ على الخادم.' : !capabilitiesAvailable ? 'تعذر التحقق من قدرات النموذج، لذلك لن نعرض أو نرسل إعدادات بالتخمين.' : !selectedCreditsPerSecond ? 'تركيبة الإعدادات الحالية غير مسعّرة، لذلك لن يتم حجز أي نقاط.' : 'اختر قيمة مدعومة من القوائم المتاحة.'} يمكنك الاستمرار في حفظ المسودات دون أي تكلفة.</p></div></div>
               </div>
             )}
 
             <div className="bb-surface-1 bb-border rounded-3xl border p-4 sm:p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><h2 className="bb-text-primary text-sm font-black">عمليات التوليد</h2><p className="bb-text-tertiary mt-1 text-[11px]">الحالة محفوظة على الخادم والناتج النهائي يُنسخ إلى تخزين Brand Box.</p></div><span className="bb-text-tertiary text-[11px]">{generations.length} عملية</span></div>
               {generations.length === 0 ? (
-                <div className="flex min-h-[300px] flex-col items-center justify-center text-center"><span className="bb-accent-soft flex h-16 w-16 items-center justify-center rounded-2xl border"><Film size={30} /></span><h3 className="bb-text-primary mt-5 text-lg font-black">لا توجد فيديوهات مولدة بعد</h3><p className="bb-text-secondary mt-2 max-w-md text-sm leading-7">عند تفعيل المزود وتسعيره ستظهر المهام هنا من لحظة الانتظار حتى اكتمال الفيديو.</p></div>
+                <div className="flex min-h-[300px] flex-col items-center justify-center text-center"><span className="bb-accent-soft flex h-16 w-16 items-center justify-center rounded-2xl border"><Film size={30} /></span><h3 className="bb-text-primary mt-5 text-lg font-black">لا توجد فيديوهات مولدة بعد</h3><p className="bb-text-secondary mt-2 max-w-md text-sm leading-7">عند تفعيل نموذج مسعّر ستظهر المهام هنا من لحظة الانتظار حتى اكتمال الفيديو.</p></div>
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2">
                   {generations.map((item) => {
@@ -443,23 +463,23 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
         </section>
 
         <aside className="bb-panel order-1 h-fit rounded-3xl border p-5 xl:order-2 xl:sticky xl:top-[150px]">
-          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Video size={22}/></span><div><div className="bb-text-primary text-sm font-black">توليد فيديو AI</div><div className="bb-text-tertiary text-[11px]">{selectedModel?.name || 'اختر نموذج فيديو'}</div></div></div>
+          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Video size={22}/></span><div className="min-w-0"><div className="flex items-center gap-2"><div className="bb-text-primary truncate text-sm font-black">توليد فيديو AI</div>{selectedModel && <span className="bb-accent-soft shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black">{selectedModelBadge}</span>}</div><div className="bb-text-tertiary mt-0.5 truncate text-[11px]">{selectedModel?.name || 'اختر نموذج فيديو'}</div></div></div>
 
           <label htmlFor="video-prompt" className="bb-text-secondary mt-6 block text-xs font-black">وصف الفيديو</label>
           <textarea id="video-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value.slice(0, 1000))} maxLength={1000} placeholder="صف المشهد، الحركة، زاوية الكاميرا والإضاءة..." className="bb-input mt-2 min-h-40 w-full resize-none rounded-2xl border p-4 text-sm leading-7 outline-none" />
           <div className="bb-text-tertiary mt-1 text-left text-[10px]">{prompt.length}/1000</div>
 
           <div className="mt-5 space-y-4">
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select value={modelId} onChange={handleModelChange} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : models.map((model) => <option key={model.modelId} value={model.modelId}>{model.name}</option>)}</select></label>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select aria-label="نماذج الفيديو" value={modelId} onChange={handleModelChange} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مسعّر ومتاح</option> : <>{recommendedVideoModels.length > 0 && <optgroup label="موصى به">{recommendedVideoModels.map((model) => <option key={model.modelId} value={model.modelId}>{videoModelOptionLabel(model)}</option>)}</optgroup>}{otherVideoModels.length > 0 && <optgroup label="كل النماذج">{otherVideoModels.map((model) => <option key={model.modelId} value={model.modelId}>{videoModelOptionLabel(model)}</option>)}</optgroup>}</>}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={effectiveRatio} onChange={(event) => setRatio(event.target.value)} disabled={!capabilitiesAvailable || availableRatios.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableRatios.map((value) => <option key={value} value={value}>{ratioLabel(value)}</option>)}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={effectiveDuration} onChange={(event) => setDuration(Number(event.target.value))} disabled={!capabilitiesAvailable || availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">الدقة</span><select value={effectiveResolution} onChange={(event) => setResolution(event.target.value)} disabled={!capabilitiesAvailable || availableResolutions.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableResolutions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            {selectedModel?.supportsAudio && <label className="bb-input flex items-center justify-between rounded-xl border px-4 py-3"><span><span className="bb-text-primary block text-xs font-black">توليد الصوت مع الفيديو</span><span className="bb-text-tertiary mt-1 block text-[10px]">السعر يتغير تلقائيًا حسب الدقة وتشغيل الصوت، والخادم يعيد التحقق قبل الخصم.</span></span><input type="checkbox" checked={effectiveGenerateAudio} disabled={!audioPriceAvailable} onChange={(event) => setGenerateAudio(event.target.checked)} className="h-4 w-4" /></label>}
+            {availableResolutions.length > 0 ? <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">الدقة</span><select value={effectiveResolution} onChange={(event) => setResolution(event.target.value)} disabled={!capabilitiesAvailable} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableResolutions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label> : selectedModel && <div className="bb-surface-1 bb-border rounded-xl border px-4 py-3"><span className="bb-text-secondary block text-xs font-black">الدقة</span><span className="bb-text-tertiary mt-1 block text-[10px]">يحددها النموذج تلقائيًا ولا تؤثر في سعر Brand Box لهذا الموديل.</span></div>}
+            {selectedModel?.supportsAudio && <label className="bb-input flex items-center justify-between rounded-xl border px-4 py-3"><span><span className="bb-text-primary block text-xs font-black">توليد الصوت مع الفيديو</span><span className="bb-text-tertiary mt-1 block text-[10px]">السعر يتغير تلقائيًا حسب إعدادات الموديل، والخادم يعيد التحقق قبل الخصم.</span></span><input type="checkbox" checked={effectiveGenerateAudio} disabled={!audioPriceAvailable} onChange={(event) => setGenerateAudio(event.target.checked)} className="h-4 w-4" /></label>}
           </div>
 
           <div className="bb-surface-1 bb-border bb-text-secondary mt-5 rounded-2xl border p-3 text-xs leading-6">
-            {capabilitiesAvailable ? <><span>قدرات النموذج:</span> <strong className="bb-text-primary">{availableResolutions.join(' / ')} · {availableDurations.join(', ')} ث</strong><br/></> : <><span className="bb-text-danger font-black">تعذر تأكيد قدرات النموذج، لذلك تم تعطيل التوليد.</span><br/></>}
-            {selectedCreditsPerSecond ? <><span>سعر الإعداد الحالي:</span> <strong className="bb-text-primary">{selectedCreditsPerSecond} نقطة/ث</strong><br/><span>إجمالي هذه المهمة:</span> <strong className="bb-text-accent">{priceEstimate} نقطة</strong></> : 'تركيبة الدقة والصوت الحالية غير مسعّرة ولن يتم حجز نقاط لها.'}
+            {capabilitiesAvailable ? <><span>قدرات النموذج:</span> <strong className="bb-text-primary">{availableResolutions.length ? `${availableResolutions.join(' / ')} · ` : 'دقة تلقائية · '}{availableDurations.join(', ')} ث</strong><br/></> : <><span className="bb-text-danger font-black">تعذر تأكيد قدرات النموذج، لذلك تم تعطيل التوليد.</span><br/></>}
+            {selectedCreditsPerSecond ? <><span>سعر الإعداد الحالي:</span> <strong className="bb-text-primary">{selectedCreditsPerSecond} نقطة/ث</strong><br/><span>إجمالي هذه المهمة:</span> <strong className="bb-text-accent">{priceEstimate} نقطة</strong></> : 'تركيبة الإعدادات الحالية غير مسعّرة ولن يتم حجز نقاط لها.'}
             {creditBalance !== null && creditBalance !== undefined && <><br/><span>رصيدك الحالي:</span> <strong className="bb-text-primary">{creditBalance}</strong></>}
           </div>
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  hasResolutionIndependentVideoPricing,
   hasVideoPricingMatrix,
   minimumVideoCreditsPerSecond,
   parseVideoPricingMatrix,
@@ -25,6 +26,7 @@ const matrixMetadata = {
 };
 
 assert.equal(hasVideoPricingMatrix(matrixMetadata), true);
+assert.equal(hasResolutionIndependentVideoPricing(matrixMetadata), false);
 assert.deepEqual(pricedVideoResolutions(matrixMetadata), ['720p', '1080p']);
 assert.deepEqual(pricedVideoAudioModes(matrixMetadata, '720p'), ['off', 'on']);
 assert.equal(minimumVideoCreditsPerSecond(matrixMetadata), 10);
@@ -42,6 +44,39 @@ assert.equal(resolveVideoPricing(matrixMetadata, { resolution: '1080p', generate
 const publicOptions = publicVideoPricingOptions(matrixMetadata);
 assert.equal(publicOptions.length, 4);
 assert.ok(publicOptions.every((option) => !('providerUsdPerSecond' in option)), 'provider USD cost must stay server-only');
+
+const klingStandardMetadata = {
+  brandbox_video_pricing_matrix: {
+    version: 1,
+    pricing_dimension: 'audio_mode',
+    resolution_independent: true,
+    variants: [
+      { resolution: '*', audio_mode: 'off', credits_per_second: 28, provider_usd_per_second: 0.084 },
+      { resolution: '*', audio_mode: 'on', credits_per_second: 42, provider_usd_per_second: 0.126 },
+    ],
+  },
+};
+assert.equal(hasResolutionIndependentVideoPricing(klingStandardMetadata), true);
+assert.deepEqual(pricedVideoResolutions(klingStandardMetadata), [], '`*` is pricing metadata, not a user resolution');
+assert.deepEqual(pricedVideoAudioModes(klingStandardMetadata), ['off', 'on']);
+assert.equal(resolveVideoPricing(klingStandardMetadata, { generateAudio: false })?.creditsPerSecond, 28);
+assert.equal(resolveVideoPricing(klingStandardMetadata, { generateAudio: true })?.creditsPerSecond, 42);
+assert.equal(resolveVideoPricing(klingStandardMetadata, { resolution: '1080p', generateAudio: true })?.creditsPerSecond, 42);
+assert.equal(minimumVideoCreditsPerSecond(klingStandardMetadata), 28);
+
+// Resolution-specific pricing wins when a catalog ever combines an exact SKU
+// with a provider-wide fallback for the same audio mode.
+const mixedMetadata = {
+  brandbox_video_pricing_matrix: {
+    version: 1,
+    variants: [
+      { resolution: '*', audio_mode: 'off', credits_per_second: 28 },
+      { resolution: '4K', audio_mode: 'off', credits_per_second: 90 },
+    ],
+  },
+};
+assert.equal(resolveVideoPricing(mixedMetadata, { resolution: '4K', generateAudio: false })?.creditsPerSecond, 90);
+assert.equal(resolveVideoPricing(mixedMetadata, { resolution: '720p', generateAudio: false })?.creditsPerSecond, 28);
 
 // Once a matrix is declared, malformed or incomplete matrix data must fail
 // closed instead of falling back to the old flat 5 credits/sec rate.

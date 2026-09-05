@@ -6,6 +6,7 @@ import { RUNWAY_VIDEO_MODELS, validateRunwayVideoRequest } from '@/lib/ai/runway
 import { getOpenRouterModelCapabilities, isCapabilityKnown } from '@/lib/ai/openrouter-model-capabilities';
 import { applyVideoCapabilityPolicy } from '@/lib/ai/openrouter-settings-policy';
 import {
+  hasResolutionIndependentVideoPricing,
   minimumVideoCreditsPerSecond,
   pricedVideoAudioModes,
   pricedVideoResolutions,
@@ -44,9 +45,24 @@ function safeMinimumCredits(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function safeModelPresentation(metadata: unknown, pricingReady: boolean) {
+  const record = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {};
+  const configuredBadge = typeof record.brandbox_badge === 'string' && record.brandbox_badge.trim()
+    ? record.brandbox_badge.trim().slice(0, 30)
+    : 'متاح';
+  return {
+    featured: record.brandbox_featured === true,
+    badge: pricingReady ? configuredBadge : 'غير مسعّر',
+  };
+}
+
 function safeRunwayModel(model: Record<string, unknown>) {
   const creditsPerSecond = modelCreditsPerSecond(model.metadata);
   const minimumCredits = safeMinimumCredits(model.minimum_credits) ?? 0;
+  const pricingReady = creditsPerSecond !== null;
+  const presentation = safeModelPresentation(model.metadata, pricingReady);
   return {
     modelId: model.model_id,
     provider: 'runway',
@@ -57,7 +73,9 @@ function safeRunwayModel(model: Record<string, unknown>) {
     minimumCreditsPerSecond: creditsPerSecond,
     pricingOptions: creditsPerSecond ? [{ resolution: '720p', audioMode: 'off', creditsPerSecond }] : [],
     sortOrder: Number(model.sort_order || 0),
-    pricingReady: creditsPerSecond !== null,
+    pricingReady,
+    featured: presentation.featured,
+    badge: presentation.badge,
     configured: runwayConfigured(),
     capabilitiesAvailable: true,
     supportedDurations: Array.from({ length: 9 }, (_, index) => index + 2),
@@ -65,6 +83,7 @@ function safeRunwayModel(model: Record<string, unknown>) {
     maximumDuration: 10,
     supportedRatios: ['1280:720', '720:1280'],
     supportedResolutions: ['720p'],
+    resolutionRequired: true,
     supportsAudio: false,
     quality: '720p',
   };
@@ -83,17 +102,22 @@ async function safeOpenRouterModel(model: Record<string, unknown>) {
   const ratios = known ? (video?.aspectRatios || []) : [];
   const pricingOptions = publicVideoPricingOptions(model.metadata);
   const pricingConfigured = pricingOptions.length > 0;
+  const resolutionIndependentPricing = pricingConfigured && hasResolutionIndependentVideoPricing(model.metadata);
   const pricedResolutions = pricingConfigured ? pricedVideoResolutions(model.metadata) : [];
   const pricedAudioModes = pricingConfigured ? pricedVideoAudioModes(model.metadata) : [];
   const selectableResolutions = pricingConfigured
-    ? resolutions.filter((resolution) => pricedResolutions.includes(resolution))
+    ? resolutionIndependentPricing
+      ? resolutions
+      : resolutions.filter((resolution) => pricedResolutions.includes(resolution))
     : resolutions;
   const minimumCreditsPerSecond = minimumVideoCreditsPerSecond(model.metadata);
   const flatRate = pricingOptions.length > 0
     && pricingOptions.every((option) => option.creditsPerSecond === pricingOptions[0].creditsPerSecond)
     ? pricingOptions[0].creditsPerSecond
     : null;
-  const pricingReady = minimumCreditsPerSecond !== null && selectableResolutions.length > 0;
+  const pricingReady = minimumCreditsPerSecond !== null
+    && (resolutionIndependentPricing || selectableResolutions.length > 0);
+  const presentation = safeModelPresentation(model.metadata, pricingReady);
   return {
     modelId,
     provider: 'openrouter',
@@ -105,6 +129,8 @@ async function safeOpenRouterModel(model: Record<string, unknown>) {
     pricingOptions,
     sortOrder: Number(model.sort_order || 0),
     pricingReady,
+    featured: presentation.featured,
+    badge: presentation.badge,
     configured: openRouterConfigured(),
     capabilitiesAvailable: known,
     capabilitySource: capabilities.source,
@@ -113,6 +139,7 @@ async function safeOpenRouterModel(model: Record<string, unknown>) {
     maximumDuration: durations.length ? Math.max(...durations) : null,
     supportedRatios: ratios,
     supportedResolutions: selectableResolutions,
+    resolutionRequired: selectableResolutions.length > 0,
     supportsAudio: video?.supportsAudio === true
       && (!pricingConfigured || pricedAudioModes.includes('on')),
     supportsSeed: video?.supportsSeed === true,
@@ -180,6 +207,7 @@ export async function GET(request: NextRequest) {
     .map(async (model) => String(model.provider || '') === 'openrouter'
       ? safeOpenRouterModel(model as unknown as Record<string, unknown>)
       : safeRunwayModel(model as unknown as Record<string, unknown>)));
+  const userVisibleModels = supportedModels.filter((model) => model.pricingReady === true);
 
   const rows = await Promise.all((generations || []).map(async (generation) => {
     let resultUrl: string | null = null;
@@ -199,8 +227,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     project: ownership.project,
-    providerConfigured: supportedModels.some((model) => model.configured && model.pricingReady && model.capabilitiesAvailable),
-    models: supportedModels,
+    providerConfigured: userVisibleModels.some((model) => model.configured && model.capabilitiesAvailable),
+    models: userVisibleModels,
     generations: rows,
   });
 }
@@ -268,11 +296,14 @@ export async function POST(request: NextRequest) {
         generateAudio: settings.generateAudio,
         seed: settings.seed,
       });
+      const normalizedResolution = typeof policy.settings.resolution === 'string' && policy.settings.resolution.trim()
+        ? policy.settings.resolution.trim()
+        : undefined;
       normalizedSettings = {
         ratio: String(policy.settings.aspectRatio || ''),
         duration: Number(policy.settings.duration),
         quality,
-        resolution: policy.settings.resolution,
+        ...(normalizedResolution ? { resolution: normalizedResolution } : {}),
         generateAudio: policy.settings.generateAudio === true,
         ...(policy.settings.seed !== undefined ? { seed: policy.settings.seed } : {}),
       };

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { getOpenRouterModelCapabilities, isCapabilityKnown } from '@/lib/ai/openrouter-model-capabilities';
+import { isModelUserPriced } from '@/lib/ai/model-user-pricing';
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateActiveUser(request);
@@ -19,7 +20,8 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: 'AUDIO_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
 
-  const decorated = await Promise.all((models || []).map(async (model) => {
+  const pricedModels = (models || []).filter((model) => isModelUserPriced({ ...model, generation_type: 'audio' }));
+  const decorated = await Promise.all(pricedModels.map(async (model) => {
     const capabilities = await getOpenRouterModelCapabilities('audio', model.model_id, {
       fallbackMetadata: model.metadata,
     });

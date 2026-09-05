@@ -7,6 +7,7 @@ const accountPage = readFileSync(join(root, 'src/app/dashboard/account/page.jsx'
 const accountSettings = readFileSync(join(root, 'src/components/AccountSettings.jsx'), 'utf8');
 const pricing = readFileSync(join(root, 'src/app/pricing/page.jsx'), 'utf8');
 const paymentResult = readFileSync(join(root, 'src/app/payment/result/page.jsx'), 'utf8');
+const adminCreditPackage = readFileSync(join(root, 'src/app/api/v1/admin/credit-packages/[id]/route.ts'), 'utf8');
 
 for (const [name, source] of [
   ['dashboard account', accountPage],
@@ -32,6 +33,20 @@ assert.ok(pricing.includes("fetch('/api/v1/credit-packages'"));
 assert.ok(pricing.includes("fetch('/api/v1/ezonepay/payment-links'"));
 assert.ok(pricing.includes("body: JSON.stringify({ itemType, itemId })"));
 assert.ok(!pricing.includes('priceLYD:'));
+
+// SUPER_ADMIN package edits cannot push the effective sale value (including
+// bonus credits) below the server-configured Brand Box credit floor.
+for (const snippet of [
+  'FALLBACK_CREDIT_FLOOR_LYD = 0.11225',
+  ".from('billing_settings')",
+  ".select('reference_credit_value_lyd')",
+  'const totalCredits = purchased + bonus',
+  'const effectiveCreditValueLYD = price / totalCredits',
+  "error: 'PACKAGE_BELOW_CREDIT_FLOOR'",
+  'minimumCreditValueLYD: creditFloorLYD',
+  'effective_credit_value_lyd: effectiveCreditValueLYD',
+  'minimum_credit_value_lyd: creditFloorLYD',
+]) assert.ok(adminCreditPackage.includes(snippet), `credit package floor guard missing ${snippet}`);
 
 // Payment completion continues to be read from the server-side status endpoint.
 assert.ok(paymentResult.includes("fetch('/api/v1/ezonepay/status?order='"));
