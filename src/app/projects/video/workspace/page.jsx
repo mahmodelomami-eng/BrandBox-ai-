@@ -1,6 +1,6 @@
 import AuthGate from '../../../../components/AuthGate';
 import ProjectWorkspaceGate from '../../../../components/ProjectWorkspaceGate';
-import VideoProjectWorkspace from '../../../../components/VideoProjectWorkspace';
+import OpenRouterVideoProjectWorkspace from '../../../../components/OpenRouterVideoProjectWorkspace';
 
 function stringParam(value) {
   return typeof value === 'string' ? value : '';
@@ -19,7 +19,7 @@ export default async function VideoProjectPage({ searchParams }) {
   return (
     <AuthGate>
       <ProjectWorkspaceGate tool="video" projectId={projectId}>
-        <VideoProjectWorkspace
+        <OpenRouterVideoProjectWorkspace
           projectId={projectId}
           initialPrompt={initialPrompt}
           templateSettings={templateSettings}
