@@ -105,6 +105,47 @@ async function run() {
   assert.deepEqual(audio.audio?.responseFormats, ['mp3', 'pcm']);
   assert.equal(audio.audio?.supportsSpeed, true);
 
+  // Production media discovery must fetch the media catalog once and reuse it
+  // across different models instead of issuing one OpenRouter request/model.
+  const originalFetch = globalThis.fetch;
+  let sharedImageFetches = 0;
+  globalThis.fetch = (async () => {
+    sharedImageFetches += 1;
+    return jsonResponse({
+      data: [
+        {
+          id: 'vendor/cache-image-a',
+          supported_parameters: {
+            resolution: { type: 'enum', values: ['1K'] },
+            aspect_ratio: { type: 'enum', values: ['1:1'] },
+            n: { type: 'range', min: 1, max: 1 },
+          },
+        },
+        {
+          id: 'vendor/cache-image-b',
+          supported_parameters: {
+            resolution: { type: 'enum', values: ['2K'] },
+            aspect_ratio: { type: 'enum', values: ['16:9'] },
+            n: { type: 'range', min: 1, max: 1 },
+          },
+        },
+      ],
+    });
+  }) as typeof fetch;
+  try {
+    const cachedA = await getOpenRouterModelCapabilities('image', 'vendor/cache-image-a', {
+      apiKey: 'test-key', forceRefresh: true,
+    });
+    const cachedB = await getOpenRouterModelCapabilities('image', 'vendor/cache-image-b', {
+      apiKey: 'test-key',
+    });
+    assert.deepEqual(cachedA.image?.resolutions, ['1K']);
+    assert.deepEqual(cachedB.image?.resolutions, ['2K']);
+    assert.equal(sharedImageFetches, 1, 'multiple image models should share one /images/models snapshot');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
   const failingFetch: typeof fetch = async () => new Response('upstream down', { status: 503 });
   const closedFallback = await getOpenRouterModelCapabilities('image', 'vendor/unknown', {
     apiKey: 'test-key', fetchImpl: failingFetch, forceRefresh: true, fallbackMetadata: {},
