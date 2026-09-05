@@ -7,7 +7,11 @@ export async function GET(request: NextRequest) {
   if (!auth) return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
 
   const database = createPrivilegedSupabaseClient();
-  const [{ data: profile, error: profileError }, { data: projects, error: projectsError }, { data: subscription }] = await Promise.all([
+  const [
+    { data: profile, error: profileError },
+    { data: projects, error: projectsError },
+    { data: subscription, error: subscriptionError },
+  ] = await Promise.all([
     database.from('profiles')
       .select('id,first_name,last_name,avatar_url,credit_balance,status')
       .eq('id', auth.user.id)
@@ -29,6 +33,7 @@ export async function GET(request: NextRequest) {
 
   if (profileError || !profile) return NextResponse.json({ error: 'PROFILE_UNAVAILABLE' }, { status: 503 });
   if (projectsError) return NextResponse.json({ error: 'PROJECTS_UNAVAILABLE' }, { status: 503 });
+  if (subscriptionError) return NextResponse.json({ error: 'SUBSCRIPTION_UNAVAILABLE' }, { status: 503 });
 
   return NextResponse.json({
     profile: {
