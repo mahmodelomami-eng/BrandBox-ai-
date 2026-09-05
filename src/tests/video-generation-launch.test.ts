@@ -62,6 +62,9 @@ assert.ok(post.includes('modelCreditsPerSecond(model.metadata)'));
 assert.ok(post.includes('safeMinimumCredits(model.minimum_credits)'));
 assert.ok(post.includes("resolution: '480p'"));
 assert.ok(post.includes('generateAudio: false'));
+assert.ok(route.includes('minimumDuration'));
+assert.ok(route.includes('maximumDuration'));
+assert.ok(route.includes('configured: providerConfigured(provider)'));
 assert.ok(!route.includes('CreditEngine.calculateRequiredCredits'), 'video pricing must remain server catalog-authoritative');
 
 // Both lifecycle services reserve/refund credits and persist only Brand Box storage paths.
@@ -86,7 +89,7 @@ assert.ok(openRouterService.includes('downloadOpenRouterVideoContent(task.taskId
 assert.ok(openRouterService.includes("provider: 'openrouter'"));
 assert.ok(openRouterService.includes('MAX_VIDEO_BYTES'));
 
-// Existing video product UX remains project-scoped, async and semantic-theme safe.
+// Video UX is model-specific, project-scoped, asynchronous and semantic-theme safe.
 assert.ok(page.includes('VideoProjectWorkspace'));
 assert.ok(!page.includes('MediaProjectWorkspace'));
 assert.ok(workspace.includes("fetch('/api/v1/video-generations'"));
@@ -95,6 +98,13 @@ assert.ok(workspace.includes('6000 + Math.floor(Math.random() * 1200)'));
 assert.ok(workspace.includes('<video controls'));
 assert.ok(workspace.includes('إعادة المحاولة'));
 assert.ok(workspace.includes('providerConfigured'));
+assert.ok(workspace.includes('selectedProviderConfigured'));
+assert.ok(workspace.includes('const availableDurations = useMemo'));
+assert.ok(workspace.includes('selectedModel?.minimumDuration'));
+assert.ok(workspace.includes('selectedModel?.maximumDuration'));
+assert.ok(workspace.includes('availableDurations.map'));
+assert.ok(workspace.includes("selectedModel?.quality || '—'"));
+assert.ok(workspace.includes('Math.max(Number(selectedModel.minimumCredits || 0), selectedModel.creditsPerSecond * duration)'));
 assert.ok(workspace.includes('creditsPerSecond'));
 assert.ok(workspace.includes('bb-app-canvas'));
 assert.ok(workspace.includes('bb-panel'));
@@ -110,10 +120,15 @@ assert.ok(workspace.includes('const insufficientCredits ='));
 assert.ok(workspace.includes('priceEstimate > creditBalance'));
 assert.ok(workspace.includes('href="/pricing"'));
 
-// Admin keeps explicit provider-secret visibility; unknown providers must never be assumed configured.
+// Admin keeps explicit provider-secret visibility and cannot activate video without secret + pricing.
 assert.ok(adminRoute.includes('function hasRunwaySecret'));
+assert.ok(adminRoute.includes('function hasOpenRouterSecret'));
 assert.ok(adminRoute.includes('runwayConfigured: hasRunwaySecret()'));
-assert.ok(adminRoute.includes("provider === 'openrouter'"));
+assert.ok(adminRoute.includes("existingModel.provider === 'runway' && !hasRunwaySecret()"));
+assert.ok(adminRoute.includes("existingModel.provider === 'openrouter' && !hasOpenRouterSecret()"));
+assert.ok(adminRoute.includes("error: 'OPENROUTER_SECRET_REQUIRED'"));
+assert.ok(adminRoute.includes("error: 'VIDEO_PRICING_REQUIRED'"));
+assert.ok(adminRoute.includes("['runway', 'openrouter'].includes(currentModel.data.provider)"));
 assert.ok(adminWorkspace.includes('Runway: {secretPolicy.runwayConfigured'));
 
 // Storage + existing Runway launch gates remain intact.
