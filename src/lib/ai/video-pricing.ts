@@ -1,14 +1,17 @@
 export type VideoPricingAudioMode = 'off' | 'on';
 
+/** `*` means the provider price is independent of resolution. */
+export type VideoPricingResolution = string;
+
 export interface VideoPricingVariant {
-  resolution: string;
+  resolution: VideoPricingResolution;
   audioMode: VideoPricingAudioMode;
   creditsPerSecond: number;
   providerUsdPerSecond?: number;
 }
 
 export interface PublicVideoPricingOption {
-  resolution: string;
+  resolution: VideoPricingResolution;
   audioMode: VideoPricingAudioMode;
   creditsPerSecond: number;
 }
@@ -94,6 +97,8 @@ export function parseVideoPricingMatrix(metadata: unknown): VideoPricingVariant[
   }
 
   return variants.sort((left, right) => {
+    if (left.resolution === '*' && right.resolution !== '*') return -1;
+    if (right.resolution === '*' && left.resolution !== '*') return 1;
     const resolutionOrder = left.resolution.localeCompare(right.resolution, 'en', { numeric: true });
     if (resolutionOrder !== 0) return resolutionOrder;
     return left.audioMode.localeCompare(right.audioMode);
@@ -131,29 +136,46 @@ export function publicVideoPricingOptions(metadata: unknown): PublicVideoPricing
   }));
 }
 
+/**
+ * Resolve the exact billable variant. Resolution-specific pricing wins over a
+ * wildcard (`*`) variant. Wildcard pricing is only for providers whose public
+ * price is independent of output resolution (for example Kling v3 on
+ * OpenRouter as of 2026-09-05).
+ */
 export function resolveVideoPricing(
   metadata: unknown,
   settings: Record<string, unknown>,
 ): ResolvedVideoPricing | null {
   const resolution = cleanString(settings.resolution);
   const mode: VideoPricingAudioMode = settings.generateAudio === true ? 'on' : 'off';
-  if (!resolution) return null;
+  const variants = videoPricingVariants(metadata);
+
+  const exact = resolution
+    ? variants.find((candidate) => candidate.resolution === resolution && candidate.audioMode === mode)
+    : null;
+  const wildcard = variants.find((candidate) => candidate.resolution === '*' && candidate.audioMode === mode);
+  const variant = exact || wildcard;
+  if (!variant) return null;
 
   const matrixDeclared = hasVideoPricingMatrix(metadata);
-  const variant = videoPricingVariants(metadata)
-    .find((candidate) => candidate.resolution === resolution && candidate.audioMode === mode);
-  if (!variant) return null;
   return { ...variant, source: matrixDeclared ? 'matrix' : 'legacy' };
 }
 
+/** User-selectable resolutions only; `*` is pricing metadata, not a UI option. */
 export function pricedVideoResolutions(metadata: unknown): string[] {
-  return [...new Set(videoPricingVariants(metadata).map((variant) => variant.resolution))];
+  return [...new Set(videoPricingVariants(metadata)
+    .map((variant) => variant.resolution)
+    .filter((resolution) => resolution !== '*'))];
+}
+
+export function hasResolutionIndependentVideoPricing(metadata: unknown): boolean {
+  return videoPricingVariants(metadata).some((variant) => variant.resolution === '*');
 }
 
 export function pricedVideoAudioModes(metadata: unknown, resolution?: string): VideoPricingAudioMode[] {
   const targetResolution = cleanString(resolution);
   return [...new Set(videoPricingVariants(metadata)
-    .filter((variant) => !targetResolution || variant.resolution === targetResolution)
+    .filter((variant) => variant.resolution === '*' || !targetResolution || variant.resolution === targetResolution)
     .map((variant) => variant.audioMode))];
 }
 
