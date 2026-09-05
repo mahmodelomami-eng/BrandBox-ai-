@@ -38,7 +38,11 @@ assert.ok(studio.includes('تعذر تأكيد قدرات هذا النموذج'
 assert.ok(studio.includes('function friendlyImageError(value)'));
 assert.ok(studio.includes('friendlyImageError(raw)'));
 assert.ok(studio.includes('بالإعدادات المدعومة فعليًا من النموذج'));
-assert.ok(!studio.includes("setPrompt('');"), 'successful image generation should not discard the reusable prompt');
+const generateStart = studio.indexOf('const generateImages = async () =>');
+const generateEnd = studio.indexOf('const copyImageLink = async', generateStart);
+assert.ok(generateStart >= 0 && generateEnd > generateStart);
+const generateFlow = studio.slice(generateStart, generateEnd);
+assert.ok(!generateFlow.includes("setPrompt('');"), 'successful image generation should not discard the reusable prompt');
 assert.ok(studio.includes('اقتراح جاهز'));
 assert.ok(!studio.includes('إلهام عشوائي'));
 
