@@ -14,12 +14,14 @@ const generationExecution = postRoute.indexOf('GenerationEngine.executeGeneratio
 assert.ok(postCatalogCheck >= 0, 'chat POST must consult ai_model_catalog');
 assert.ok(generationExecution > postCatalogCheck, 'POST model catalog authorization must occur before GenerationEngine/credit deduction');
 assert.ok(postRoute.includes(".eq('provider', 'openrouter')"));
-assert.ok(postRoute.includes(".eq('generation_type', 'chat')"));
+assert.ok(postRoute.includes(".eq('generation_type', generationType)"), 'shared chat/image catalog lookup must be scoped by the authenticated generation type');
 assert.ok(postRoute.includes(".eq('is_enabled', true)"));
 assert.ok(postRoute.includes(".eq('is_visible_to_users', true)"));
-assert.ok(postRoute.includes("error: 'CHAT_MODEL_NOT_AVAILABLE'"));
-assert.ok(postRoute.includes("error: 'CHAT_MODEL_PRICING_UNAVAILABLE'"));
+assert.ok(postRoute.includes("'CHAT_MODEL_NOT_AVAILABLE'"));
+assert.ok(postRoute.includes("'CHAT_MODEL_PRICING_UNAVAILABLE'"));
 assert.ok(postRoute.includes('minimum_credits'));
+assert.ok(postRoute.includes("getOpenRouterModelCapabilities(generationType, body.modelId"), 'chat must resolve model capabilities before spending credits');
+assert.ok(postRoute.includes('applyChatCapabilityPolicy(capabilities'), 'chat settings must be normalized by the model capability policy');
 assert.ok(postRoute.includes('projectChatSystemPrompt(project, brandKit || null)'));
 assert.ok(postRoute.includes(".from('brand_kits')"), 'chat context must load Brand Kit server-side');
 assert.ok(postRoute.includes(".eq('user_id', user.id)"), 'Brand Kit context must remain tenant-scoped');
