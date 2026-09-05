@@ -84,34 +84,25 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
     () => Array.isArray(selectedModel?.supportedResolutions) ? selectedModel.supportedResolutions.filter(Boolean) : [],
     [selectedModel]
   );
+  const effectiveRatio = ratioAlias(ratio, availableRatios);
+  const effectiveDuration = availableDurations.includes(duration) ? duration : (availableDurations[0] || 0);
+  const effectiveResolution = availableResolutions.includes(resolution) ? resolution : (availableResolutions[0] || '');
+  const effectiveGenerateAudio = Boolean(selectedModel?.supportsAudio && generateAudio);
   const selectedProviderConfigured = Boolean(selectedModel?.configured);
   const capabilitiesAvailable = Boolean(selectedModel?.capabilitiesAvailable);
-  const priceEstimate = selectedModel?.creditsPerSecond && duration
-    ? Math.max(Number(selectedModel.minimumCredits || 0), selectedModel.creditsPerSecond * duration)
+  const priceEstimate = selectedModel?.creditsPerSecond && effectiveDuration
+    ? Math.max(Number(selectedModel.minimumCredits || 0), selectedModel.creditsPerSecond * effectiveDuration)
     : null;
   const generationReady = Boolean(
     selectedProviderConfigured
     && capabilitiesAvailable
     && selectedModel?.pricingReady
     && selectedModel?.creditsPerSecond
-    && availableDurations.includes(duration)
-    && availableRatios.includes(ratio)
-    && availableResolutions.includes(resolution)
+    && effectiveDuration
+    && effectiveRatio
+    && effectiveResolution
   );
   const insufficientCredits = Boolean(priceEstimate && creditBalance !== null && creditBalance !== undefined && priceEstimate > creditBalance);
-
-  useEffect(() => {
-    if (!selectedModel) return;
-    const nextRatio = ratioAlias(ratio, availableRatios);
-    if (nextRatio !== ratio) setRatio(nextRatio);
-    if (availableDurations.length > 0 && !availableDurations.includes(duration)) {
-      setDuration(availableDurations[0]);
-    }
-    if (availableResolutions.length > 0 && !availableResolutions.includes(resolution)) {
-      setResolution(availableResolutions[0]);
-    }
-    if (!selectedModel.supportsAudio && generateAudio) setGenerateAudio(false);
-  }, [availableDurations, availableRatios, availableResolutions, duration, generateAudio, ratio, resolution, selectedModel]);
 
   function handleModelChange(event) {
     const nextModelId = event.target.value;
@@ -253,15 +244,27 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           modelId: selectedModel.modelId,
           prompt: prompt.trim(),
           requestId,
-          settings: { ratio, duration, resolution, generateAudio, quality: 'standard' },
+          settings: {
+            ratio: effectiveRatio,
+            duration: effectiveDuration,
+            resolution: effectiveResolution,
+            generateAudio: effectiveGenerateAudio,
+            quality: 'standard',
+          },
         }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.generationId) throw new Error(result.errorMessage || result.error || 'تعذر بدء توليد الفيديو.');
-      const finalSettings = result.normalizedSettings || { ratio, duration, resolution, generateAudio, quality: 'standard' };
-      setRatio(finalSettings.ratio || ratio);
-      setDuration(Number(finalSettings.duration || duration));
-      setResolution(finalSettings.resolution || resolution);
+      const finalSettings = result.normalizedSettings || {
+        ratio: effectiveRatio,
+        duration: effectiveDuration,
+        resolution: effectiveResolution,
+        generateAudio: effectiveGenerateAudio,
+        quality: 'standard',
+      };
+      setRatio(finalSettings.ratio || effectiveRatio);
+      setDuration(Number(finalSettings.duration || effectiveDuration));
+      setResolution(finalSettings.resolution || effectiveResolution);
       setGenerateAudio(finalSettings.generateAudio === true);
       setGenerations((current) => [{
         id: result.generationId,
@@ -299,7 +302,13 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           projectId,
           tool: 'video',
           prompt: prompt.trim(),
-          settings: { ratio, duration: `${duration} ثوانٍ`, quality: resolution, generateAudio, modelId },
+          settings: {
+            ratio: effectiveRatio,
+            duration: `${effectiveDuration} ثوانٍ`,
+            quality: effectiveResolution,
+            generateAudio: effectiveGenerateAudio,
+            modelId,
+          },
           status: 'draft',
           itemType: 'draft',
         }),
@@ -419,10 +428,10 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
 
           <div className="mt-5 space-y-4">
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select value={modelId} onChange={handleModelChange} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : models.map((model) => <option key={model.modelId} value={model.modelId}>{model.name}</option>)}</select></label>
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={ratio} onChange={(event) => setRatio(event.target.value)} disabled={!capabilitiesAvailable || availableRatios.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableRatios.map((value) => <option key={value} value={value}>{ratioLabel(value)}</option>)}</select></label>
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={duration} onChange={(event) => setDuration(Number(event.target.value))} disabled={!capabilitiesAvailable || availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">الدقة</span><select value={resolution} onChange={(event) => setResolution(event.target.value)} disabled={!capabilitiesAvailable || availableResolutions.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableResolutions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            {selectedModel?.supportsAudio && <label className="bb-input flex items-center justify-between rounded-xl border px-4 py-3"><span><span className="bb-text-primary block text-xs font-black">توليد الصوت مع الفيديو</span><span className="bb-text-tertiary mt-1 block text-[10px]">هذا الخيار يظهر فقط لأن النموذج المحدد يعلنه كقدرة مدعومة.</span></span><input type="checkbox" checked={generateAudio} onChange={(event) => setGenerateAudio(event.target.checked)} className="h-4 w-4" /></label>}
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={effectiveRatio} onChange={(event) => setRatio(event.target.value)} disabled={!capabilitiesAvailable || availableRatios.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableRatios.map((value) => <option key={value} value={value}>{ratioLabel(value)}</option>)}</select></label>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={effectiveDuration} onChange={(event) => setDuration(Number(event.target.value))} disabled={!capabilitiesAvailable || availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">الدقة</span><select value={effectiveResolution} onChange={(event) => setResolution(event.target.value)} disabled={!capabilitiesAvailable || availableResolutions.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableResolutions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            {selectedModel?.supportsAudio && <label className="bb-input flex items-center justify-between rounded-xl border px-4 py-3"><span><span className="bb-text-primary block text-xs font-black">توليد الصوت مع الفيديو</span><span className="bb-text-tertiary mt-1 block text-[10px]">هذا الخيار يظهر فقط لأن النموذج المحدد يعلنه كقدرة مدعومة.</span></span><input type="checkbox" checked={effectiveGenerateAudio} onChange={(event) => setGenerateAudio(event.target.checked)} className="h-4 w-4" /></label>}
           </div>
 
           <div className="bb-surface-1 bb-border bb-text-secondary mt-5 rounded-2xl border p-3 text-xs leading-6">
