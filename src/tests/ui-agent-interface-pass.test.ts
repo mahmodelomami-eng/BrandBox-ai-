@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
+const rootPage = readFileSync(join(root, 'src/app/page.jsx'), 'utf8');
 const dashboard = readFileSync(join(root, 'src/components/StableUserDashboard.jsx'), 'utf8');
 const navigation = readFileSync(join(root, 'src/components/GlobalNavigation.jsx'), 'utf8');
 const appNavigationWrapper = readFileSync(join(root, 'src/components/layout/AppNavigationWrapper.jsx'), 'utf8');
@@ -80,6 +81,15 @@ assert.ok(appNavigationWrapper.includes('href="#main-content"'), 'global shell m
 assert.ok(appNavigationWrapper.includes('تجاوز إلى المحتوى الرئيسي'));
 assert.ok(appNavigationWrapper.includes('<main id="main-content" tabIndex={-1}'), 'skip-link target must be semantic and focusable');
 assert.ok(appNavigationWrapper.includes('focus:translate-y-0'), 'skip link must become visible on keyboard focus');
+
+// Public root route should keep legacy redirects off the client to avoid an unnecessary hydration/blank-state redirect pass.
+assert.ok(!rootPage.includes("'use client'"), 'root page should remain a server component');
+assert.ok(rootPage.includes("import { redirect } from 'next/navigation'"), 'legacy view routing should use the server redirect primitive');
+assert.ok(rootPage.includes('export default async function RootPage({ searchParams })'), 'root page should resolve query routing before rendering the client experience');
+assert.ok(rootPage.includes('if (legacyTarget) redirect(legacyTarget);'), 'legacy views must redirect before the home client tree renders');
+assert.ok(!rootPage.includes('useRouter'), 'root route should not ship client router logic only for legacy redirects');
+assert.ok(!rootPage.includes('useSearchParams'), 'root route should not hydrate just to read the legacy view query');
+assert.ok(!rootPage.includes('Suspense fallback='), 'root route should not render a blank client redirect fallback');
 
 // Mobile review must scope responsive overrides locally and keep touch targets usable.
 assert.ok(mobileReview.includes('className="mobile-review-layout"'), 'mobile review must expose a local responsive layout hook');
