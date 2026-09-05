@@ -5,6 +5,7 @@ import { join } from 'node:path';
 const root = process.cwd();
 const dashboard = readFileSync(join(root, 'src/components/StableUserDashboard.jsx'), 'utf8');
 const navigation = readFileSync(join(root, 'src/components/GlobalNavigation.jsx'), 'utf8');
+const appNavigationWrapper = readFileSync(join(root, 'src/components/layout/AppNavigationWrapper.jsx'), 'utf8');
 const pricing = readFileSync(join(root, 'src/app/pricing/page.jsx'), 'utf8');
 const account = readFileSync(join(root, 'src/app/dashboard/account/page.jsx'), 'utf8');
 const plansApi = readFileSync(join(root, 'src/app/api/v1/plans/route.ts'), 'utf8');
@@ -71,5 +72,11 @@ assert.ok(navigation.includes("max-h-[calc(100dvh-5rem)]"));
 assert.ok(navigation.includes("aria-current={active ? 'page' : undefined}"));
 assert.ok(navigation.includes('إنشاء حساب'));
 assert.ok(!navigation.includes('> اشتراك</Link>'), 'auth CTA must not be mislabeled as a paid subscription action');
+
+// Keyboard users must be able to bypass the persistent global navigation and land on semantic main content.
+assert.ok(appNavigationWrapper.includes('href="#main-content"'), 'global shell must expose a skip link');
+assert.ok(appNavigationWrapper.includes('تجاوز إلى المحتوى الرئيسي'));
+assert.ok(appNavigationWrapper.includes('<main id="main-content" tabIndex={-1}'), 'skip-link target must be semantic and focusable');
+assert.ok(appNavigationWrapper.includes('focus:translate-y-0'), 'skip link must become visible on keyboard focus');
 
 console.log('Product/Monitoring interface pass guard passed.');
