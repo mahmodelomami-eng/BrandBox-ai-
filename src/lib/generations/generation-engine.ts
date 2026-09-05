@@ -253,7 +253,7 @@ export class GenerationEngine {
         : undefined;
       const imageResolution = ['512', '1K', '2K', '4K'].includes(String(request.settings?.resolution))
         ? request.settings?.resolution as '512' | '1K' | '2K' | '4K'
-        : '1K';
+        : undefined;
       const imagePromptSuffix = executionContext.imagePromptSuffix?.trim();
       const providerImagePrompt = imagePromptSuffix
         ? `${request.prompt.trim()}\n${imagePromptSuffix}`

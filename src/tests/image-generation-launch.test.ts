@@ -6,6 +6,7 @@ const root = process.cwd();
 const route = readFileSync(join(root, 'src/app/api/v1/generations/route.ts'), 'utf8');
 const engine = readFileSync(join(root, 'src/lib/generations/generation-engine.ts'), 'utf8');
 const client = readFileSync(join(root, 'src/lib/ai/openrouter-client.ts'), 'utf8');
+const capabilities = readFileSync(join(root, 'src/lib/ai/openrouter-image-capabilities.ts'), 'utf8');
 const workspace = readFileSync(join(root, 'src/components/ImageStudioWorkspace.jsx'), 'utf8');
 const migration = readFileSync(join(root, 'supabase/migrations/20260902010000_image_model_catalog_launch_seed.sql'), 'utf8');
 
@@ -25,8 +26,12 @@ assert.ok(postRoute.includes('minimum_credits'));
 assert.ok(postRoute.includes('{ unitCredits, chatSystemPrompt, imagePromptSuffix }'));
 
 assert.ok(route.includes('OPENROUTER_IMAGE_ASPECT_RATIOS'));
-assert.ok(route.includes('OPENROUTER_IMAGE_RESOLUTIONS'));
+assert.ok(route.includes('getOpenRouterImageCapabilities'));
 assert.ok(route.includes('function validImageSettings'));
+assert.ok(route.includes('function normalizeImageSettings'));
+assert.ok(route.includes('supported_resolutions'));
+assert.ok(route.includes('default_resolution'));
+assert.ok(route.includes('max_count'));
 assert.ok(route.includes('imageModelsAvailable'));
 assert.ok(route.includes('supportedImageModels'));
 assert.ok(route.includes(".eq('generation_type', 'image')"));
@@ -34,8 +39,10 @@ assert.ok(route.includes('function projectImagePromptSuffix'));
 assert.ok(postRoute.includes("generationType === 'image' && body.settings?.useBrandKit === true"));
 assert.ok(postRoute.includes(".from('brand_kits')"));
 assert.ok(postRoute.includes(".eq('user_id', user.id)"), 'image Brand Kit must be resolved from the authenticated user on the server');
+assert.ok(postRoute.includes('settings: normalizeImageSettings(body.modelId, body.settings)'), 'legacy UI resolution values must be normalized before credit deduction/provider execution');
 
-assert.ok(engine.includes("['512', '1K', '2K', '4K'].includes"), 'engine must preserve all validated image resolution tiers');
+assert.ok(engine.includes("? request.settings?.resolution as '512' | '1K' | '2K' | '4K'"));
+assert.ok(engine.includes(': undefined;'), 'engine must not force a universal 1K image resolution');
 assert.ok(engine.includes("raw.startsWith('OPENROUTER_IMAGE_RATE_LIMITED')"));
 assert.ok(engine.includes("raw.startsWith('OPENROUTER_IMAGE_PROVIDER_UNAVAILABLE')"));
 assert.ok(engine.includes("raw.startsWith('OPENROUTER_IMAGE_TIMEOUT')"));
@@ -45,7 +52,19 @@ assert.ok(engine.includes('prompt: request.prompt,'), 'the durable generation re
 assert.ok(engine.includes("'generation_failure_refund'"));
 assert.ok(engine.includes('wasRefunded: refundRes.success'));
 
+assert.ok(capabilities.includes("'bytedance-seed/seedream-5-0-lite'"));
+assert.ok(capabilities.includes("supportedResolutions: ['2K', '4K']"));
+assert.ok(capabilities.includes("defaultResolution: '2K'"));
+assert.ok(capabilities.includes("'google/gemini-3.1-flash-lite-image'"));
+assert.ok(capabilities.includes("supportedResolutions: ['1K']"));
+assert.ok(capabilities.includes('maxCount: 1'));
+assert.ok(capabilities.includes("'openai/gpt-image-2'"));
+assert.ok(capabilities.includes('supportedResolutions: []'));
+
 const imageClient = client.slice(client.indexOf('export async function createOpenRouterImageGeneration'), client.indexOf('export async function createOpenRouterChatCompletion'));
+assert.ok(imageClient.includes('resolveOpenRouterImageResolution'));
+assert.ok(imageClient.includes('isOpenRouterImageCountSupported'));
+assert.ok(imageClient.includes('...(resolution ? { resolution } : {})'), 'models without explicit resolution support must omit the provider parameter');
 assert.ok(imageClient.includes('imageHttpErrorCode(response.status)'), 'image generation must route HTTP failures through the safe error mapper');
 for (const code of [
   'OPENROUTER_IMAGE_RATE_LIMITED',
@@ -67,7 +86,6 @@ assert.ok(workspace.includes('حسب كتالوج المنصة'));
 assert.ok(workspace.includes('!selectedModel || !imageModelsAvailable'));
 assert.ok(!workspace.includes('const IMAGE_MODELS = ['), 'Image Studio must not hardcode model availability or pricing in the browser');
 assert.ok(!workspace.includes('asset.project_id === projectId'), 'image history scoping must happen on the server');
-assert.ok(workspace.includes("{ value: '512', label: '512px' }"));
 
 for (const modelId of [
   'openai/gpt-image-2',
