@@ -175,13 +175,18 @@ export class OpenRouterVideoGenerationService {
     }
 
     try {
+      const providerSettings = request.settings as unknown as Record<string, unknown>;
+      const resolution = typeof providerSettings.resolution === 'string' ? providerSettings.resolution : undefined;
+      const generateAudio = providerSettings.generateAudio === true;
+      const seed = providerSettings.seed === undefined ? undefined : Number(providerSettings.seed);
       const task = await createOpenRouterVideoTask({
         model: request.modelId,
         prompt: request.prompt,
         duration,
-        resolution: '480p',
+        resolution,
         aspectRatio: request.settings.ratio,
-        generateAudio: false,
+        generateAudio,
+        ...(Number.isInteger(seed) ? { seed } : {}),
       });
       const { error: taskUpdateError } = await database.from('generations').update({
         status: 'processing',
