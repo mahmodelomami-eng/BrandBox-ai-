@@ -24,12 +24,24 @@ assert.ok(media.includes("cache: 'no-store'"));
 // Product & Business: drafts remain reusable and UI does not imply live generation.
 assert.ok(media.includes('function reuseDraft(item)'));
 assert.ok(media.includes('استخدام كنقطة بداية'));
-assert.ok(media.includes('أي حفظ جديد سيُنشئ نسخة مسودة جديدة'));
-assert.ok(media.includes('حفظ نسخة مسودة'));
+assert.ok(media.includes('تم حفظ نسخة مسودة جديدة داخل المشروع'));
 assert.ok(media.includes('أبقينا النص في المحرر'));
+assert.ok(media.includes('حفظ نسخة مسودة'));
 assert.ok(media.includes('حفظ المسودة لا يشغّل مزودًا خارجيًا ولا يخصم نقاطًا'));
 assert.ok(media.includes('التوليد غير متاح حتى تفعيل المزود'));
 assert.ok(!media.includes("setPrompt('');"));
+
+// Audio draft controls are capability-aware but do not imply direct TTS is live.
+for (const snippet of [
+  "fetch('/api/v1/audio-models'",
+  'normalizeAudioModel',
+  'selectedAudioModel?.capabilitiesAvailable',
+  'selectedAudioModel.voices',
+  'selectedAudioModel.responseFormats',
+  'selectedAudioModel.supportsSpeed',
+  'لم نعرض أصواتًا أو صيغًا بالتخمين',
+  'القيمة الآمنة 1.0 فقط',
+]) assert.ok(media.includes(snippet), `audio draft capability guard missing ${snippet}`);
 
 // Long-form audio/video descriptions have a visible, bounded editor.
 assert.ok(media.includes('maxLength={4000}'));
