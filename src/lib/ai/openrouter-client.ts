@@ -1,3 +1,8 @@
+import {
+  isOpenRouterImageCountSupported,
+  resolveOpenRouterImageResolution,
+} from './openrouter-image-capabilities';
+
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_IMAGES_URL = 'https://openrouter.ai/api/v1/images';
 
@@ -12,10 +17,11 @@ export const OPENROUTER_IMAGE_ASPECT_RATIOS = [
   '5:4', '1:1', '4:5', '3:4', '2:3', '9:16',
 ] as const;
 
+// Kept as the coarse platform union for request typing/UI compatibility.
+// Model-specific validation is enforced by openrouter-image-capabilities.ts.
 export const OPENROUTER_IMAGE_RESOLUTIONS = ['512', '1K', '2K', '4K'] as const;
 
 const IMAGE_ASPECT_RATIO_SET = new Set<string>(OPENROUTER_IMAGE_ASPECT_RATIOS);
-const IMAGE_RESOLUTION_SET = new Set<string>(OPENROUTER_IMAGE_RESOLUTIONS);
 
 export interface OpenRouterChatRequest {
   model: string;
@@ -97,11 +103,11 @@ export async function createOpenRouterImageGeneration(
   const aspectRatio = (request.aspectRatio || '1:1').toLowerCase();
   if (!IMAGE_ASPECT_RATIO_SET.has(aspectRatio)) throw new Error('OPENROUTER_INVALID_ASPECT_RATIO');
 
-  const resolution = request.resolution || '1K';
-  if (!IMAGE_RESOLUTION_SET.has(resolution)) throw new Error('OPENROUTER_INVALID_IMAGE_RESOLUTION');
-
+  const resolution = resolveOpenRouterImageResolution(request.model, request.resolution);
   const count = Math.trunc(Number(request.count ?? 1));
-  if (!Number.isFinite(count) || count < 1 || count > 4) throw new Error('OPENROUTER_INVALID_IMAGE_COUNT');
+  if (!Number.isFinite(count) || !isOpenRouterImageCountSupported(request.model, count)) {
+    throw new Error('OPENROUTER_INVALID_IMAGE_COUNT');
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 120_000);
@@ -120,8 +126,8 @@ export async function createOpenRouterImageGeneration(
         model: request.model,
         prompt,
         aspect_ratio: aspectRatio,
-        resolution,
         n: count,
+        ...(resolution ? { resolution } : {}),
       }),
     });
 
