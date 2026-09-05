@@ -25,13 +25,28 @@ function validImageSettings(modelId: string, settings: Record<string, unknown> |
   const useBrandKit = settings?.useBrandKit;
 
   if (!imageAspectRatios.has(aspectRatio)) return false;
-  if (resolution !== undefined) {
-    if (typeof resolution !== 'string' || !capabilities.supportedResolutions.includes(resolution as never)) return false;
-  }
+  if (resolution !== undefined && typeof resolution !== 'string') return false;
   if (!Number.isInteger(count) || count < 1 || count > capabilities.maxCount) return false;
   if (style !== undefined && (typeof style !== 'string' || !imageStyleIds.has(style))) return false;
   if (useBrandKit !== undefined && typeof useBrandKit !== 'boolean') return false;
   return true;
+}
+
+function normalizeImageSettings(
+  modelId: string,
+  settings: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const capabilities = getOpenRouterImageCapabilities(modelId);
+  const normalized = { ...(settings || {}) };
+  if (!capabilities) return normalized;
+
+  const requestedResolution = typeof normalized.resolution === 'string' ? normalized.resolution : undefined;
+  if (capabilities.supportedResolutions.length === 0) {
+    delete normalized.resolution;
+  } else if (!requestedResolution || !(capabilities.supportedResolutions as readonly string[]).includes(requestedResolution)) {
+    normalized.resolution = capabilities.defaultResolution || capabilities.supportedResolutions[0];
+  }
+  return normalized;
 }
 
 function projectChatSystemPrompt(
@@ -224,6 +239,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'INVALID_IMAGE_SETTINGS' }, { status: 400 });
   }
 
+  const executionBody: GenerationRequest = generationType === 'image'
+    ? { ...body, settings: normalizeImageSettings(body.modelId, body.settings) }
+    : body;
+
   const database = createPrivilegedSupabaseClient();
   let unitCredits: number | undefined;
 
@@ -307,7 +326,7 @@ export async function POST(request: NextRequest) {
 
   const result = await GenerationEngine.executeGeneration(
     { userId: user.id, email: user.email || '', role: auth.profile.role },
-    { ...body, requestId },
+    { ...executionBody, requestId },
     { unitCredits, chatSystemPrompt, imagePromptSuffix }
   );
   if (result.retryable) {
