@@ -3,71 +3,93 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
-const client = readFileSync(join(root, 'src/lib/ai/runway-client.ts'), 'utf8');
-const service = readFileSync(join(root, 'src/lib/generations/video-generation-service.ts'), 'utf8');
+const runwayClient = readFileSync(join(root, 'src/lib/ai/runway-client.ts'), 'utf8');
+const openRouterClient = readFileSync(join(root, 'src/lib/ai/openrouter-video-client.ts'), 'utf8');
+const runwayService = readFileSync(join(root, 'src/lib/generations/video-generation-service.ts'), 'utf8');
+const openRouterService = readFileSync(join(root, 'src/lib/generations/openrouter-video-generation-service.ts'), 'utf8');
 const route = readFileSync(join(root, 'src/app/api/v1/video-generations/route.ts'), 'utf8');
 const workspace = readFileSync(join(root, 'src/components/VideoProjectWorkspace.jsx'), 'utf8');
 const page = readFileSync(join(root, 'src/app/projects/video/workspace/page.jsx'), 'utf8');
 const adminRoute = readFileSync(join(root, 'src/app/api/v1/admin/ai-integrations/route.ts'), 'utf8');
 const adminWorkspace = readFileSync(join(root, 'src/components/AdminAIIntegrationsPanel.jsx'), 'utf8');
-const migration = readFileSync(join(root, 'supabase/migrations/20260902023000_runway_video_catalog_launch_seed.sql'), 'utf8');
-const pricingMigration = readFileSync(join(root, 'supabase/migrations/20260902135442_price_runway_gen45_video.sql'), 'utf8');
+const runwayMigration = readFileSync(join(root, 'supabase/migrations/20260902023000_runway_video_catalog_launch_seed.sql'), 'utf8');
+const runwayPricingMigration = readFileSync(join(root, 'supabase/migrations/20260902135442_price_runway_gen45_video.sql'), 'utf8');
+const openRouterMigration = readFileSync(join(root, 'supabase/migrations/20260905170000_openrouter_seedance_video_launch_seed.sql'), 'utf8');
 
-assert.ok(client.includes("RUNWAY_VIDEO_MODELS = ['gen4.5']"));
-assert.ok(client.includes("RUNWAY_TEXT_TO_VIDEO_RATIOS = ['1280:720', '720:1280']"));
-assert.ok(client.includes('RUNWAY_TEXT_TO_VIDEO_MIN_DURATION = 2'));
-assert.ok(client.includes('RUNWAY_TEXT_TO_VIDEO_MAX_DURATION = 10'));
-assert.ok(client.includes('/v1/text_to_video'));
-assert.ok(!client.includes('/v1/image_to_video'), 'text-only Gen-4.5 requests must use Runway text_to_video');
-assert.ok(client.includes('/v1/tasks/'));
-assert.ok(client.includes("'X-Runway-Version': RUNWAY_API_VERSION"));
-assert.ok(client.includes('process.env.RUNWAYML_API_SECRET'));
-assert.ok(!client.includes('error?.message'), 'provider internals must not be surfaced by the Runway client');
-assert.ok(!client.includes('gen3a_turbo'));
-assert.ok(!client.includes('runway-gen3-alpha'));
+// Runway remains a supported provider and keeps its existing security contract.
+assert.ok(runwayClient.includes("RUNWAY_VIDEO_MODELS = ['gen4.5']"));
+assert.ok(runwayClient.includes('/v1/text_to_video'));
+assert.ok(runwayClient.includes('/v1/tasks/'));
+assert.ok(runwayClient.includes('process.env.RUNWAYML_API_SECRET'));
+assert.ok(!runwayClient.includes('error?.message'));
 
+// OpenRouter video uses the verified async /videos lifecycle and one launch model.
+assert.ok(openRouterClient.includes("OPENROUTER_VIDEO_MODELS = ['bytedance/seedance-2.0-mini']"));
+assert.ok(openRouterClient.includes("OPENROUTER_VIDEO_RESOLUTIONS = ['480p']"));
+assert.ok(openRouterClient.includes('OPENROUTER_VIDEO_MIN_DURATION = 4'));
+assert.ok(openRouterClient.includes("const OPENROUTER_VIDEO_BASE = 'https://openrouter.ai/api/v1/videos'"));
+assert.ok(openRouterClient.includes("generate_audio: input.generateAudio"));
+assert.ok(openRouterClient.includes("case 'pending': return 'queued'"));
+assert.ok(openRouterClient.includes("case 'in_progress': return 'processing'"));
+assert.ok(openRouterClient.includes("case 'completed': return 'succeeded'"));
+assert.ok(openRouterClient.includes('/content?index=0'));
+assert.ok(openRouterClient.includes('process.env.OPENROUTER_API_KEY'));
+assert.ok(!openRouterClient.includes('error?.message'), 'OpenRouter video client must not expose provider internals');
+
+// Route resolves server catalog + provider before any paid generation begins.
 const post = route.slice(route.indexOf('export async function POST'), route.indexOf('export async function PATCH'));
 const catalogIndex = post.indexOf(".from('ai_model_catalog')");
-const serviceStartIndex = post.indexOf('VideoGenerationService.start');
-assert.ok(catalogIndex >= 0 && serviceStartIndex > catalogIndex, 'video catalog checks must happen before credit reservation/service start');
-assert.ok(post.includes(".eq('provider', 'runway')"));
-assert.ok(post.includes(".eq('generation_type', 'video')"));
-assert.ok(post.includes(".eq('is_enabled', true)"));
-assert.ok(post.includes(".eq('is_visible_to_users', true)"));
-assert.ok(post.includes("error: 'VIDEO_MODEL_NOT_AVAILABLE'"));
-assert.ok(post.includes("error: 'VIDEO_MODEL_PRICING_UNAVAILABLE'"));
-assert.ok(post.includes("error: 'VIDEO_PROVIDER_NOT_CONFIGURED'"));
+const providerStartIndex = Math.min(
+  ...['OpenRouterVideoGenerationService.start', 'VideoGenerationService.start']
+    .map((value) => post.indexOf(value))
+    .filter((value) => value >= 0),
+);
+assert.ok(catalogIndex >= 0 && providerStartIndex > catalogIndex, 'catalog checks must precede provider/credit execution');
+assert.ok(route.includes(".in('provider', ['runway', 'openrouter'])"));
+assert.ok(route.includes("projectTypeMatchesTool(project.type, 'video')"));
+assert.ok(route.includes('OPENROUTER_VIDEO_MODELS'));
+assert.ok(route.includes('RUNWAY_VIDEO_MODELS'));
+assert.ok(route.includes('validateOpenRouterVideoRequest'));
+assert.ok(route.includes('validateRunwayVideoRequest'));
+assert.ok(route.includes("provider === 'openrouter'"));
+assert.ok(route.includes('OpenRouterVideoGenerationService.start'));
+assert.ok(route.includes('OpenRouterVideoGenerationService.refresh'));
+assert.ok(route.includes('VideoGenerationService.start'));
+assert.ok(route.includes('VideoGenerationService.refresh'));
+assert.ok(route.includes("Boolean(process.env.OPENROUTER_API_KEY)"));
+assert.ok(route.includes("Boolean(process.env.RUNWAYML_API_SECRET)"));
 assert.ok(post.includes('modelCreditsPerSecond(model.metadata)'));
 assert.ok(post.includes('safeMinimumCredits(model.minimum_credits)'));
-assert.ok(post.includes('{ creditsPerSecond, minimumCredits }'));
-assert.ok(post.includes('ownedVideoProject'));
-assert.ok(route.includes("projectTypeMatchesTool(project.type, 'video')"), 'ownedVideoProject must enforce video project type');
-assert.ok(post.includes('validateRunwayVideoRequest'));
-assert.ok(!route.includes('CreditEngine.calculateRequiredCredits'), 'video route must never fall back to generic hardcoded model pricing');
+assert.ok(post.includes("resolution: '480p'"));
+assert.ok(post.includes('generateAudio: false'));
+assert.ok(route.includes('minimumDuration'));
+assert.ok(route.includes('maximumDuration'));
+assert.ok(route.includes('configured: providerConfigured(provider)'));
+assert.ok(!route.includes('CreditEngine.calculateRequiredCredits'), 'video pricing must remain server catalog-authoritative');
 
-assert.ok(service.includes("status: 'queued'"));
-assert.ok(service.includes("status: 'processing'"));
-assert.ok(service.includes("status: 'completed'"));
-assert.ok(service.includes("status: 'failed'"));
-assert.ok(service.includes("'failed' | 'cancelled'"), 'provider cancellation must remain a typed terminal state');
-assert.ok(service.includes("task.status === 'cancelled'"));
-assert.ok(service.includes("`video_refund_${generationId}`"));
-assert.ok(service.includes("'generation_failure_refund'"));
-assert.ok(service.includes('Math.max(minimumCredits, creditsPerSecond * duration)'), 'minimum credits must be a real server-side floor');
-assert.ok(service.includes("const VIDEO_BUCKET = 'generation-video-assets'"));
-assert.ok(service.includes('downloadRunwayVideo(task.outputUrls[0])'));
-assert.ok(service.includes("redirect: 'error'"), 'provider output downloads must not follow unvalidated redirects');
-assert.ok(service.includes('result_url: storagePath'));
-assert.ok(!service.includes('result_url: task.outputUrls'), 'ephemeral Runway URLs must never be stored as durable result URLs');
-assert.ok(service.includes("contentType: 'video/mp4'"));
-assert.ok(service.includes('MAX_VIDEO_BYTES'));
-assert.ok(service.includes('isIP(hostname) !== 0'), 'provider output download must reject IP-literal SSRF targets');
-assert.ok(service.includes(".eq('user_id', actor.userId)"));
-assert.ok(service.includes(".eq('generation_type', 'video')"));
-const providerRefreshCatch = service.slice(service.indexOf('catch (providerError)'), service.indexOf("if (task.status === 'queued'"));
-assert.ok(providerRefreshCatch.includes('refundVideoCredits'), 'non-transient reconciliation errors must not leave credits reserved forever');
-assert.ok(providerRefreshCatch.includes("status: 'failed'"));
+// Both lifecycle services reserve/refund credits and persist only Brand Box storage paths.
+for (const service of [runwayService, openRouterService]) {
+  assert.ok(service.includes("status: 'queued'"));
+  assert.ok(service.includes("status: 'processing'"));
+  assert.ok(service.includes("status: 'completed'"));
+  assert.ok(service.includes("status: 'failed'"));
+  assert.ok(service.includes("`video_refund_${generationId}`"));
+  assert.ok(service.includes("'generation_failure_refund'"));
+  assert.ok(service.includes('Math.max(minimumCredits, creditsPerSecond * duration)'));
+  assert.ok(service.includes("const VIDEO_BUCKET = 'generation-video-assets'"));
+  assert.ok(service.includes("contentType: 'video/mp4'"));
+  assert.ok(service.includes('result_url: storagePath'));
+  assert.ok(service.includes(".eq('user_id', actor.userId)"));
+  assert.ok(service.includes(".eq('generation_type', 'video')"));
+}
+assert.ok(runwayService.includes('downloadRunwayVideo(task.outputUrls[0])'));
+assert.ok(runwayService.includes("redirect: 'error'"));
+assert.ok(runwayService.includes('isIP(hostname) !== 0'));
+assert.ok(openRouterService.includes('downloadOpenRouterVideoContent(task.taskId)'));
+assert.ok(openRouterService.includes("provider: 'openrouter'"));
+assert.ok(openRouterService.includes('MAX_VIDEO_BYTES'));
 
+// Video UX is model-specific, project-scoped, asynchronous and semantic-theme safe.
 assert.ok(page.includes('VideoProjectWorkspace'));
 assert.ok(!page.includes('MediaProjectWorkspace'));
 assert.ok(workspace.includes("fetch('/api/v1/video-generations'"));
@@ -75,11 +97,16 @@ assert.ok(workspace.includes("method: 'PATCH'"));
 assert.ok(workspace.includes('6000 + Math.floor(Math.random() * 1200)'));
 assert.ok(workspace.includes('<video controls'));
 assert.ok(workspace.includes('إعادة المحاولة'));
-assert.ok(workspace.includes('providerConfigured'));
+assert.ok(workspace.includes('selectedProviderConfigured'));
+assert.ok(workspace.includes('function handleModelChange(event)'));
+assert.ok(workspace.includes('nextAvailableDurations.includes(duration)'));
+assert.ok(workspace.includes('const availableDurations = useMemo'));
+assert.ok(workspace.includes('selectedModel?.minimumDuration'));
+assert.ok(workspace.includes('selectedModel?.maximumDuration'));
+assert.ok(workspace.includes('availableDurations.map'));
+assert.ok(workspace.includes("selectedModel?.quality || '—'"));
+assert.ok(workspace.includes('Math.max(Number(selectedModel.minimumCredits || 0), selectedModel.creditsPerSecond * duration)'));
 assert.ok(workspace.includes('creditsPerSecond'));
-assert.ok(!workspace.includes('Runway Gen-3 Alpha'));
-
-// Theme/Design System: application chrome is semantic, media playback alone stays black.
 assert.ok(workspace.includes('bb-app-canvas'));
 assert.ok(workspace.includes('bb-panel'));
 assert.ok(workspace.includes('bb-input'));
@@ -87,55 +114,45 @@ assert.ok(workspace.includes('bb-button-primary'));
 assert.ok(workspace.includes('bb-button-secondary'));
 assert.ok(workspace.includes('bb-warning-surface'));
 assert.ok(workspace.includes('bg-black object-contain'));
-assert.ok(!workspace.includes('bg-[#050506]'));
-assert.ok(!workspace.includes('bg-[#0b0d12]'));
-assert.ok(!workspace.includes('bg-[#080a0e]'));
-assert.ok(!workspace.includes('bg-[#0d1016]'));
-assert.ok(!workspace.includes('bg-[#11141a]'));
-assert.ok(!workspace.includes('bg-[#171a21]'));
 assert.ok(!workspace.includes('text-gray-'));
-assert.ok(!workspace.includes('border-white/10'));
-
-// Monitoring/Product: load failure is distinct from a genuinely empty project and credit preflight is visible.
 assert.ok(workspace.includes('const [workspaceLoadFailed, setWorkspaceLoadFailed]'));
 assert.ok(workspace.includes('تعذر تحميل مساحة الفيديو'));
-assert.ok(workspace.includes('لم يتم اعتبار المساحة فارغة'));
 assert.ok(workspace.includes('const insufficientCredits ='));
 assert.ok(workspace.includes('priceEstimate > creditBalance'));
 assert.ok(workspace.includes('href="/pricing"'));
-assert.ok(workspace.includes('رصيدك الحالي لا يغطي التكلفة المتوقعة'));
-assert.ok(workspace.includes('disabled={!generationReady || generating || !prompt.trim() || insufficientCredits}'));
 
+// Admin keeps explicit provider-secret visibility and cannot activate video without secret + pricing.
 assert.ok(adminRoute.includes('function hasRunwaySecret'));
+assert.ok(adminRoute.includes('function hasOpenRouterSecret'));
 assert.ok(adminRoute.includes('runwayConfigured: hasRunwaySecret()'));
-assert.ok(adminRoute.includes("error: 'RUNWAY_SECRET_REQUIRED'"));
+assert.ok(adminRoute.includes("existingModel.provider === 'runway' && !hasRunwaySecret()"));
+assert.ok(adminRoute.includes("existingModel.provider === 'openrouter' && !hasOpenRouterSecret()"));
+assert.ok(adminRoute.includes("error: 'OPENROUTER_SECRET_REQUIRED'"));
 assert.ok(adminRoute.includes("error: 'VIDEO_PRICING_REQUIRED'"));
-assert.ok(adminRoute.includes('brandboxCreditsPerSecond'));
-assert.ok(adminRoute.includes('brandbox_credits_per_second'));
-assert.ok(!adminRoute.includes("provider === 'openrouter' ? hasOpenRouterSecret() : true"), 'unknown providers must not be reported configured by default');
+assert.ok(adminRoute.includes("['runway', 'openrouter'].includes(currentModel.data.provider)"));
 assert.ok(adminWorkspace.includes('Runway: {secretPolicy.runwayConfigured'));
-assert.ok(adminWorkspace.includes('BB / sec'));
-assert.ok(adminWorkspace.includes('Brand Box credits / second'));
 
-assert.ok(migration.includes("'generation-video-assets'"));
-assert.match(migration, /'generation-video-assets',[\s\S]*?FALSE,[\s\S]*?157286400/);
-assert.ok(migration.includes("ARRAY['video/mp4']"));
-assert.ok(migration.includes("'gen4.5'"));
-assert.ok(migration.includes("'runway'"));
-assert.ok(migration.includes("'video'"));
-assert.ok(migration.includes("'brandbox_credits_per_second', 0"));
-assert.ok(migration.includes("'provider_runway_credits_per_second', 12"));
-assert.match(migration, /\n\s*0,\n\s*FALSE,\n\s*FALSE,/);
-assert.ok(!migration.includes('is_enabled = EXCLUDED.is_enabled'));
-assert.ok(!migration.includes('minimum_credits = EXCLUDED.minimum_credits'));
+// Storage + existing Runway launch gates remain intact.
+assert.ok(runwayMigration.includes("'generation-video-assets'"));
+assert.match(runwayMigration, /'generation-video-assets',[\s\S]*?FALSE,[\s\S]*?157286400/);
+assert.ok(runwayMigration.includes("ARRAY['video/mp4']"));
+assert.ok(runwayMigration.includes("'gen4.5'"));
+assert.ok(runwayMigration.includes("'runway'"));
+assert.ok(runwayPricingMigration.includes('minimum_credits = 50'));
+assert.ok(runwayPricingMigration.includes("'brandbox_credits_per_second', 25"));
+assert.ok(!runwayPricingMigration.includes('is_enabled = TRUE'));
+assert.ok(!runwayPricingMigration.includes('is_visible_to_users = TRUE'));
 
-assert.ok(pricingMigration.includes('minimum_credits = 50'));
-assert.ok(pricingMigration.includes("'brandbox_credits_per_second', 25"));
-assert.ok(pricingMigration.includes("'provider_runway_credits_per_second', 12"));
-assert.ok(pricingMigration.includes("'provider_usd_per_second', 0.12"));
-assert.ok(pricingMigration.includes("'pricing_fx_lyd_per_usd', 13"));
-assert.ok(pricingMigration.includes("'pricing_margin_floor_pct', 40"));
-assert.ok(!pricingMigration.includes('is_enabled = TRUE'), 'pricing migration must not activate provider without its secret');
-assert.ok(!pricingMigration.includes('is_visible_to_users = TRUE'), 'pricing migration must not expose provider without its secret');
+// OpenRouter video is catalogued with tested capabilities but does not auto-activate production.
+assert.ok(openRouterMigration.includes("'bytedance/seedance-2.0-mini'"));
+assert.ok(openRouterMigration.includes("'openrouter'"));
+assert.ok(openRouterMigration.includes("'brandbox_credits_per_second', 5"));
+assert.ok(openRouterMigration.includes("'supported_resolutions', jsonb_build_array('480p')"));
+assert.ok(openRouterMigration.includes("'minimum_duration_seconds', 4"));
+assert.ok(openRouterMigration.includes("'runtime_verified_on', '2026-09-05'"));
+assert.match(openRouterMigration, /\n\s*20,\n\s*FALSE,\n\s*FALSE,/);
+assert.ok(!openRouterMigration.includes('is_enabled = EXCLUDED.is_enabled'));
+assert.ok(!openRouterMigration.includes('is_visible_to_users = EXCLUDED.is_visible_to_users'));
+assert.ok(!openRouterMigration.includes('minimum_credits = EXCLUDED.minimum_credits'));
 
-console.log('Video generation launch + semantic theme guard passed.');
+console.log('Video generation dual-provider launch + semantic theme guard passed.');

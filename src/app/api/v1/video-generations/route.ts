@@ -3,13 +3,31 @@ import { authenticateActiveUser } from '@/lib/auth/user-auth';
 import { createPrivilegedSupabaseClient } from '@/lib/supabase/server';
 import { projectTypeMatchesTool } from '@/lib/projects/project-scope';
 import { RUNWAY_VIDEO_MODELS, validateRunwayVideoRequest } from '@/lib/ai/runway-client';
+import {
+  OPENROUTER_VIDEO_MODELS,
+  OPENROUTER_VIDEO_MIN_DURATION,
+  OPENROUTER_VIDEO_MAX_DURATION,
+  validateOpenRouterVideoRequest,
+} from '@/lib/ai/openrouter-video-client';
 import { VideoGenerationService } from '@/lib/generations/video-generation-service';
+import { OpenRouterVideoGenerationService } from '@/lib/generations/openrouter-video-generation-service';
 import { emitServerError, getRequestCorrelationId } from '@/lib/observability/telemetry';
 
 const VIDEO_BUCKET = 'generation-video-assets';
+type VideoProvider = 'runway' | 'openrouter';
 
 function runwayConfigured(): boolean {
   return Boolean(process.env.RUNWAYML_API_SECRET);
+}
+
+function openRouterConfigured(): boolean {
+  return Boolean(process.env.OPENROUTER_API_KEY);
+}
+
+function providerConfigured(provider: string): boolean {
+  if (provider === 'runway') return runwayConfigured();
+  if (provider === 'openrouter') return openRouterConfigured();
+  return false;
 }
 
 function modelCreditsPerSecond(metadata: unknown): number | null {
@@ -24,17 +42,37 @@ function safeMinimumCredits(value: unknown): number | null {
 }
 
 function safeVideoModel(model: Record<string, unknown>) {
+  const provider = String(model.provider || '');
   const creditsPerSecond = modelCreditsPerSecond(model.metadata);
   const minimumCredits = safeMinimumCredits(model.minimum_credits) ?? 0;
+  const isOpenRouter = provider === 'openrouter';
   return {
     modelId: model.model_id,
+    provider,
     name: model.display_name_ar || model.display_name_en || model.model_id,
-    vendor: model.vendor_name || 'Runway',
+    vendor: model.vendor_name || (isOpenRouter ? 'OpenRouter / ByteDance' : 'Runway'),
     minimumCredits,
     creditsPerSecond,
     sortOrder: Number(model.sort_order || 0),
     pricingReady: creditsPerSecond !== null,
+    configured: providerConfigured(provider),
+    minimumDuration: isOpenRouter ? OPENROUTER_VIDEO_MIN_DURATION : 2,
+    maximumDuration: isOpenRouter ? Math.min(10, OPENROUTER_VIDEO_MAX_DURATION) : 10,
+    supportedRatios: ['1280:720', '720:1280'],
+    quality: isOpenRouter ? '480p' : '720p',
   };
+}
+
+function openRouterRatio(value: string): '16:9' | '9:16' | '' {
+  if (value === '1280:720' || value === '16:9') return '16:9';
+  if (value === '720:1280' || value === '9:16') return '9:16';
+  return '';
+}
+
+function supportedVideoModel(provider: string, modelId: string): boolean {
+  if (provider === 'runway') return RUNWAY_VIDEO_MODELS.includes(modelId as typeof RUNWAY_VIDEO_MODELS[number]);
+  if (provider === 'openrouter') return OPENROUTER_VIDEO_MODELS.includes(modelId as typeof OPENROUTER_VIDEO_MODELS[number]);
+  return false;
 }
 
 async function ownedVideoProject(database: ReturnType<typeof createPrivilegedSupabaseClient>, userId: string, projectId: string) {
@@ -62,14 +100,14 @@ export async function GET(request: NextRequest) {
 
   const [{ data: models, error: modelsError }, { data: generations, error: generationsError }] = await Promise.all([
     database.from('ai_model_catalog')
-      .select('model_id,display_name_ar,display_name_en,vendor_name,minimum_credits,sort_order,metadata')
-      .eq('provider', 'runway')
+      .select('model_id,provider,display_name_ar,display_name_en,vendor_name,minimum_credits,sort_order,metadata')
+      .in('provider', ['runway', 'openrouter'])
       .eq('generation_type', 'video')
       .eq('is_enabled', true)
       .eq('is_visible_to_users', true)
       .order('sort_order', { ascending: true }),
     database.from('generations')
-      .select('id,project_id,model,prompt,settings,status,credits_reserved,credits_consumed,error_message,created_at')
+      .select('id,project_id,provider,model,prompt,settings,status,credits_reserved,credits_consumed,error_message,created_at')
       .eq('user_id', auth.user.id)
       .eq('project_id', projectId)
       .eq('generation_type', 'video')
@@ -80,7 +118,7 @@ export async function GET(request: NextRequest) {
   if (generationsError) return NextResponse.json({ error: 'VIDEO_HISTORY_UNAVAILABLE' }, { status: 503 });
 
   const supportedModels = (models || [])
-    .filter((model) => RUNWAY_VIDEO_MODELS.includes(model.model_id as typeof RUNWAY_VIDEO_MODELS[number]))
+    .filter((model) => supportedVideoModel(String(model.provider || ''), String(model.model_id || '')))
     .map((model) => safeVideoModel(model as unknown as Record<string, unknown>));
 
   const rows = await Promise.all((generations || []).map(async (generation) => {
@@ -101,7 +139,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     project: ownership.project,
-    providerConfigured: runwayConfigured(),
+    providerConfigured: supportedModels.some((model) => model.configured && model.pricingReady),
     models: supportedModels,
     generations: rows,
   });
@@ -130,8 +168,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'INVALID_VIDEO_REQUEST' }, { status: 400 });
   }
   if (quality !== 'standard') return NextResponse.json({ error: 'INVALID_VIDEO_SETTINGS' }, { status: 400 });
-  try { validateRunwayVideoRequest({ model: modelId, promptText: prompt, ratio, duration }); }
-  catch { return NextResponse.json({ error: 'INVALID_VIDEO_SETTINGS' }, { status: 400 }); }
 
   const database = createPrivilegedSupabaseClient();
   const ownership = await ownedVideoProject(database, auth.user.id, projectId);
@@ -139,9 +175,9 @@ export async function POST(request: NextRequest) {
   if (ownership.error) return NextResponse.json({ error: ownership.error }, { status: 409 });
 
   const { data: model, error: modelError } = await database.from('ai_model_catalog')
-    .select('model_id,minimum_credits,metadata')
+    .select('model_id,provider,minimum_credits,metadata')
     .eq('model_id', modelId)
-    .eq('provider', 'runway')
+    .in('provider', ['runway', 'openrouter'])
     .eq('generation_type', 'video')
     .eq('is_enabled', true)
     .eq('is_visible_to_users', true)
@@ -149,25 +185,49 @@ export async function POST(request: NextRequest) {
   if (modelError) return NextResponse.json({ error: 'VIDEO_MODEL_CATALOG_UNAVAILABLE' }, { status: 503 });
   if (!model) return NextResponse.json({ error: 'VIDEO_MODEL_NOT_AVAILABLE' }, { status: 400 });
 
+  const provider = String(model.provider || '') as VideoProvider;
+  if (!supportedVideoModel(provider, modelId)) return NextResponse.json({ error: 'VIDEO_MODEL_NOT_AVAILABLE' }, { status: 400 });
+
+  let normalizedRatio = ratio;
+  try {
+    if (provider === 'runway') {
+      validateRunwayVideoRequest({ model: modelId, promptText: prompt, ratio, duration });
+    } else if (provider === 'openrouter') {
+      normalizedRatio = openRouterRatio(ratio);
+      validateOpenRouterVideoRequest({
+        model: modelId,
+        prompt,
+        duration,
+        resolution: '480p',
+        aspectRatio: normalizedRatio,
+        generateAudio: false,
+      });
+    } else {
+      return NextResponse.json({ error: 'VIDEO_MODEL_NOT_AVAILABLE' }, { status: 400 });
+    }
+  } catch {
+    return NextResponse.json({ error: 'INVALID_VIDEO_SETTINGS' }, { status: 400 });
+  }
+
   const creditsPerSecond = modelCreditsPerSecond(model.metadata);
   const minimumCredits = safeMinimumCredits(model.minimum_credits);
   if (!creditsPerSecond || minimumCredits === null) {
     return NextResponse.json({ error: 'VIDEO_MODEL_PRICING_UNAVAILABLE' }, { status: 503 });
   }
-  if (!runwayConfigured()) return NextResponse.json({ error: 'VIDEO_PROVIDER_NOT_CONFIGURED' }, { status: 503 });
+  if (!providerConfigured(provider)) return NextResponse.json({ error: 'VIDEO_PROVIDER_NOT_CONFIGURED' }, { status: 503 });
 
   try {
-    const result = await VideoGenerationService.start(
-      { userId: auth.user.id, email: auth.user.email || '', role: auth.profile.role },
-      {
-        modelId,
-        prompt,
-        projectId,
-        requestId,
-        settings: { ratio, duration, quality },
-      },
-      { creditsPerSecond, minimumCredits }
-    );
+    const actor = { userId: auth.user.id, email: auth.user.email || '', role: auth.profile.role };
+    const generationRequest = {
+      modelId,
+      prompt,
+      projectId,
+      requestId,
+      settings: { ratio: normalizedRatio, duration, quality },
+    };
+    const result = provider === 'openrouter'
+      ? await OpenRouterVideoGenerationService.start(actor, generationRequest, { creditsPerSecond, minimumCredits })
+      : await VideoGenerationService.start(actor, generationRequest, { creditsPerSecond, minimumCredits });
     const status = result.success ? 202 : result.errorCode === 'INSUFFICIENT_CREDITS' ? 402 : 502;
     if (!result.success && status >= 500) {
       emitServerError('Video generation start failed', new Error(result.errorCode || 'VIDEO_GENERATION_FAILED'), {
@@ -175,6 +235,7 @@ export async function POST(request: NextRequest) {
         requestId,
         generationId: result.generationId,
         operation: 'video_start',
+        provider,
         errorCode: result.errorCode || 'VIDEO_GENERATION_FAILED',
         wasRefunded: result.wasRefunded === true,
       });
@@ -187,6 +248,7 @@ export async function POST(request: NextRequest) {
       correlationId,
       requestId,
       operation: 'video_start',
+      provider,
       errorCode: 'VIDEO_GENERATION_FAILED',
     });
     return NextResponse.json({ error: 'VIDEO_GENERATION_FAILED' }, { status: 502 });
@@ -203,20 +265,38 @@ export async function PATCH(request: NextRequest) {
   const generationId = typeof body.generationId === 'string' ? body.generationId.trim() : '';
   if (!generationId || body.action !== 'refresh') return NextResponse.json({ error: 'INVALID_VIDEO_REFRESH' }, { status: 400 });
 
+  const database = createPrivilegedSupabaseClient();
+  const { data: generation } = await database.from('generations')
+    .select('provider')
+    .eq('id', generationId)
+    .eq('user_id', auth.user.id)
+    .eq('generation_type', 'video')
+    .maybeSingle();
+  if (!generation) return NextResponse.json({ error: 'VIDEO_GENERATION_NOT_FOUND' }, { status: 404 });
+  const provider = String(generation.provider || '') as VideoProvider;
+
   try {
-    const result = await VideoGenerationService.refresh(
-      { userId: auth.user.id, email: auth.user.email || '', role: auth.profile.role },
-      generationId
-    );
+    const actor = { userId: auth.user.id, email: auth.user.email || '', role: auth.profile.role };
+    const result = provider === 'openrouter'
+      ? await OpenRouterVideoGenerationService.refresh(actor, generationId)
+      : provider === 'runway'
+        ? await VideoGenerationService.refresh(actor, generationId)
+        : null;
+    if (!result) return NextResponse.json({ error: 'VIDEO_PROVIDER_NOT_SUPPORTED' }, { status: 409 });
     return NextResponse.json(result);
   } catch (error) {
     const code = error instanceof Error ? error.message : '';
     if (code === 'VIDEO_GENERATION_NOT_FOUND') return NextResponse.json({ error: code }, { status: 404 });
-    if (code === 'RUNWAY_RATE_LIMITED' || code === 'RUNWAY_PROVIDER_UNAVAILABLE' || code === 'RUNWAY_TIMEOUT' || code === 'RUNWAY_AUTH_FAILED' || code === 'RUNWAY_API_SECRET_MISSING') {
+    const transientProviderError = [
+      'RUNWAY_RATE_LIMITED', 'RUNWAY_PROVIDER_UNAVAILABLE', 'RUNWAY_TIMEOUT', 'RUNWAY_AUTH_FAILED', 'RUNWAY_API_SECRET_MISSING',
+      'OPENROUTER_VIDEO_RATE_LIMITED', 'OPENROUTER_VIDEO_PROVIDER_UNAVAILABLE', 'OPENROUTER_VIDEO_TIMEOUT', 'OPENROUTER_VIDEO_AUTH_FAILED', 'OPENROUTER_API_KEY_MISSING',
+    ].includes(code);
+    if (transientProviderError) {
       emitServerError('Video generation refresh failed', error, {
         correlationId,
         generationId,
         operation: 'video_refresh',
+        provider,
         errorCode: 'VIDEO_PROVIDER_TEMPORARILY_UNAVAILABLE',
       });
       return NextResponse.json({ error: 'VIDEO_PROVIDER_TEMPORARILY_UNAVAILABLE' }, { status: 503 });
@@ -225,6 +305,7 @@ export async function PATCH(request: NextRequest) {
       correlationId,
       generationId,
       operation: 'video_refresh',
+      provider,
       errorCode: 'VIDEO_REFRESH_FAILED',
     });
     return NextResponse.json({ error: 'VIDEO_REFRESH_FAILED' }, { status: 502 });

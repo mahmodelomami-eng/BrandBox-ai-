@@ -47,7 +47,6 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
   const { creditBalance, refreshProfile } = useAuth();
   const [project, setProject] = useState(null);
   const [models, setModels] = useState([]);
-  const [providerConfigured, setProviderConfigured] = useState(false);
   const [generations, setGenerations] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [prompt, setPrompt] = useState(initialPrompt.slice(0, 1000));
@@ -62,9 +61,34 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
   const [message, setMessage] = useState(initialPrompt ? { type: 'success', text: 'تم تحميل برومبت القالب وإعداداته. يمكنك تعديله قبل التوليد.' } : null);
 
   const selectedModel = models.find((model) => model.modelId === modelId) || models[0] || null;
-  const priceEstimate = selectedModel?.creditsPerSecond ? selectedModel.creditsPerSecond * duration : null;
-  const generationReady = Boolean(providerConfigured && selectedModel?.pricingReady && selectedModel?.creditsPerSecond);
+  const availableDurations = useMemo(() => {
+    const minimum = Number(selectedModel?.minimumDuration ?? 2);
+    const maximum = Number(selectedModel?.maximumDuration ?? 10);
+    return DURATIONS.filter((value) => value >= minimum && value <= maximum);
+  }, [selectedModel]);
+  const selectedProviderConfigured = Boolean(selectedModel?.configured);
+  const priceEstimate = selectedModel?.creditsPerSecond
+    ? Math.max(Number(selectedModel.minimumCredits || 0), selectedModel.creditsPerSecond * duration)
+    : null;
+  const generationReady = Boolean(
+    selectedProviderConfigured
+    && selectedModel?.pricingReady
+    && selectedModel?.creditsPerSecond
+    && availableDurations.includes(duration)
+  );
   const insufficientCredits = Boolean(priceEstimate && creditBalance !== null && creditBalance !== undefined && priceEstimate > creditBalance);
+
+  function handleModelChange(event) {
+    const nextModelId = event.target.value;
+    const nextModel = models.find((model) => model.modelId === nextModelId) || null;
+    const minimum = Number(nextModel?.minimumDuration ?? 2);
+    const maximum = Number(nextModel?.maximumDuration ?? 10);
+    const nextAvailableDurations = DURATIONS.filter((value) => value >= minimum && value <= maximum);
+    setModelId(nextModelId);
+    if (nextAvailableDurations.length > 0 && !nextAvailableDurations.includes(duration)) {
+      setDuration(nextAvailableDurations[0]);
+    }
+  }
 
   const getToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -93,7 +117,6 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || 'تعذر تحميل مساحة توليد الفيديو.');
     setProject(payload.project || null);
-    setProviderConfigured(Boolean(payload.providerConfigured));
     const nextModels = Array.isArray(payload.models) ? payload.models : [];
     setModels(nextModels);
     setModelId((current) => nextModels.some((model) => model.modelId === current) ? current : (nextModels[0]?.modelId || ''));
@@ -201,6 +224,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
       setGenerations((current) => [{
         id: result.generationId,
         project_id: projectId,
+        provider: selectedModel.provider,
         model: selectedModel.modelId,
         prompt: prompt.trim(),
         settings: { ratio, duration, quality: 'standard' },
@@ -233,7 +257,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           projectId,
           tool: 'video',
           prompt: prompt.trim(),
-          settings: { ratio: ratio === '1280:720' ? '16:9' : '9:16', duration: `${duration} ثوانٍ`, quality: '720p' },
+          settings: { ratio: ratio === '1280:720' ? '16:9' : '9:16', duration: `${duration} ثوانٍ`, quality: selectedModel?.quality || '720p' },
           status: 'draft',
           itemType: 'draft',
         }),
@@ -252,7 +276,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
   function retryGeneration(item) {
     setPrompt(String(item.prompt || '').slice(0, 1000));
     const itemRatio = item.settings?.ratio;
-    setRatio(itemRatio === '720:1280' ? '720:1280' : '1280:720');
+    setRatio(itemRatio === '720:1280' || itemRatio === '9:16' ? '720:1280' : '1280:720');
     setDuration(initialDuration(item.settings?.duration));
     setMessage({ type: 'info', text: 'تم تحميل إعدادات المحاولة السابقة. راجعها ثم اضغط توليد الفيديو لبدء مهمة جديدة.' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -302,7 +326,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           <div className="space-y-5 p-4 sm:p-5">
             {!generationReady && (
               <div className="bb-warning-surface rounded-2xl border p-4 text-xs leading-6">
-                <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير متاح بعد</div><p className="bb-text-secondary mt-1">{!providerConfigured ? 'مفتاح مزود Runway غير مهيأ على الخادم.' : models.length === 0 ? 'لا يوجد نموذج فيديو مفعّل ومرئي من لوحة الإدارة.' : 'النموذج موجود لكن سعر Brand Box لكل ثانية لم يُضبط بعد.'} يمكنك الاستمرار في حفظ المسودات دون أي تكلفة.</p></div></div>
+                <div className="flex items-start gap-3"><AlertTriangle size={19} className="mt-0.5 shrink-0" /><div><div className="bb-text-primary font-black">التوليد المباشر غير متاح بعد</div><p className="bb-text-secondary mt-1">{models.length === 0 ? 'لا يوجد نموذج فيديو مفعّل ومرئي من لوحة الإدارة.' : !selectedProviderConfigured ? 'مفتاح مزود الفيديو المحدد غير مهيأ على الخادم.' : !selectedModel?.pricingReady ? 'النموذج موجود لكن سعر Brand Box لكل ثانية لم يُضبط بعد.' : 'اختر مدة مدعومة بواسطة النموذج.'} يمكنك الاستمرار في حفظ المسودات دون أي تكلفة.</p></div></div>
               </div>
             )}
 
@@ -343,17 +367,17 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
         </section>
 
         <aside className="bb-panel order-1 h-fit rounded-3xl border p-5 xl:order-2 xl:sticky xl:top-[150px]">
-          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Video size={22}/></span><div><div className="bb-text-primary text-sm font-black">توليد فيديو AI</div><div className="bb-text-tertiary text-[11px]">{selectedModel?.name || 'Runway Gen-4.5'}</div></div></div>
+          <div className="flex items-center gap-3"><span className="bb-accent-soft flex h-11 w-11 items-center justify-center rounded-xl border"><Video size={22}/></span><div><div className="bb-text-primary text-sm font-black">توليد فيديو AI</div><div className="bb-text-tertiary text-[11px]">{selectedModel?.name || 'اختر نموذج فيديو'}</div></div></div>
 
           <label htmlFor="video-prompt" className="bb-text-secondary mt-6 block text-xs font-black">وصف الفيديو</label>
           <textarea id="video-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value.slice(0, 1000))} maxLength={1000} placeholder="صف المشهد، الحركة، زاوية الكاميرا والإضاءة..." className="bb-input mt-2 min-h-40 w-full resize-none rounded-2xl border p-4 text-sm leading-7 outline-none" />
           <div className="bb-text-tertiary mt-1 text-left text-[10px]">{prompt.length}/1000</div>
 
           <div className="mt-5 space-y-4">
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select value={modelId} onChange={(event) => setModelId(event.target.value)} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : models.map((model) => <option key={model.modelId} value={model.modelId}>{model.name}</option>)}</select></label>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select value={modelId} onChange={handleModelChange} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : models.map((model) => <option key={model.modelId} value={model.modelId}>{model.name}</option>)}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={ratio} onChange={(event) => setRatio(event.target.value)} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none">{RATIOS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={duration} onChange={(event) => setDuration(Number(event.target.value))} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none">{DURATIONS.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
-            <div className="bb-input rounded-xl border px-4 py-3"><div className="bb-text-tertiary text-[10px] font-bold">الجودة</div><div className="bb-text-primary mt-1 text-sm font-black">720p · Standard</div></div>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={duration} onChange={(event) => setDuration(Number(event.target.value))} disabled={availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
+            <div className="bb-input rounded-xl border px-4 py-3"><div className="bb-text-tertiary text-[10px] font-bold">الجودة</div><div className="bb-text-primary mt-1 text-sm font-black">{selectedModel?.quality || '—'} · Standard</div></div>
           </div>
 
           <div className="bb-surface-1 bb-border bb-text-secondary mt-5 rounded-2xl border p-3 text-xs leading-6">
