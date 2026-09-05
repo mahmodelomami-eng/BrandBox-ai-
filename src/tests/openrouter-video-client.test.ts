@@ -21,14 +21,19 @@ async function run() {
   assert.equal(validated.aspectRatio, '16:9');
   assert.equal(validated.generateAudio, false);
 
-  await assert.rejects(
-    async () => validateOpenRouterVideoRequest({ model: 'unknown/video', prompt: 'x', duration: 4, aspectRatio: '16:9' }),
+  assert.throws(
+    () => validateOpenRouterVideoRequest({ model: 'invalid-model-without-author', prompt: 'x', duration: 4, aspectRatio: '16:9' }),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_VIDEO_MODEL_NOT_ALLOWED'
   );
-  await assert.rejects(
-    async () => validateOpenRouterVideoRequest({ model: 'bytedance/seedance-2.0-mini', prompt: 'x', duration: 3, aspectRatio: '16:9' }),
+  assert.throws(
+    () => validateOpenRouterVideoRequest({ model: 'vendor/video', prompt: 'x', duration: 0, aspectRatio: '16:9' }),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_VIDEO_INVALID_DURATION'
   );
+  const generic = validateOpenRouterVideoRequest({ model: 'vendor/video', prompt: 'x', duration: 8, resolution: '1080p', aspectRatio: '21:9', generateAudio: true, seed: 7 });
+  assert.equal(generic.resolution, '1080p');
+  assert.equal(generic.aspectRatio, '21:9');
+  assert.equal(generic.generateAudio, true);
+  assert.equal(generic.seed, 7);
 
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const created = await createOpenRouterVideoTask({
