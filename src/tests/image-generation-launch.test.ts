@@ -55,8 +55,9 @@ for (const snippet of [
   'countRange: rangeValue(supported.n)',
 ]) assert.ok(capabilityService.includes(snippet), `capability service missing ${snippet}`);
 assert.ok(settingsPolicy.includes('applyImageCapabilityPolicy'));
-assert.ok(settingsPolicy.includes('capabilities.image?.resolutions'));
-assert.ok(settingsPolicy.includes('capabilities.image?.aspectRatios'));
+assert.ok(settingsPolicy.includes('const image = capabilities.image'));
+assert.ok(settingsPolicy.includes('image.resolutions'));
+assert.ok(settingsPolicy.includes('image.aspectRatios'));
 
 const imageClient = client.slice(client.indexOf('export async function createOpenRouterImageGeneration'), client.indexOf('export async function createOpenRouterChatCompletion'));
 assert.ok(imageClient.includes('...(resolution ? { resolution } : {})'), 'resolution must be omitted when the selected model exposes none');
