@@ -4,10 +4,21 @@ import React from 'react';
 import { AuthProvider } from '../context/AuthContext';
 import AppNavigationWrapper from '../components/layout/AppNavigationWrapper';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.brandbox-ai.com';
+
 export const metadata = {
+  metadataBase: new URL(siteUrl),
+  applicationName: 'Brand Box AI',
   title: 'Brand Box AI — منصة الذكاء الاصطناعي الشاملة',
   description: 'منصة الذكاء الاصطناعي المتكاملة لصناع المحتوى والشركات في ليبيا والشرق الأوسط.',
   icons: { icon: '/brandbox-logo.png' },
+  openGraph: {
+    type: 'website',
+    locale: 'ar_LY',
+    siteName: 'Brand Box AI',
+    title: 'Brand Box AI — منصة الذكاء الاصطناعي الشاملة',
+    description: 'منصة الذكاء الاصطناعي المتكاملة لصناع المحتوى والشركات في ليبيا والشرق الأوسط.',
+  },
 };
 
 const themeInitScript = `
