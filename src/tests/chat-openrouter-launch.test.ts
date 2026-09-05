@@ -58,7 +58,9 @@ assert.ok(!chatClient.includes('error?.message'), 'chat client must not expose r
 assert.ok(workspace.includes('payload.chatModels'));
 assert.ok(workspace.includes('payload.chatModelsAvailable'));
 assert.ok(workspace.includes("new URLSearchParams({ projectId, generationType: 'chat' })"));
-assert.ok(workspace.includes('النماذج المفعّلة من لوحة الإدارة'));
+assert.ok(workspace.includes('.map(normalizeChatModel)'), 'chat UI must derive each model from server-returned capability data');
+assert.ok(workspace.includes('buildChatSettings(selectedModel)'), 'chat UI must build provider settings from the selected model capabilities');
+assert.ok(workspace.includes('selectedCapabilitiesAvailable'), 'chat UI must fail closed when selected model capabilities are unavailable');
 assert.ok(!workspace.includes('const MODELS = ['), 'chat model list must no longer be hardcoded in the browser');
 assert.ok(!workspace.includes(".filter((item) => item.project_id === projectId"), 'chat history filtering must happen on the server');
 
@@ -88,7 +90,7 @@ assert.ok(workspace.includes('const insufficientCredits ='));
 assert.ok(workspace.includes('selectedModel.cost > balance'));
 assert.ok(workspace.includes('href="/pricing"'));
 assert.ok(workspace.includes('رصيدك الحالي أقل من الحد الأدنى المتوقع'));
-assert.ok(workspace.includes('disabled={sending || !prompt.trim() || !modelId || !modelCatalogAvailable || insufficientCredits}'));
+assert.ok(workspace.includes('!selectedCapabilitiesAvailable || insufficientCredits'), 'send action must be disabled when model capabilities cannot be confirmed');
 assert.ok(workspace.includes('إعادة المحاولة'));
 
 console.log('Chat/OpenRouter launch + semantic theme guard passed.');
