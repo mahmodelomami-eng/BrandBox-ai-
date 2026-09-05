@@ -171,8 +171,11 @@ export class GenerationEngine {
 
     const requestId = safeGenerationRequestId(request.requestId);
     const generationId = generationIdForRequest(actor.userId, requestId);
+    // Per-model count was already normalized by the authenticated capability
+    // policy. Keep only a broad safety ceiling here; do not re-impose a
+    // platform-wide model limit such as 4.
     const requestedCount = request.generationType === 'image'
-      ? Math.max(1, Math.min(4, Math.trunc(Number(request.settings?.count) || 1)))
+      ? Math.max(1, Math.min(20, Math.trunc(Number(request.settings?.count) || 1)))
       : 1;
     const trustedUnitCredits = Number(executionContext.unitCredits);
     const unitCredits = Number.isFinite(trustedUnitCredits) && trustedUnitCredits >= 1
@@ -251,8 +254,8 @@ export class GenerationEngine {
             maxTokens: typeof request.settings?.maxTokens === 'number' ? request.settings.maxTokens : undefined,
           })
         : undefined;
-      const imageResolution = ['512', '1K', '2K', '4K'].includes(String(request.settings?.resolution))
-        ? request.settings?.resolution as '512' | '1K' | '2K' | '4K'
+      const imageResolution = typeof request.settings?.resolution === 'string' && request.settings.resolution.trim()
+        ? request.settings.resolution.trim()
         : undefined;
       const imagePromptSuffix = executionContext.imagePromptSuffix?.trim();
       const providerImagePrompt = imagePromptSuffix
