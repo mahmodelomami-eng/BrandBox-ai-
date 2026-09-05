@@ -54,8 +54,9 @@ async function run() {
       supported_resolutions: ['720p', '1080p'],
       supported_aspect_ratios: ['16:9', '9:16'],
       supported_frame_images: ['first_frame'],
-      supported_parameters: ['seed'],
-      supports_audio_generation: false,
+      allowed_passthrough_parameters: ['seed'],
+      generate_audio: true,
+      seed: true,
     }],
   });
   const video = await getOpenRouterModelCapabilities('video', 'vendor/video-a', {
@@ -63,9 +64,10 @@ async function run() {
   });
   assert.deepEqual(video.video?.durations, [4, 6, 8]);
   assert.deepEqual(video.video?.resolutions, ['720p', '1080p']);
-  assert.equal(video.video?.supportsAudio, false);
+  assert.equal(video.video?.supportsAudio, true);
   assert.equal(video.video?.supportsSeed, true);
   assert.deepEqual(video.video?.frameImages, ['first_frame']);
+  assert.equal(video.supportedParameters.includes('seed'), true);
   assert.equal(normalizeSetting(5, video.video?.durations || []), 4);
 
   const chatFetch: typeof fetch = async () => jsonResponse({
