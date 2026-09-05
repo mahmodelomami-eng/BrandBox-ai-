@@ -9,6 +9,7 @@ const client = readFileSync(join(root, 'src/lib/ai/openrouter-client.ts'), 'utf8
 const capabilities = readFileSync(join(root, 'src/lib/ai/openrouter-image-capabilities.ts'), 'utf8');
 const workspace = readFileSync(join(root, 'src/components/ImageStudioWorkspace.jsx'), 'utf8');
 const migration = readFileSync(join(root, 'supabase/migrations/20260902010000_image_model_catalog_launch_seed.sql'), 'utf8');
+const verifiedMigration = readFileSync(join(root, 'supabase/migrations/20260905193000_add_verified_seedream_45_image_model.sql'), 'utf8');
 
 const postRoute = route.slice(route.indexOf('export async function POST'));
 const imageCatalogCheck = postRoute.indexOf(".eq('generation_type', 'image')");
@@ -52,6 +53,8 @@ assert.ok(engine.includes('prompt: request.prompt,'), 'the durable generation re
 assert.ok(engine.includes("'generation_failure_refund'"));
 assert.ok(engine.includes('wasRefunded: refundRes.success'));
 
+assert.ok(capabilities.includes("'bytedance-seed/seedream-4.5'"));
+assert.ok(capabilities.includes("supportedResolutions: ['1K', '2K', '4K']"));
 assert.ok(capabilities.includes("'bytedance-seed/seedream-5-0-lite'"));
 assert.ok(capabilities.includes("supportedResolutions: ['2K', '4K']"));
 assert.ok(capabilities.includes("defaultResolution: '2K'"));
@@ -60,6 +63,7 @@ assert.ok(capabilities.includes("supportedResolutions: ['1K']"));
 assert.ok(capabilities.includes('maxCount: 1'));
 assert.ok(capabilities.includes("'openai/gpt-image-2'"));
 assert.ok(capabilities.includes('supportedResolutions: []'));
+assert.ok(client.includes("'bytedance-seed/seedream-4.5'"), 'runtime-verified Seedream 4.5 must be allowed by the provider client');
 
 const imageClient = client.slice(client.indexOf('export async function createOpenRouterImageGeneration'), client.indexOf('export async function createOpenRouterChatCompletion'));
 assert.ok(imageClient.includes('resolveOpenRouterImageResolution'));
@@ -94,6 +98,14 @@ for (const modelId of [
 ]) {
   assert.ok(migration.includes(`'${modelId}'`), `image launch catalog must seed ${modelId}`);
 }
+assert.ok(verifiedMigration.includes("'bytedance-seed/seedream-4.5'"));
+assert.ok(verifiedMigration.includes("'runtime_verified', TRUE"));
+assert.ok(verifiedMigration.includes("'brandbox_badge', 'مُثبت'"));
+assert.match(verifiedMigration, /'bytedance-seed\/seedream-4\.5'[\s\S]*?\n\s*1,\n\s*4,/);
+assert.match(verifiedMigration, /\n\s*TRUE,\n\s*TRUE,\n\s*5,/);
+assert.ok(!verifiedMigration.includes('minimum_credits = EXCLUDED.minimum_credits'), 'verified seed reruns must not overwrite administrator pricing decisions');
+assert.ok(!verifiedMigration.includes('is_enabled = EXCLUDED.is_enabled'), 'verified seed reruns must not overwrite administrator enable/disable decisions');
+
 assert.match(migration, /'openai\/gpt-image-2'[\s\S]*?\n\s*1,\n\s*6,/);
 assert.match(migration, /'bytedance-seed\/seedream-5-0-lite'[\s\S]*?\n\s*1,\n\s*4,/);
 assert.match(migration, /'google\/gemini-3\.1-flash-lite-image'[\s\S]*?\n\s*1,\n\s*4,/);
