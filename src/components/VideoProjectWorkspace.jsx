@@ -47,7 +47,6 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
   const { creditBalance, refreshProfile } = useAuth();
   const [project, setProject] = useState(null);
   const [models, setModels] = useState([]);
-  const [providerConfigured, setProviderConfigured] = useState(false);
   const [generations, setGenerations] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [prompt, setPrompt] = useState(initialPrompt.slice(0, 1000));
@@ -79,11 +78,17 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
   );
   const insufficientCredits = Boolean(priceEstimate && creditBalance !== null && creditBalance !== undefined && priceEstimate > creditBalance);
 
-  useEffect(() => {
-    if (availableDurations.length > 0 && !availableDurations.includes(duration)) {
-      setDuration(availableDurations[0]);
+  function handleModelChange(event) {
+    const nextModelId = event.target.value;
+    const nextModel = models.find((model) => model.modelId === nextModelId) || null;
+    const minimum = Number(nextModel?.minimumDuration ?? 2);
+    const maximum = Number(nextModel?.maximumDuration ?? 10);
+    const nextAvailableDurations = DURATIONS.filter((value) => value >= minimum && value <= maximum);
+    setModelId(nextModelId);
+    if (nextAvailableDurations.length > 0 && !nextAvailableDurations.includes(duration)) {
+      setDuration(nextAvailableDurations[0]);
     }
-  }, [availableDurations, duration]);
+  }
 
   const getToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -112,7 +117,6 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || 'تعذر تحميل مساحة توليد الفيديو.');
     setProject(payload.project || null);
-    setProviderConfigured(Boolean(payload.providerConfigured));
     const nextModels = Array.isArray(payload.models) ? payload.models : [];
     setModels(nextModels);
     setModelId((current) => nextModels.some((model) => model.modelId === current) ? current : (nextModels[0]?.modelId || ''));
@@ -370,7 +374,7 @@ export default function VideoProjectWorkspace({ projectId, initialPrompt = '', t
           <div className="bb-text-tertiary mt-1 text-left text-[10px]">{prompt.length}/1000</div>
 
           <div className="mt-5 space-y-4">
-            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select value={modelId} onChange={(event) => setModelId(event.target.value)} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : models.map((model) => <option key={model.modelId} value={model.modelId}>{model.name}</option>)}</select></label>
+            <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النموذج</span><select value={modelId} onChange={handleModelChange} disabled={models.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{models.length === 0 ? <option value="">لا يوجد نموذج مفعّل</option> : models.map((model) => <option key={model.modelId} value={model.modelId}>{model.name}</option>)}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">النسبة</span><select value={ratio} onChange={(event) => setRatio(event.target.value)} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none">{RATIOS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <label className="block"><span className="bb-text-secondary mb-2 block text-xs font-black">المدة</span><select value={duration} onChange={(event) => setDuration(Number(event.target.value))} disabled={availableDurations.length === 0} className="bb-input w-full rounded-xl border px-4 py-3 text-sm font-bold outline-none disabled:opacity-55">{availableDurations.map((value) => <option key={value} value={value}>{value} ثوانٍ</option>)}</select></label>
             <div className="bb-input rounded-xl border px-4 py-3"><div className="bb-text-tertiary text-[10px] font-bold">الجودة</div><div className="bb-text-primary mt-1 text-sm font-black">{selectedModel?.quality || '—'} · Standard</div></div>
