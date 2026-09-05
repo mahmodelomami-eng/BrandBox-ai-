@@ -6,6 +6,7 @@ const root = process.cwd();
 const dashboard = readFileSync(join(root, 'src/components/StableUserDashboard.jsx'), 'utf8');
 const navigation = readFileSync(join(root, 'src/components/GlobalNavigation.jsx'), 'utf8');
 const appNavigationWrapper = readFileSync(join(root, 'src/components/layout/AppNavigationWrapper.jsx'), 'utf8');
+const mobileReview = readFileSync(join(root, 'src/app/mobile-review/page.tsx'), 'utf8');
 const pricing = readFileSync(join(root, 'src/app/pricing/page.jsx'), 'utf8');
 const account = readFileSync(join(root, 'src/app/dashboard/account/page.jsx'), 'utf8');
 const plansApi = readFileSync(join(root, 'src/app/api/v1/plans/route.ts'), 'utf8');
@@ -78,5 +79,17 @@ assert.ok(appNavigationWrapper.includes('href="#main-content"'), 'global shell m
 assert.ok(appNavigationWrapper.includes('تجاوز إلى المحتوى الرئيسي'));
 assert.ok(appNavigationWrapper.includes('<main id="main-content" tabIndex={-1}'), 'skip-link target must be semantic and focusable');
 assert.ok(appNavigationWrapper.includes('focus:translate-y-0'), 'skip link must become visible on keyboard focus');
+
+// Mobile review must scope responsive overrides locally and keep touch targets usable.
+assert.ok(mobileReview.includes('className="mobile-review-layout"'), 'mobile review must expose a local responsive layout hook');
+assert.ok(mobileReview.includes('className="mobile-review-summary"'), 'mobile review summary must use a page-local responsive hook');
+assert.ok(mobileReview.includes('className="mobile-review-device-column"'), 'mobile review device column must use a page-local responsive hook');
+assert.ok(mobileReview.includes('<style jsx>{`@media (max-width:850px){.mobile-review-layout'), 'responsive CSS must stay scoped to the mobile review page');
+assert.ok(!mobileReview.includes('body{overflow:hidden!important}'), 'mobile review must not mutate global body overflow through CSS');
+assert.ok(!mobileReview.includes('.brandbox-theme-scope>nav{display:none!important}'), 'mobile review must not hide the shared global navigation by descendant override');
+assert.ok(mobileReview.includes('aria-label="التنقل الرئيسي لنسخة المراجعة"'), 'bottom navigation needs an accessible label');
+assert.ok(mobileReview.includes("aria-current={active ? 'page' : undefined}"), 'active bottom-navigation item must be exposed to assistive technology');
+assert.ok(mobileReview.includes('minHeight: 48'), 'bottom-navigation controls must preserve a usable touch target');
+assert.ok(mobileReview.includes('minHeight: 44'), 'primary review controls must preserve a minimum touch target');
 
 console.log('Product/Monitoring interface pass guard passed.');
