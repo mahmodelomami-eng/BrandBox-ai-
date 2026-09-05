@@ -99,7 +99,9 @@ assertContract(
   rootPage.includes('const LEGACY_VIEW_MAP') &&
     rootPage.includes("dashboard: '/dashboard'") &&
     rootPage.includes("projects: '/projects'") &&
-    rootPage.includes('router.replace(legacyTarget)') &&
+    rootPage.includes("import { redirect } from 'next/navigation'") &&
+    rootPage.includes('if (legacyTarget) redirect(legacyTarget)') &&
+    !rootPage.includes('router.replace(legacyTarget)') &&
     !/from\s+['"][^'"]*\/?App(?:\.jsx)?['"]/.test(rootPage),
 );
 

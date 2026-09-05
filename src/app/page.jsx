@@ -1,7 +1,4 @@
-'use client';
-
-import React, { useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import HomeExperience from '../components/HomeExperience';
 
 const LEGACY_VIEW_MAP = {
@@ -22,27 +19,12 @@ const LEGACY_VIEW_MAP = {
   'admin-shell': '/admin',
 };
 
-function RootPageContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const viewParam = searchParams.get('view');
+export default async function RootPage({ searchParams }) {
+  const params = await searchParams;
+  const viewParam = typeof params?.view === 'string' ? params.view : null;
   const legacyTarget = viewParam ? LEGACY_VIEW_MAP[viewParam] : null;
 
-  useEffect(() => {
-    if (legacyTarget) router.replace(legacyTarget);
-  }, [legacyTarget, router]);
-
-  if (legacyTarget) {
-    return <div className="bb-app-canvas min-h-screen" aria-hidden="true" />;
-  }
+  if (legacyTarget) redirect(legacyTarget);
 
   return <HomeExperience />;
-}
-
-export default function RootPage() {
-  return (
-    <Suspense fallback={<div className="bb-app-canvas min-h-screen" />}>
-      <RootPageContent />
-    </Suspense>
-  );
 }
