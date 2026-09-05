@@ -57,7 +57,9 @@ export type OpenRouterModelCapabilities = {
 };
 
 type CacheEntry = { expiresAt: number; value: OpenRouterModelCapabilities };
+type MediaCatalogCacheEntry = { expiresAt: number; payload: Record<string, unknown> };
 const capabilityCache = new Map<string, CacheEntry>();
+const mediaCatalogCache = new Map<'image' | 'video', MediaCatalogCacheEntry>();
 
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -197,6 +199,27 @@ async function fetchJson(url: string, apiKey: string, fetchImpl: typeof fetch): 
   }
 }
 
+async function fetchMediaCatalog(
+  tool: 'image' | 'video',
+  apiKey: string,
+  fetchImpl: typeof fetch,
+  forceRefresh: boolean,
+): Promise<Record<string, unknown>> {
+  // Custom fetch implementations are primarily used by tests; do not let one
+  // mocked provider snapshot leak into another test. Production uses the global
+  // fetch and shares one media-catalog response across every selected model.
+  const canShare = fetchImpl === fetch;
+  const cached = canShare ? mediaCatalogCache.get(tool) : undefined;
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached.payload;
+
+  const endpoint = tool === 'image' ? 'images/models' : 'videos/models';
+  const payload = await fetchJson(`${OPENROUTER_API_BASE}/${endpoint}`, apiKey, fetchImpl);
+  if (canShare) {
+    mediaCatalogCache.set(tool, { payload, expiresAt: Date.now() + CAPABILITY_TTL_MS });
+  }
+  return payload;
+}
+
 function findModel(payload: Record<string, unknown>, modelId: string): Record<string, unknown> | null {
   const data = Array.isArray(payload.data) ? payload.data : [];
   const match = data.find((item) => {
@@ -271,9 +294,6 @@ function normalizeImageModel(modelId: string, row: Record<string, unknown>): Ope
 }
 
 function normalizeVideoModel(modelId: string, row: Record<string, unknown>): OpenRouterModelCapabilities {
-  // Current /videos/models returns dedicated capability fields plus
-  // allowed_passthrough_parameters. Older snapshots may also expose a
-  // supported_parameters array, so combine both without trusting either alone.
   const supportedParameters = [
     ...stringArray(row.supported_parameters),
     ...stringArray(row.allowed_passthrough_parameters),
@@ -304,15 +324,16 @@ async function fetchLiveCapabilities(
   modelId: string,
   apiKey: string,
   fetchImpl: typeof fetch,
+  forceRefresh: boolean,
 ): Promise<OpenRouterModelCapabilities> {
   if (tool === 'image') {
-    const payload = await fetchJson(`${OPENROUTER_API_BASE}/images/models`, apiKey, fetchImpl);
+    const payload = await fetchMediaCatalog('image', apiKey, fetchImpl, forceRefresh);
     const row = findModel(payload, modelId);
     if (!row) throw new Error('OPENROUTER_CAPABILITY_MODEL_NOT_FOUND');
     return normalizeImageModel(modelId, row);
   }
   if (tool === 'video') {
-    const payload = await fetchJson(`${OPENROUTER_API_BASE}/videos/models`, apiKey, fetchImpl);
+    const payload = await fetchMediaCatalog('video', apiKey, fetchImpl, forceRefresh);
     const row = findModel(payload, modelId);
     if (!row) throw new Error('OPENROUTER_CAPABILITY_MODEL_NOT_FOUND');
     return normalizeVideoModel(modelId, row);
@@ -353,7 +374,13 @@ export async function getOpenRouterModelCapabilities(
   }
 
   try {
-    const value = await fetchLiveCapabilities(tool, normalizedModelId, apiKey, options.fetchImpl || fetch);
+    const value = await fetchLiveCapabilities(
+      tool,
+      normalizedModelId,
+      apiKey,
+      options.fetchImpl || fetch,
+      options.forceRefresh === true,
+    );
     capabilityCache.set(key, { value, expiresAt: Date.now() + CAPABILITY_TTL_MS });
     return value;
   } catch {
