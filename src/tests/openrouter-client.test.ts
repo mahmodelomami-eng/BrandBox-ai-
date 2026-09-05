@@ -79,28 +79,29 @@ async function run() {
   );
 
   const imageCalls: Array<{ url: string; init?: RequestInit }> = [];
+  const imageFetch = async (input: string | URL | Request, init?: RequestInit) => {
+    imageCalls.push({ url: String(input), init });
+    return new Response(JSON.stringify({
+      data: [
+        { b64_json: 'aW1hZ2Ux', media_type: 'image/png' },
+        { b64_json: 'aW1hZ2Uy', media_type: 'image/webp' },
+      ],
+      usage: { total_tokens: 12, cost: 0.03 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
   const imageResult = await createOpenRouterImageGeneration({
     model: 'openai/gpt-image-2',
     prompt: '  a red poster  ',
     aspectRatio: '4:5',
     count: 2,
-    resolution: '4K',
   }, {
     apiKey: 'test-key',
-    fetchImpl: async (input, init) => {
-      imageCalls.push({ url: String(input), init });
-      return new Response(JSON.stringify({
-        data: [
-          { b64_json: 'aW1hZ2Ux', media_type: 'image/png' },
-          { b64_json: 'aW1hZ2Uy', media_type: 'image/webp' },
-        ],
-        usage: { total_tokens: 12, cost: 0.03 },
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    },
+    fetchImpl: imageFetch,
   });
   assert.equal(imageCalls[0].url, 'https://openrouter.ai/api/v1/images');
   assert.deepEqual(JSON.parse(String(imageCalls[0].init?.body)), {
-    model: 'openai/gpt-image-2', prompt: 'a red poster', aspect_ratio: '4:5', resolution: '4K', n: 2,
+    model: 'openai/gpt-image-2', prompt: 'a red poster', aspect_ratio: '4:5', n: 2,
   });
   assert.deepEqual(imageResult.images, [
     { base64: 'aW1hZ2Ux', mediaType: 'image/png' },
@@ -108,13 +109,47 @@ async function run() {
   ]);
   assert.equal(imageResult.costUsd, 0.03);
 
+  const seedreamCalls: Array<{ url: string; init?: RequestInit }> = [];
+  await createOpenRouterImageGeneration({
+    model: 'bytedance-seed/seedream-5-0-lite',
+    prompt: 'a product photo',
+    aspectRatio: '1:1',
+    count: 1,
+  }, {
+    apiKey: 'test-key',
+    fetchImpl: async (input, init) => {
+      seedreamCalls.push({ url: String(input), init });
+      return new Response(JSON.stringify({
+        data: [{ b64_json: 'c2VlZHJlYW0=', media_type: 'image/png' }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    },
+  });
+  assert.equal(JSON.parse(String(seedreamCalls[0].init?.body)).resolution, '2K');
+
+  await assert.rejects(
+    () => createOpenRouterImageGeneration({
+      model: 'bytedance-seed/seedream-5-0-lite', prompt: 'hello', resolution: '1K', count: 1,
+    }, { apiKey: 'test-key', fetchImpl: imageFetch }),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_IMAGE_RESOLUTION'
+  );
+
+  await assert.rejects(
+    () => createOpenRouterImageGeneration({
+      model: 'google/gemini-3.1-flash-lite-image', prompt: 'hello', resolution: '1K', count: 2,
+    }, { apiKey: 'test-key', fetchImpl: imageFetch }),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_IMAGE_COUNT'
+  );
+
+  await assert.rejects(
+    () => createOpenRouterImageGeneration({
+      model: 'openai/gpt-image-2', prompt: 'hello', resolution: '4K', count: 1,
+    }, { apiKey: 'test-key', fetchImpl: imageFetch }),
+    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_IMAGE_RESOLUTION'
+  );
+
   await assert.rejects(
     () => createOpenRouterImageGeneration({ model: 'unknown/image-model', prompt: 'hello' }, { apiKey: 'test-key', fetchImpl }),
     (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_IMAGE_MODEL_NOT_ALLOWED'
-  );
-  await assert.rejects(
-    () => createOpenRouterImageGeneration({ model: 'openai/gpt-image-2', prompt: 'hello', resolution: '4K', count: 5 }, { apiKey: 'test-key', fetchImpl }),
-    (error: unknown) => error instanceof Error && error.message === 'OPENROUTER_INVALID_IMAGE_COUNT'
   );
 
   await assert.rejects(
