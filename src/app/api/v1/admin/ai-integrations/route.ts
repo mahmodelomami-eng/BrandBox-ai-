@@ -43,13 +43,7 @@ function providerConfigured(provider: string) {
   return false;
 }
 
-function brandboxCreditsPerSecond(metadata: unknown): number {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return 0;
-  const value = Number((metadata as Record<string, unknown>).brandbox_credits_per_second || 0);
-  return Number.isInteger(value) && value >= 1 ? value : 0;
-}
-
-function adminModel(model: Record<string, unknown>) {
+function adminModel<T extends Record<string, unknown>>(model: T) {
   const userPricingReady = isModelUserPriced(model);
   return {
     ...model,
@@ -71,7 +65,7 @@ export async function GET(request: NextRequest) {
 
   if (modelsResult.error) return NextResponse.json({ error: modelsResult.error.message }, { status: 500 });
 
-  const models = (modelsResult.data || []).map((model) => adminModel(model as unknown as Record<string, unknown>));
+  const models = (modelsResult.data || []).map((model) => adminModel(model));
   const providers = Array.from(new Set(models.map((model) => String(model.provider || 'unknown')))).map((provider) => ({
     id: provider,
     modelCount: models.filter((model) => model.provider === provider).length,
