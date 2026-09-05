@@ -18,6 +18,7 @@ const runwayPricingMigration = readFileSync(join(root, 'supabase/migrations/2026
 const seedanceMigration = readFileSync(join(root, 'supabase/migrations/20260905170000_openrouter_seedance_video_launch_seed.sql'), 'utf8');
 const popularMigration = readFileSync(join(root, 'supabase/migrations/20260905194500_openrouter_popular_media_catalog.sql'), 'utf8');
 const extendedMigration = readFileSync(join(root, 'supabase/migrations/20260905200500_openrouter_extended_video_catalog.sql'), 'utf8');
+const pricingScopeMigration = readFileSync(join(root, 'supabase/migrations/20260905202500_seedance_video_pricing_scope.sql'), 'utf8');
 
 // Existing Runway provider remains supported and server-secret protected.
 assert.ok(runwayClient.includes("RUNWAY_VIDEO_MODELS = ['gen4.5']"));
@@ -41,10 +42,11 @@ assert.ok(openRouterClient.includes('/content?index=0'));
 assert.ok(openRouterClient.includes('process.env.OPENROUTER_API_KEY'));
 assert.ok(!openRouterClient.includes('error?.message'));
 
-// Current OpenRouter video model fields + one shared /videos/models snapshot.
+// Current OpenRouter video model fields + one shared media-catalog snapshot.
 for (const snippet of [
   'mediaCatalogCache',
-  "`${OPENROUTER_API_BASE}/videos/models`",
+  "const endpoint = tool === 'image' ? 'images/models' : 'videos/models'",
+  '`${OPENROUTER_API_BASE}/${endpoint}`',
   'durations: numberArray(row.supported_durations)',
   'resolutions: stringArray(row.supported_resolutions)',
   'aspectRatios: stringArray(row.supported_aspect_ratios)',
@@ -53,16 +55,20 @@ for (const snippet of [
   "stringArray(row.allowed_passthrough_parameters)",
 ]) assert.ok(capabilityService.includes(snippet), `video capability service missing ${snippet}`);
 assert.ok(settingsPolicy.includes('applyVideoCapabilityPolicy'));
-assert.ok(settingsPolicy.includes('capabilities.video?.durations'));
-assert.ok(settingsPolicy.includes('capabilities.video?.resolutions'));
-assert.ok(settingsPolicy.includes('capabilities.video?.aspectRatios'));
+assert.ok(settingsPolicy.includes('const video = capabilities.video'));
+assert.ok(settingsPolicy.includes('video.durations'));
+assert.ok(settingsPolicy.includes('video.resolutions'));
+assert.ok(settingsPolicy.includes('video.aspectRatios'));
 
-// Route authorizes catalog + capabilities before any credit/provider start.
+// Route authorizes catalog + capabilities + exact verified pricing scope before
+// any credit reservation/provider start.
 const post = route.slice(route.indexOf('export async function POST'), route.indexOf('export async function PATCH'));
 const catalogIndex = post.indexOf(".from('ai_model_catalog')");
 const capabilityIndex = post.indexOf("getOpenRouterModelCapabilities('video', modelId");
+const pricingScopeIndex = post.indexOf('openRouterPricingScopeMatches(model.metadata, normalizedSettings)');
 const providerStartIndex = post.indexOf('OpenRouterVideoGenerationService.start');
-assert.ok(catalogIndex >= 0 && capabilityIndex > catalogIndex && providerStartIndex > capabilityIndex, 'catalog/capability checks must precede OpenRouter video execution');
+assert.ok(catalogIndex >= 0 && capabilityIndex > catalogIndex, 'catalog checks must precede capability resolution');
+assert.ok(pricingScopeIndex > capabilityIndex && providerStartIndex > pricingScopeIndex, 'verified settings pricing scope must be checked before OpenRouter credit/provider execution');
 for (const snippet of [
   ".in('provider', ['runway', 'openrouter'])",
   ".eq('generation_type', 'video')",
@@ -71,8 +77,12 @@ for (const snippet of [
   "projectTypeMatchesTool(project.type, 'video')",
   "return /^[^/]+\\/.+/.test(modelId)",
   "'VIDEO_MODEL_CAPABILITIES_UNAVAILABLE'",
+  "'VIDEO_MODEL_PRICING_UNAVAILABLE'",
   'applyVideoCapabilityPolicy(capabilities',
   'modelCreditsPerSecond(model.metadata)',
+  'modelPricedResolutions',
+  'modelPricedAudioModes',
+  'openRouterPricingScopeMatches',
   'safeMinimumCredits(model.minimum_credits)',
   'OpenRouterVideoGenerationService.start',
   'OpenRouterVideoGenerationService.refresh',
@@ -84,18 +94,18 @@ assert.ok(!post.includes("resolution: '480p'"), 'route must not impose 480p on e
 assert.ok(!post.includes('generateAudio: false'), 'route must not disable model-supported audio globally');
 assert.ok(!route.includes('CreditEngine.calculateRequiredCredits'));
 
-// GET exposes capabilities separately from pricing readiness. This lets staging
-// validate new models while unpriced paid generation remains disabled.
+// GET exposes full capabilities for unpriced staging models, but for a model with
+// a Brand Box rate it only exposes the subset covered by that verified rate.
 for (const snippet of [
   'async function safeOpenRouterModel',
   'capabilitiesAvailable: known',
   'supportedDurations: durations',
   'supportedRatios: ratios',
-  'supportedResolutions: resolutions',
-  'supportsAudio: video?.supportsAudio === true',
-  'supportsSeed: video?.supportsSeed === true',
-  'pricingReady: creditsPerSecond !== null',
-]) assert.ok(route.includes(snippet), `video model decoration missing ${snippet}`);
+  'supportedResolutions: selectableResolutions',
+  "pricedResolutions.includes(resolution)",
+  "pricedAudioModes.includes('on')",
+  'pricingReady',
+]) assert.ok(route.includes(snippet), `video model decoration/pricing scope missing ${snippet}`);
 
 // Both lifecycle services retain tenant isolation, refunds, durable MP4 storage.
 for (const service of [runwayService, openRouterService]) {
@@ -155,6 +165,14 @@ assert.ok(seedanceMigration.includes("'brandbox_credits_per_second', 5"));
 assert.ok(seedanceMigration.includes("'runtime_verified_on', '2026-09-05'"));
 assert.ok(!seedanceMigration.includes('is_enabled = EXCLUDED.is_enabled'));
 
+// The current Seedance rate is explicitly scoped to the runtime-verified launch
+// envelope. Higher resolution/audio must fail closed until #227 adds a matrix.
+assert.ok(pricingScopeMigration.includes("'brandbox_priced_resolutions', jsonb_build_array('480p')"));
+assert.ok(pricingScopeMigration.includes("'brandbox_priced_audio_modes', jsonb_build_array('off')"));
+assert.ok(pricingScopeMigration.includes("'bytedance/seedance-2.0-mini'"));
+assert.ok(!pricingScopeMigration.includes('is_enabled ='));
+assert.ok(!pricingScopeMigration.includes('is_visible_to_users ='));
+
 // Popular + extended general-purpose OpenRouter video catalogs. Production
 // defaults stay disabled/hidden; Sora is intentionally absent because of its
 // announced 2026-09-24 removal.
@@ -178,4 +196,4 @@ assert.ok(extendedMigration.includes('FALSE, FALSE, sort_order'));
 assert.ok(!popularMigration.includes('is_enabled = EXCLUDED.is_enabled'));
 assert.ok(!extendedMigration.includes('is_enabled = EXCLUDED.is_enabled'));
 
-console.log('Video generation adaptive multi-model + dual-provider guard passed.');
+console.log('Video generation adaptive multi-model + pricing-scope guard passed.');
