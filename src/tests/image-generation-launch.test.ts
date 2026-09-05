@@ -48,7 +48,8 @@ assert.ok(engine.includes('wasRefunded: refundRes.success'));
 
 for (const snippet of [
   'mediaCatalogCache',
-  "`${OPENROUTER_API_BASE}/images/models`",
+  "const endpoint = tool === 'image' ? 'images/models' : 'videos/models'",
+  '`${OPENROUTER_API_BASE}/${endpoint}`',
   'resolutions: enumValues(supported.resolution)',
   'aspectRatios: enumValues(supported.aspect_ratio)',
   'countRange: rangeValue(supported.n)',
