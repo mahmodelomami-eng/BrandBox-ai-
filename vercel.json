@@ -1,0 +1,3 @@
+{
+  "buildCommand": "node --import tsx scripts/rc-image-runtime-smoke.ts && npm run build"
+}
